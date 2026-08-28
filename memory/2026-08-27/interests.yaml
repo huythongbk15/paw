@@ -1,0 +1,39 @@
+date: '2026-08-27'
+topic_count: 3
+diversity_days: 7
+topics:
+- title: PAW Core Phase 1 Task Lifecycle E2E implementation
+  reason: Phase 0 acceptance criteria all met; immediate next milestone with 5 concrete
+    deliverables (SessionManager, Task CRUD, TaskLedger, MockExecutor, minimal skill
+    registry)
+  evidence: Phase 0 complete; Phase 1 section lists 5 items to implement
+  keywords:
+  - PAW Core
+  - Phase 1
+  - Task Lifecycle
+  - E2E
+  - SessionManager
+  paths:
+  - memory/2026-08-27/paw-core-phase0-complete-architecture-decision.md
+- title: Local-first architecture with zero prohibited deps in core
+  reason: Core must remain free of QwenPaw, DeepSeek Harness, NotebookLM, Antigravity
+    — a hard constraint to enforce as the codebase grows
+  evidence: 'No prohibited deps criteria: QwenPaw, DeepSeek Harness, NotebookLM, Antigravity
+    absent from paw/core'
+  keywords:
+  - local-first
+  - zero prohibited deps
+  - architectural constraint
+  - free-tier
+  paths:
+  - memory/2026-08-27/paw-core-phase0-complete-architecture-decision.md
+- title: Knowledge Engine (Phase 7) replacing NotebookLM
+  reason: Decision to replace NotebookLM with a custom Knowledge Engine in Phase 7
+    — track design when reaching that phase
+  evidence: 'NotebookLM: KHÔNG DÙNG — thay bằng Knowledge Engine tự xây (Phase 7)'
+  keywords:
+  - Knowledge Engine
+  - Phase 7
+  - NotebookLM replacement
+  paths:
+  - memory/2026-08-27/paw-core-phase0-complete-architecture-decision.md

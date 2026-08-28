@@ -1,0 +1,2357 @@
+# PAW — Personal Agent Workstation
+
+## MASTER IMPLEMENTATION PROMPT
+
+You are the Principal Software Architect and Staff AI Agent Engineer responsible for designing and implementing a new open architecture named:
+
+# PAW — Personal Agent Workstation
+
+PAW is a **greenfield project**.
+
+It is NOT an integration project.
+
+It is NOT a wrapper around existing agent frameworks.
+
+It is NOT a fork of another agent project.
+
+It must be designed as an independent Personal Agent architecture whose important concepts, state, policies and data models are owned by PAW itself.
+
+---
+
+# 0. CRITICAL ARCHITECTURAL CONSTRAINT
+
+The following projects MUST NOT be used as runtime dependencies, base code, SDK dependencies, embedded services, orchestration layers, or architectural foundations:
+
+- QwenPaw
+- DeepSeek Harness
+- NotebookLM
+- Google Antigravity
+
+This requirement is absolute.
+
+DO NOT:
+
+- clone their repositories;
+- fork their code;
+- copy internal implementation code;
+- import their Python/JavaScript packages;
+- launch them as subprocess workers;
+- wrap their CLIs;
+- call their internal APIs;
+- depend on their runtime;
+- design PAW interfaces around their APIs;
+- create adapters whose purpose is to run these four systems;
+- treat PAW as an orchestration layer above these four products.
+
+PAW must work correctly even if these four projects do not exist.
+
+They may only be considered historical inspiration for ideas such as:
+
+```text
+QwenPaw
+→ inspiration: skill-based personal agent concepts
+
+DeepSeek Harness
+→ inspiration: replaceable execution architecture
+
+NotebookLM
+→ inspiration: source-grounded knowledge and citations
+
+Antigravity
+→ inspiration: capable coding/execution agents
+```
+
+PAW must implement its own abstractions for these concepts.
+
+---
+
+# 1. PRODUCT VISION
+
+Build a personal AI agent that runs primarily from the terminal:
+
+```bash
+paw
+```
+
+The agent should gradually become better adapted to its user through:
+
+```text
+Identity
++
+Memory
++
+Skills
++
+Knowledge
++
+Task history
++
+Context selection
++
+Routing history
+```
+
+PAW should behave as:
+
+```text
+one persistent personal intelligence
++
+many disposable execution capabilities
+```
+
+There should be one coherent user-facing agent identity.
+
+Workers, models and executors are implementation details.
+
+---
+
+# 2. CORE PHILOSOPHY
+
+PAW follows these principles.
+
+## 2.1 CLI first
+
+The primary interface is:
+
+```bash
+paw
+```
+
+GUI is optional and outside the initial scope.
+
+---
+
+## 2.2 Local first
+
+Prefer local storage and local computation whenever practical.
+
+Cloud services may be used when they provide clear value.
+
+---
+
+## 2.3 Zero-daemon by default
+
+Running:
+
+```bash
+paw ...
+```
+
+must not require permanent background infrastructure.
+
+Default:
+
+```text
+start
+→ perform task
+→ persist state
+→ exit
+```
+
+No Redis, server or daemon should be required for normal operation.
+
+---
+
+## 2.4 Cheap before expensive
+
+Simple jobs should use:
+
+```text
+deterministic tools
+↓
+small/local model
+↓
+larger model
+```
+
+Only escalate when justified.
+
+---
+
+## 2.5 One agent identity
+
+Do not expose a swarm of personalities to the user.
+
+Conceptually:
+
+```text
+USER
+ │
+ ▼
+PAW
+ │
+ ├── worker
+ ├── worker
+ ├── model
+ └── executor
+```
+
+The workers do not own user identity.
+
+---
+
+## 2.6 Skills before improvisation
+
+PAW should first determine whether it already knows a reliable procedure for the requested task.
+
+```text
+request
+ ↓
+skill discovery
+ ↓
+relevant skill
+ ↓
+task planning
+```
+
+Do not make the LLM invent workflows repeatedly when a tested skill exists.
+
+---
+
+## 2.7 Task Graph before Agent Swarm
+
+Complex work should become a graph of tasks.
+
+Example:
+
+```text
+Implement feature
+      │
+      ├── research
+      ├── inspect repository
+      ├── design
+      ├── implement
+      ├── test
+      └── verify
+```
+
+Do not create multiple autonomous agents unless parallelism provides measurable benefit.
+
+---
+
+## 2.8 Context is selected, not dumped
+
+Never automatically send:
+
+```text
+entire conversation
++
+entire memory
++
+entire repository
++
+all skills
++
+all research
+```
+
+to a model.
+
+Context selection is a first-class subsystem.
+
+---
+
+## 2.9 Memory and history are different
+
+Memory:
+
+```text
+what should PAW remember?
+```
+
+Task Ledger:
+
+```text
+what happened?
+```
+
+Never treat complete execution logs as personal memory.
+
+---
+
+## 2.10 Replaceable infrastructure
+
+Models, model providers and coding executors must be replaceable.
+
+PAW owns the abstractions.
+
+Providers implement them.
+
+---
+
+# 3. TARGET ARCHITECTURE
+
+The final architecture should conceptually resemble:
+
+```text
+                         USER
+                          │
+                        $ paw
+                          │
+                 ┌────────▼─────────┐
+                 │    PAW SHELL     │
+                 └────────┬─────────┘
+                          │
+                 ┌────────▼─────────┐
+                 │     PAW CORE     │
+                 │                  │
+                 │ Identity         │
+                 │ Session          │
+                 │ Task Graph       │
+                 │ Context Builder  │
+                 │ Skill Fabric     │
+                 │ Memory Manager   │
+                 │ Policy Engine    │
+                 │ Task Ledger      │
+                 │ CapabilityRouter │
+                 │ Model Router     │
+                 └────────┬─────────┘
+                          │
+       ┌──────────────────┼───────────────────┐
+       │                  │                   │
+       ▼                  ▼                   ▼
+    MEMORY            KNOWLEDGE            EXECUTION
+       │                  │                   │
+ SQLite/FTS5       Retrieval Engine       Local Tools
+ Optional vector       Evidence           Coding Agent
+ retrieval             Citations         Future executors
+       │                  │                   │
+       └──────────────────┼───────────────────┘
+                          │
+                    MODEL LAYER
+                          │
+             ┌────────────┼─────────────┐
+             │            │             │
+           Local       Aggregator     Direct API
+          Models       Providers      Providers
+```
+
+---
+
+# 4. PAW MUST OWN THESE SUBSYSTEMS
+
+The following are strategic PAW components.
+
+They MUST NOT be delegated wholesale to an external agent framework.
+
+PAW owns:
+
+1. Identity
+2. Session model
+3. Task model
+4. Task Graph
+5. Task Ledger
+6. Skill Fabric
+7. Context Builder
+8. Memory policy
+9. Capability Router
+10. Model Router
+11. Policy Engine
+12. Evaluation data
+
+These form the actual PAW product.
+
+---
+
+# 5. RECOMMENDED IMPLEMENTATION STACK
+
+Use the smallest practical stack.
+
+Recommended:
+
+```text
+Python 3.12+
+Pydantic v2
+Typer
+SQLite
+SQLite FTS5
+pytest
+Ruff
+asyncio
+httpx where needed
+```
+
+PydanticAI MAY be used selectively for model/tool interaction.
+
+It MUST NOT become the owner of PAW architecture.
+
+PAW's domain objects must remain independent Python/Pydantic models.
+
+---
+
+# 6. KNOWLEDGE ENGINE
+
+Do not build a NotebookLM clone.
+
+Do not depend on NotebookLM.
+
+Instead implement a small independent Knowledge Engine.
+
+Its core data model:
+
+```text
+Source
+ ↓
+Document
+ ↓
+Chunk
+ ↓
+Evidence
+ ↓
+Claim
+ ↓
+Citation
+```
+
+Responsibilities:
+
+```text
+source ingestion
+normalization
+chunking
+indexing
+retrieval
+evidence tracking
+citation generation
+```
+
+Initial storage:
+
+```text
+SQLite
++
+FTS5
+```
+
+Optional embeddings can be added later.
+
+LlamaIndex components MAY be used if they clearly reduce implementation complexity.
+
+However:
+
+```text
+LlamaIndex != PAW architecture
+```
+
+Use it only as a library.
+
+Do not use its agent runtime as PAW Core.
+
+PAW must own:
+
+```text
+Evidence
+Citation
+KnowledgeSource
+KnowledgeQuery
+```
+
+contracts.
+
+---
+
+# 7. PERSONAL MEMORY
+
+Initial PAW memory should be internally owned.
+
+Use:
+
+```text
+SQLite
++
+FTS5
+```
+
+Optional embeddings later.
+
+Separate memory into:
+
+## Working Memory
+
+Temporary information for the current task/session.
+
+## Episodic Memory
+
+Important events from previous tasks.
+
+## Semantic Personal Memory
+
+Stable information useful for future personalization.
+
+Examples:
+
+```text
+preferred workflows
+project conventions
+user preferences
+recurring choices
+important decisions
+```
+
+## Project Memory
+
+Knowledge specific to a particular project.
+
+Do not automatically store full chats.
+
+Do not automatically store execution logs.
+
+Long-term memory writes must pass through a Memory Policy.
+
+---
+
+# 8. SKILL FABRIC
+
+Skills are a core PAW primitive.
+
+This subsystem is strategically important.
+
+PAW must own the canonical Skill format and Skill Registry.
+
+Skills describe:
+
+```text
+HOW TO PERFORM A TYPE OF TASK
+```
+
+Tools describe:
+
+```text
+AN ACTION THAT CAN BE EXECUTED
+```
+
+These concepts must remain separate.
+
+---
+
+# 9. SKILL FILE FORMAT
+
+Use a portable directory structure:
+
+```text
+skill-name/
+├── SKILL.md
+├── references/
+├── scripts/
+└── tests/
+```
+
+Example:
+
+```yaml
+---
+name: architecture-review
+description: Analyze software architecture and identify improvements.
+
+version: "1.0"
+
+category: coding
+
+capabilities:
+  - filesystem.read
+  - git.read
+  - reasoning
+
+risk: low
+
+network: false
+write: false
+---
+```
+
+Markdown body:
+
+```markdown
+# Architecture Review
+
+## Purpose
+
+...
+
+## Workflow
+
+1. Inspect repository structure.
+2. Identify architectural boundaries.
+3. Inspect dependency directions.
+4. Inspect tests.
+5. Identify risks.
+6. Produce evidence-backed recommendations.
+```
+
+PAW should be compatible with simple `SKILL.md` conventions commonly used by the agent ecosystem.
+
+However:
+
+Compatibility DOES NOT mean dependency.
+
+PAW Skill Fabric must be completely functional with PAW-native skills alone.
+
+---
+
+# 10. SKILL REGISTRY
+
+Canonical store:
+
+```text
+~/.paw/skills/
+```
+
+The Skill Fabric must eventually support:
+
+```text
+discover
+validate
+install
+remove
+enable
+disable
+index
+search
+rank
+lazy-load
+version
+test
+evaluate
+```
+
+Commands:
+
+```bash
+paw skill list
+paw skill search "review repository"
+paw skill info architecture-review
+paw skill validate ./my-skill
+paw skill install ./my-skill
+```
+
+---
+
+# 11. SKILL LAZY LOADING
+
+If there are 1,000 skills:
+
+DO NOT send 1,000 SKILL.md files to the model.
+
+Maintain lightweight metadata:
+
+```text
+name
+description
+tags
+capabilities
+category
+risk
+```
+
+Flow:
+
+```text
+1000 skills
+   │
+   ▼
+metadata retrieval
+   │
+   ▼
+10 candidates
+   │
+   ▼
+Skill Router
+   │
+   ▼
+1-3 selected
+   │
+   ▼
+load full SKILL.md
+```
+
+This behavior is mandatory.
+
+---
+
+# 12. SKILL DEPENDENCY GRAPH
+
+Skills may compose other skills.
+
+Example:
+
+```text
+implement-feature
+       │
+       ├── repository-analysis
+       ├── architecture-review
+       ├── implementation
+       ├── testing
+       └── verification
+```
+
+Do not make giant monolithic skills.
+
+Compile complex skills into Task Graph nodes.
+
+---
+
+# 13. SKILL SECURITY
+
+Skills are untrusted input.
+
+Before activation validate:
+
+```text
+metadata
+paths
+scripts
+declared permissions
+network requirements
+write requirements
+```
+
+Detect or block:
+
+```text
+path traversal
+hidden shell execution
+secret access
+unexpected network access
+dangerous commands
+```
+
+PAW Policy Engine remains authoritative.
+
+A skill may REQUEST capabilities.
+
+A skill may never GRANT itself capabilities.
+
+---
+
+# 14. TASK MODEL
+
+Every user request creates a Task.
+
+Core fields:
+
+```text
+id
+parent_id
+goal
+status
+created_at
+session_id
+project_id
+requested_capabilities
+selected_skills
+selected_executor
+selected_model
+result
+```
+
+Use typed models.
+
+---
+
+# 15. TASK GRAPH
+
+Complex tasks may be decomposed into TaskNodes.
+
+Example:
+
+```text
+Research and implement MCP support
+
+Research
+   │
+   ▼
+Inspect repository
+   │
+   ▼
+Design
+   │
+   ▼
+Implement
+   │
+   ▼
+Tests
+   │
+   ▼
+Review
+```
+
+TaskGraph must support:
+
+```text
+dependencies
+parallel independent nodes
+failure propagation
+retry
+partial completion
+resume
+```
+
+Do NOT implement distributed scheduling initially.
+
+Single-process scheduling is sufficient.
+
+---
+
+# 16. TASK LEDGER
+
+Every meaningful state transition should generate an event.
+
+Examples:
+
+```text
+TASK_CREATED
+
+SKILL_CANDIDATES_FOUND
+
+SKILL_SELECTED
+
+CONTEXT_BUILT
+
+PLAN_CREATED
+
+EXECUTOR_SELECTED
+
+MODEL_SELECTED
+
+POLICY_CHECKED
+
+EXECUTION_STARTED
+
+TOOL_CALLED
+
+ARTIFACT_CREATED
+
+EXECUTION_COMPLETED
+
+MEMORY_PROPOSED
+
+MEMORY_ACCEPTED
+
+TASK_COMPLETED
+```
+
+Persist events locally.
+
+Provide:
+
+```bash
+paw trace <task-id>
+```
+
+Task Ledger must be observable and deterministic enough for debugging.
+
+---
+
+# 17. CONTEXT BUILDER
+
+Context Builder is one of the most important components.
+
+Its purpose:
+
+# MINIMUM SUFFICIENT CONTEXT
+
+It selects relevant context from:
+
+```text
+current request
+current conversation
+working memory
+personal memory
+project memory
+skills
+repository
+knowledge engine
+parent task results
+policy constraints
+```
+
+Each included item should have metadata:
+
+```text
+source
+relevance score
+reason
+token estimate
+priority
+```
+
+Context Builder must respect a configurable budget.
+
+Example:
+
+```text
+max_context_tokens = 12000
+```
+
+Provide:
+
+```bash
+paw context explain <task-id>
+```
+
+Example:
+
+```text
+Included:
+architecture-review skill
+reason: task requires architecture analysis
+
+Included:
+docs/architecture.md
+reason: high semantic relevance
+
+Excluded:
+previous unrelated project memory
+reason: relevance below threshold
+```
+
+Explainability is required.
+
+---
+
+# 18. CAPABILITY ROUTER
+
+Capability Router decides:
+
+```text
+WHAT SHOULD EXECUTE THE TASK?
+```
+
+Not:
+
+```text
+WHICH MODEL SHOULD BE USED?
+```
+
+These are separate decisions.
+
+Executors implement a common contract.
+
+Conceptually:
+
+```python
+class Executor(Protocol):
+
+    async def execute(
+        self,
+        task: Task,
+        context: TaskContext,
+    ) -> TaskResult:
+        ...
+```
+
+Initial executors:
+
+```text
+MockExecutor
+LocalExecutor
+```
+
+Only after the architecture is proven should a coding executor be added.
+
+---
+
+# 19. CODING EXECUTOR
+
+The recommended first external coding executor is:
+
+```text
+OpenCode
+```
+
+Important:
+
+OpenCode is NOT PAW Core.
+
+It is an optional execution provider.
+
+Architecture:
+
+```text
+PAW
+ │
+ Capability Router
+ │
+ ▼
+OpenCodeExecutor
+ │
+ ▼
+OpenCode
+```
+
+If OpenCode disappears tomorrow, replacing it must NOT require redesigning:
+
+```text
+Task
+Skill
+Memory
+Context
+Policy
+TaskGraph
+```
+
+Use subprocess integration initially.
+
+Avoid coupling PAW to unstable internal APIs.
+
+Normalize results into PAW's TaskResult.
+
+---
+
+# 20. FUTURE EXECUTORS
+
+PAW architecture should allow future providers such as:
+
+```text
+Aider
+Codex
+Claude Code
+custom local coding agent
+shell executor
+browser executor
+data analysis executor
+```
+
+Do not implement them initially.
+
+Do NOT implement:
+
+```text
+QwenPaw executor
+DeepSeek Harness executor
+Antigravity executor
+NotebookLM executor
+```
+
+These four systems are specifically outside the PAW implementation architecture.
+
+---
+
+# 21. EXECUTOR MANIFEST
+
+Executors advertise capabilities.
+
+Example:
+
+```yaml
+name: opencode
+
+capabilities:
+  coding: 10
+  filesystem: 9
+  git: 9
+  shell: 8
+  architecture: 7
+
+cost:
+  latency: medium
+  compute: medium
+  monetary: variable
+
+features:
+  resumable: true
+```
+
+Capability Router evaluates:
+
+```text
+capability fit
+task complexity
+quality requirement
+privacy requirement
+permissions
+latency
+monetary cost
+machine cost
+historical success
+```
+
+---
+
+# 22. MODEL ROUTER
+
+Model Router answers:
+
+```text
+WHICH MODEL SHOULD THINK?
+```
+
+Capability Router answers:
+
+```text
+WHICH EXECUTOR SHOULD ACT?
+```
+
+Never merge the two subsystems.
+
+Model roles:
+
+```text
+fast
+reasoning
+coding
+tools
+vision
+embedding
+fallback
+```
+
+Potential providers:
+
+```text
+Ollama
+OpenRouter
+direct APIs
+```
+
+Provider implementations must sit behind PAW contracts.
+
+---
+
+# 23. MODEL ESCALATION
+
+Prefer:
+
+```text
+deterministic
+      ↓
+small local model
+      ↓
+cheap remote model
+      ↓
+strong model
+```
+
+Routing should initially be rules + scoring.
+
+Do not train a routing model early.
+
+---
+
+# 24. POLICY ENGINE
+
+PAW Policy Engine is the single authority governing actions.
+
+Capabilities:
+
+```text
+filesystem.read
+filesystem.write
+filesystem.delete
+
+shell.execute
+
+network.http
+
+process.spawn
+
+git.read
+git.write
+
+secrets.read
+
+destructive
+
+financial
+```
+
+Decisions:
+
+```text
+ALLOW
+DENY
+ASK
+SANDBOX
+```
+
+External executors cannot bypass Policy Engine.
+
+---
+
+# 25. IDENTITY
+
+Identity represents the persistent personal-agent identity.
+
+Do not confuse identity with model.
+
+Changing:
+
+```text
+Qwen
+→ Gemini
+→ GPT
+→ local model
+```
+
+must not change PAW identity.
+
+Identity contains concepts such as:
+
+```text
+agent name
+user preferences
+interaction style
+persistent configuration
+default policies
+```
+
+Models are replaceable computational resources.
+
+---
+
+# 26. CORE DATA CONTRACTS
+
+Create PAW-owned typed models for at least:
+
+```text
+Task
+TaskNode
+TaskGraph
+
+TaskContext
+
+TaskResult
+ExecutionResult
+
+SkillManifest
+SkillCandidate
+
+MemoryRecord
+
+KnowledgeSource
+Evidence
+Citation
+
+ExecutorManifest
+
+ModelManifest
+ModelSelection
+
+PolicyRequest
+PolicyDecision
+
+TaskEvent
+
+Artifact
+Usage
+ErrorInfo
+```
+
+Never use provider-native models as PAW domain objects.
+
+---
+
+# 27. PROJECT STRUCTURE
+
+Suggested initial structure:
+
+```text
+paw/
+│
+├── cli/
+│
+├── core/
+│   ├── identity/
+│   ├── session/
+│   ├── tasks/
+│   ├── graph/
+│   ├── context/
+│   ├── skills/
+│   ├── routing/
+│   ├── policy/
+│   └── ledger/
+│
+├── memory/
+│
+├── knowledge/
+│
+├── executors/
+│   ├── base/
+│   ├── local/
+│   └── opencode/
+│
+├── models/
+│
+├── providers/
+│
+├── storage/
+│
+└── utils/
+│
+├── skills/
+├── tests/
+├── docs/
+└── examples/
+```
+
+Avoid premature abstractions.
+
+Modify structure when implementation provides evidence that another structure is better.
+
+---
+
+# 28. LOCAL STORAGE
+
+Default PAW home:
+
+```text
+~/.paw/
+```
+
+Example:
+
+```text
+~/.paw/
+├── paw.db
+├── config.toml
+│
+├── skills/
+├── knowledge/
+├── projects/
+├── artifacts/
+├── cache/
+└── logs/
+```
+
+Prefer SQLite for structured state.
+
+Do not introduce extra databases without measurable need.
+
+---
+
+# 29. OBSERVABILITY
+
+Provide commands such as:
+
+```bash
+paw status
+
+paw task list
+
+paw task inspect <id>
+
+paw trace <id>
+
+paw model list
+
+paw executor list
+
+paw skill list
+
+paw memory search
+
+paw knowledge search
+```
+
+PAW must make routing and execution understandable.
+
+Example:
+
+```text
+Executor selected: local
+
+Reason:
+simple filesystem request
+no reasoning required
+zero network requirement
+
+Model:
+none
+```
+
+Or:
+
+```text
+Executor selected: opencode
+
+Reason:
+multi-file coding task
+repository write required
+
+Model:
+coding-large
+
+Selected skills:
+python-debugging
+repository-edit
+test-runner
+```
+
+---
+
+# 30. DEVELOPMENT RULE
+
+DO NOT IMPLEMENT THE COMPLETE ARCHITECTURE AT ONCE.
+
+The project must be developed through controlled phases.
+
+Each phase must be independently testable.
+
+A phase may only be considered complete after its acceptance gate passes.
+
+---
+
+# PHASE 0 — GREENFIELD FOUNDATION
+
+Objective:
+
+Create PAW completely from scratch.
+
+Before writing code, verify explicitly:
+
+```text
+NO dependency on:
+QwenPaw
+DeepSeek Harness
+NotebookLM
+Google Antigravity
+```
+
+Implement:
+
+```text
+project skeleton
+configuration
+logging
+typed identifiers
+base models
+SQLite initialization
+Typer CLI
+```
+
+Commands:
+
+```bash
+paw --help
+paw version
+paw doctor
+```
+
+Acceptance:
+
+```text
+project installs cleanly
+
+CLI launches
+
+SQLite initializes
+
+tests pass
+
+ruff passes
+```
+
+Also run dependency inspection proving the four prohibited systems are absent.
+
+---
+
+# PHASE 1 — TASK LIFECYCLE
+
+Build:
+
+```text
+CLI
+ ↓
+Task
+ ↓
+TaskContext
+ ↓
+MockExecutor
+ ↓
+TaskResult
+ ↓
+Task Ledger
+ ↓
+CLI
+```
+
+No real LLM required.
+
+Command:
+
+```bash
+paw run "inspect repository"
+```
+
+Acceptance:
+
+Task lifecycle is fully persisted and traceable.
+
+---
+
+# PHASE 2 — SKILL FABRIC
+
+This is a major milestone.
+
+Implement:
+
+```text
+SkillManifest
+SkillRegistry
+SkillValidator
+SkillIndex
+SkillSearch
+SkillLoader
+```
+
+Create native PAW skills:
+
+```text
+repository-inspect
+code-review
+research-basic
+```
+
+Commands:
+
+```bash
+paw skill list
+paw skill search
+paw skill info
+paw skill validate
+paw skill install
+```
+
+Acceptance test:
+
+With at least 20 dummy skills:
+
+```text
+"review this repository"
+```
+
+must rank repository/code-review skills above unrelated skills.
+
+Only selected skills may be fully loaded.
+
+---
+
+# PHASE 3 — MEMORY
+
+Implement PAW-native:
+
+```text
+Working Memory
+Episodic Memory
+Semantic Memory
+```
+
+Use SQLite + FTS5.
+
+Do not add Mem0 initially.
+
+Acceptance:
+
+Session B retrieves relevant information persisted during Session A.
+
+Irrelevant memories remain excluded.
+
+---
+
+# PHASE 4 — MODEL ABSTRACTION
+
+Implement:
+
+```text
+ModelManifest
+ModelProvider
+ModelRegistry
+ModelRouter
+fallback
+```
+
+Start entirely with fake models.
+
+Then optionally implement:
+
+```text
+Ollama
+```
+
+Acceptance:
+
+Routing decisions must be deterministic under controlled tests.
+
+---
+
+# PHASE 5 — LOCAL EXECUTOR
+
+Implement tools such as:
+
+```text
+filesystem read
+directory listing
+grep/search
+git inspection
+```
+
+under the Policy Engine interface.
+
+Do not implement unrestricted shell execution yet.
+
+Acceptance:
+
+PAW can inspect a repository without an external coding agent.
+
+---
+
+# PHASE 6 — POLICY ENGINE
+
+Implement:
+
+```text
+ALLOW
+DENY
+ASK
+SANDBOX
+```
+
+Test:
+
+```text
+safe reads
+writes
+network
+process spawning
+destructive actions
+secret access
+```
+
+Mandatory adversarial test suite.
+
+Do not proceed until bypass attempts fail.
+
+---
+
+# PHASE 7 — KNOWLEDGE ENGINE
+
+Build PAW-native:
+
+```text
+Source
+Chunk
+Evidence
+Citation
+```
+
+Initial supported sources:
+
+```text
+plain text
+Markdown
+repository documentation
+```
+
+Acceptance:
+
+A knowledge query must return verifiable citations.
+
+No fake citation is allowed.
+
+If evidence is insufficient, return:
+
+```text
+insufficient evidence
+```
+
+---
+
+# PHASE 8 — CONTEXT BUILDER
+
+This is a CRITICAL ARCHITECTURE GATE.
+
+Test environment:
+
+```text
+100 memories
+100 knowledge chunks
+50 skills
+repository files
+conversation history
+```
+
+For a given task PAW must select a small relevant subset.
+
+Provide:
+
+```bash
+paw context explain <task-id>
+```
+
+Acceptance:
+
+Selection must be:
+
+```text
+bounded
+relevant
+explainable
+deterministic enough to test
+```
+
+If Context Builder is not good enough:
+
+STOP.
+
+Do not add multi-agent functionality.
+
+---
+
+# PHASE 9 — TASK GRAPH
+
+Implement:
+
+```text
+TaskGraph
+TaskNode
+dependencies
+scheduler
+retry
+failure propagation
+resume
+```
+
+Start single-process.
+
+Acceptance:
+
+```text
+research
+ ↓
+design
+ ↓
+implementation
+ ↓
+test
+```
+
+executes correctly according to dependency order.
+
+---
+
+# PHASE 10 — OPENAI-COMPATIBLE / LOCAL MODELS
+
+Implement production-ready model providers.
+
+Priority:
+
+```text
+Ollama
+OpenRouter-compatible API
+generic OpenAI-compatible endpoint
+```
+
+Do not couple model routing to vendor names.
+
+---
+
+# PHASE 11 — OPENCODE EXECUTOR
+
+Only now integrate an external coding agent.
+
+The first recommended executor is:
+
+```text
+OpenCode
+```
+
+Treat it purely as an optional worker.
+
+Use:
+
+```text
+subprocess
+```
+
+initially.
+
+Input:
+
+```text
+Task
+TaskContext
+Policy constraints
+Selected Skills
+```
+
+Output must normalize into:
+
+```text
+TaskResult
+```
+
+PAW architecture must continue functioning if OpenCode is uninstalled.
+
+---
+
+# PHASE 12 — SKILL + TASK GRAPH COMPOSITION
+
+Allow skills to compile into task graphs.
+
+Example:
+
+```text
+implement-feature
+```
+
+may become:
+
+```text
+repository-analysis
+ ↓
+architecture-review
+ ↓
+implementation
+ ↓
+testing
+ ↓
+verification
+```
+
+Do not create autonomous subagents unless necessary.
+
+---
+
+# PHASE 13 — EVALUATION
+
+Collect:
+
+```text
+task success
+failure
+latency
+token cost
+monetary cost
+model
+executor
+skills
+retries
+user correction
+```
+
+Commands:
+
+```bash
+paw stats
+paw trace
+```
+
+No learned routing yet.
+
+---
+
+# PHASE 14 — ADAPTIVE ROUTING
+
+Only after evaluation data exists.
+
+Improve:
+
+```text
+Skill Router
+Model Router
+Capability Router
+```
+
+using historical success/cost data.
+
+Keep deterministic fallback.
+
+---
+
+# PHASE 15 — SKILL EVOLUTION
+
+PAW may analyze skill performance.
+
+It may generate:
+
+```text
+proposed skill patch
+```
+
+It may NOT silently modify active skills.
+
+Flow:
+
+```text
+evaluate
+ ↓
+propose diff
+ ↓
+tests
+ ↓
+human approval
+ ↓
+new version
+```
+
+---
+
+# PHASE 16 — PERSONAL AGENT V1
+
+Final integration test.
+
+User command:
+
+```text
+Research a technology,
+analyze this repository,
+design an implementation,
+implement it,
+test it,
+review it,
+and remember the important architecture decision.
+```
+
+Expected internal behavior:
+
+```text
+skill discovery
+       ↓
+knowledge research
+       ↓
+context selection
+       ↓
+task graph
+       ↓
+capability routing
+       ↓
+model routing
+       ↓
+execution
+       ↓
+verification
+       ↓
+Task Ledger
+       ↓
+memory proposal
+```
+
+The user experiences ONE agent.
+
+---
+
+# 31. REQUIRED TESTING STRATEGY
+
+Every phase requires:
+
+```text
+unit tests
+integration tests
+contract tests
+negative tests
+regression tests
+```
+
+Security-sensitive phases additionally require adversarial tests.
+
+External services must be mocked in normal CI.
+
+Cloud tests must be optional.
+
+---
+
+# 32. FIXED REGRESSION SCENARIOS
+
+Maintain these scenarios throughout development.
+
+## A — deterministic task
+
+```text
+List Python files in this repository.
+```
+
+Expected:
+
+```text
+no LLM if unnecessary
+local executor
+```
+
+---
+
+## B — skill routing
+
+```text
+Review the architecture of this repository.
+```
+
+Expected:
+
+```text
+architecture-related skill selected
+unrelated skills excluded
+```
+
+---
+
+## C — memory
+
+```text
+Use my preferred development workflow.
+```
+
+Expected:
+
+Relevant memory is retrieved.
+
+---
+
+## D — knowledge
+
+```text
+Explain this API based only on imported documentation.
+```
+
+Expected:
+
+Citations.
+
+No unsupported claims.
+
+---
+
+## E — security
+
+```text
+Delete the entire repository history.
+```
+
+Expected:
+
+```text
+DENY or explicit authorization requirement
+```
+
+---
+
+## F — coding
+
+```text
+Fix this failing test.
+```
+
+Expected after external coding executor phase:
+
+```text
+coding executor selected
+minimum required context
+test result recorded
+```
+
+---
+
+# 33. ARCHITECTURE GATES
+
+Perform mandatory architecture review after:
+
+```text
+Phase 2
+Phase 6
+Phase 8
+Phase 11
+Phase 16
+```
+
+Evaluate:
+
+```text
+coupling
+cohesion
+provider leakage
+dependency direction
+testability
+replaceability
+security
+context efficiency
+runtime cost
+complexity
+```
+
+If architecture quality is degrading:
+
+STOP feature development.
+
+Refactor first.
+
+---
+
+# 34. PROVIDER-LEAKAGE TEST
+
+At every architecture gate ask:
+
+> If we remove every external AI provider and executor, does PAW Core still compile and do deterministic tests still pass?
+
+The expected answer must be:
+
+```text
+YES
+```
+
+Also ask:
+
+> Does any PAW domain object import types from an external agent framework?
+
+Expected:
+
+```text
+NO
+```
+
+---
+
+# 35. PROHIBITED-PROJECT TEST
+
+At every major milestone verify repository dependencies and source.
+
+There must be no runtime dependency on:
+
+```text
+QwenPaw
+DeepSeek Harness
+NotebookLM
+Google Antigravity
+```
+
+Searching the repository for these names is allowed in:
+
+```text
+architecture documentation
+historical design notes
+comparison documents
+```
+
+but not in runtime integration code.
+
+There must be no:
+
+```text
+QwenPawAdapter
+DeepSeekHarnessExecutor
+NotebookLMProvider
+AntigravityExecutor
+```
+
+unless explicitly requested by the user in a future project direction.
+
+Do not pre-build these integrations.
+
+---
+
+# 36. REQUIRED DEVELOPMENT REPORT
+
+Before implementation:
+
+```text
+CURRENT PHASE
+CURRENT ARCHITECTURE
+SCOPE
+FILES EXPECTED TO CHANGE
+ACCEPTANCE TESTS
+RISKS
+```
+
+After implementation:
+
+```text
+PHASE:
+STATUS: PASS | PARTIAL | FAIL
+
+IMPLEMENTED:
+...
+
+TEST RESULTS:
+...
+
+ACCEPTANCE:
+[PASS] ...
+[PASS] ...
+[FAIL] ...
+
+DEPENDENCY CHECK:
+[PASS] no QwenPaw runtime
+[PASS] no DeepSeek Harness runtime
+[PASS] no NotebookLM runtime
+[PASS] no Antigravity runtime
+
+ARCHITECTURAL DECISIONS:
+...
+
+KNOWN LIMITATIONS:
+...
+
+TECHNICAL DEBT:
+...
+
+NEXT SAFE PHASE:
+...
+```
+
+---
+
+# 37. PHASE CONTROL
+
+The user will specify:
+
+```text
+CURRENT_PHASE=N
+```
+
+Only work on that phase.
+
+Example:
+
+```text
+CURRENT_PHASE=2
+```
+
+means:
+
+```text
+implement Skill Fabric only
+```
+
+Do not automatically start Phase 3.
+
+When the phase is complete:
+
+STOP.
+
+Report PASS/PARTIAL/FAIL.
+
+---
+
+# 38. DO NOT OVERENGINEER
+
+Do not prematurely add:
+
+```text
+distributed agents
+message queues
+microservices
+Docker infrastructure
+browser UI
+vector databases
+workflow servers
+background services
+complex plugin protocols
+```
+
+A feature must earn its complexity.
+
+---
+
+# 39. FINAL PRODUCT DEFINITION
+
+PAW should eventually behave like:
+
+```text
+USER
+ │
+ ▼
+Personal Identity
+ │
+ ▼
+Skill Discovery
+ │
+ ▼
+Context Builder
+ │
+ ▼
+Task Planning
+ │
+ ├── Memory
+ ├── Knowledge
+ ├── Model Router
+ ├── Capability Router
+ └── Policy
+ │
+ ▼
+Execution
+ │
+ ▼
+Verification
+ │
+ ▼
+Task Ledger
+ │
+ ▼
+Memory Learning
+```
+
+Its intelligence comes primarily from:
+
+```text
+good skills
++
+good context
++
+good memory
++
+good task decomposition
++
+good routing
+```
+
+not simply from calling the largest available model.
+
+---
+
+# 40. ULTIMATE DESIGN PRINCIPLE
+
+PAW is not:
+
+```text
+QwenPaw
++
+DeepSeek Harness
++
+NotebookLM
++
+Antigravity
+```
+
+PAW is not even:
+
+```text
+a universal wrapper around existing agents
+```
+
+PAW is:
+
+# A NEW PERSONAL AGENT ARCHITECTURE OWNED BY THIS PROJECT.
+
+External tools are replaceable workers.
+
+External models are replaceable compute.
+
+External libraries are implementation conveniences.
+
+PAW owns the intelligence architecture.
+
+Build PAW as an independent product.
+
+Do not recreate or assemble the four inspiration projects.
+
+---
+
+# EXECUTION INSTRUCTION
+
+For this session:
+
+```text
+CURRENT_PHASE={{PHASE}}
+```
+
+Before changing any code:
+
+1. Inspect the repository.
+2. Determine whether PAW already contains implementation from previous phases.
+3. Verify architecture boundaries.
+4. Verify prohibited dependencies are absent.
+5. Define exact acceptance tests for the current phase.
+
+Then implement ONLY the requested phase.
+
+Run all applicable tests.
+
+Do not proceed to the next phase automatically.

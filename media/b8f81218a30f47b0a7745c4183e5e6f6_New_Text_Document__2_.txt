@@ -1,0 +1,900 @@
+# PAW — PHASE 10R
+# Architecture Stabilization, Acceptance Gate Repair and Test Hardening
+
+You are working on the PAW — Personal Agent Workstation repository.
+
+This is NOT a new feature phase.
+
+This is a mandatory stabilization phase.
+
+Current repository state claims implementation through Phase 10, but an external architecture review identified multiple cases where implementation exists while acceptance gates are incomplete, incorrect, or capable of producing false-green results.
+
+Your task is to repair the architecture and tests before any Phase 11 work begins.
+
+# CURRENT_PHASE=10R
+
+Do NOT implement OpenCode.
+
+Do NOT add another executor.
+
+Do NOT add multi-agent functionality.
+
+Do NOT add speculative features.
+
+The only goal is:
+
+> Make Phases 0–10 truthful, testable, installable, secure, and architecturally consistent.
+
+---
+
+# 1. MANDATORY SKILL
+
+Before implementation, load and follow:
+
+```text
+paw-phase-gate-review
+```
+
+Apply that skill to every acceptance decision in this stabilization phase.
+
+A green pytest run alone is NOT sufficient.
+
+---
+
+# 2. PROHIBITED ARCHITECTURE
+
+PAW remains a greenfield independent project.
+
+There must be no runtime dependency or executor/provider integration for:
+
+```text
+QwenPaw
+DeepSeek Harness
+NotebookLM
+Google Antigravity
+```
+
+Do not add them while fixing this phase.
+
+---
+
+# 3. FIRST TASK — ESTABLISH REAL PACKAGE ROOTS
+
+Inspect the repository.
+
+Explicitly print:
+
+```text
+REPOSITORY_ROOT=
+SOURCE_ROOT=
+PACKAGE_ROOT=
+TEST_ROOT=
+```
+
+Do not assume the repository folder name constitutes a valid installed Python package.
+
+Verify source scans contain at least one Python runtime file.
+
+If a security or dependency scan examines zero files, the test MUST FAIL.
+
+---
+
+# 4. FIX PYTHON PACKAGING
+
+The current repository layout/package discovery must be reviewed because package execution may currently depend on running from the parent directory of a checkout named `paw`.
+
+Convert the project to a conventional and explicit package layout.
+
+Preferred:
+
+```text
+repo/
+├── src/
+│   └── paw/
+│       ├── __init__.py
+│       ├── __main__.py
+│       ├── cli/
+│       ├── core/
+│       └── knowledge/
+├── tests/
+├── skills/
+├── docs/
+└── pyproject.toml
+```
+
+Use another layout only if you can demonstrate it is cleaner and equally robust.
+
+Update setuptools package discovery accordingly.
+
+Required verification:
+
+```text
+build wheel
+inspect wheel contents
+install wheel in isolated environment
+change cwd outside repository
+import paw
+python -m paw --help
+paw --help
+paw version
+```
+
+Tests must not rely on the checkout directory being named `paw`.
+
+---
+
+# 5. CLEAN REPOSITORY ARTIFACTS
+
+Remove tracked generated artifacts including, where applicable:
+
+```text
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+dist/
+build/
+```
+
+Add/update `.gitignore`.
+
+Do not delete legitimate source files.
+
+Add a hygiene test or CI check preventing these artifacts from being recommitted where practical.
+
+---
+
+# 6. REPAIR PROHIBITED-DEPENDENCY TESTS
+
+Current dependency-invariant tests must be audited.
+
+The test must explicitly determine the real PAW source directory.
+
+Pattern:
+
+```python
+runtime_files = list(PACKAGE_ROOT.rglob("*.py"))
+
+assert runtime_files, "Dependency scan examined zero PAW runtime files"
+
+for file in runtime_files:
+    ...
+```
+
+Check actual runtime source and dependency manifests.
+
+Verify absence of runtime integration with:
+
+```text
+QwenPaw
+DeepSeek Harness
+NotebookLM
+Google Antigravity
+```
+
+Do not produce false green when the path is wrong.
+
+Add at least one negative-control test proving the scanner detects a prohibited reference in a temporary fixture.
+
+---
+
+# 7. REPAIR PHASE 6 SECURITY GATE
+
+There is currently no trustworthy evidence that Phase 6 completed its mandatory adversarial gate.
+
+Add a dedicated Phase 6 policy test suite.
+
+At minimum test:
+
+```text
+filesystem.read
+filesystem.write
+filesystem.delete
+shell.execute
+network.http
+process.spawn
+git.read
+git.write
+secrets.read
+destructive
+financial
+```
+
+Also test:
+
+```text
+path traversal
+write outside allowed root
+symlink escape if filesystem tools support symlinks
+secret-like files
+dangerous shell request
+nested or delegated execution
+skill capability escalation
+```
+
+Default expected posture:
+
+```text
+safe read        ALLOW
+write            ASK unless explicitly scoped
+delete           DENY
+shell            ASK
+network          ASK
+process spawn    DENY
+git read         ALLOW
+git write        ASK
+secrets          DENY
+destructive      DENY
+financial        DENY
+```
+
+---
+
+# 8. IMPLEMENT POLICY CONDITIONS OR REMOVE THE CLAIM
+
+If PolicyRule contains:
+
+```text
+conditions
+```
+
+then conditions must be evaluated.
+
+Example desired scope:
+
+```text
+filesystem.write
+ALLOW
+only if target path is under allowed project root
+```
+
+A field stored in SQLite but never applied is not implemented functionality.
+
+Choose one:
+
+A. implement minimal, typed condition evaluation now;
+
+or
+
+B. clearly mark conditions unsupported and remove misleading behavior/API until a future phase.
+
+Do not retain pseudo-features.
+
+Add positive and negative condition tests.
+
+---
+
+# 9. FIX CAPABILITY ROUTER IDENTITY BUG
+
+Audit Capability Router scoring.
+
+A routing score must preserve executor identity independently from capability identity.
+
+Do not use:
+
+```text
+capability="*"
+```
+
+and later attempt:
+
+```text
+registry.get(best_score.capability)
+```
+
+Introduce a typed score object if necessary, conceptually:
+
+```python
+class ExecutorScore:
+    executor_id: str
+    executor_name: str
+    total_score: float
+    capability_scores: dict[str, float]
+    reason: str
+```
+
+Tests must cover:
+
+```text
+single executor
+multiple executors
+partial capability match
+no match
+tie
+privacy requirement
+complexity differences
+disabled executor
+```
+
+Assert the executor receiving the highest total score is the executor returned by `best_executor()`.
+
+---
+
+# 10. SEPARATE MODEL AND EXECUTOR CAPABILITIES
+
+Audit model manifests.
+
+Model capabilities should describe MODEL abilities, for example:
+
+```text
+reasoning
+coding
+vision
+tool_calling
+structured_output
+long_context
+embedding
+planning
+```
+
+Executor capabilities should describe ACTION permissions/capabilities:
+
+```text
+filesystem.read
+filesystem.write
+shell.execute
+git.read
+git.write
+network.http
+process.spawn
+```
+
+Do not assign filesystem or shell abilities directly to model manifests.
+
+Refactor schemas/tests while preserving backwards compatibility only where it is useful.
+
+Model Router answers:
+
+```text
+WHICH MODEL SHOULD THINK?
+```
+
+Capability Router answers:
+
+```text
+WHICH EXECUTOR SHOULD ACT?
+```
+
+Keep this boundary explicit.
+
+---
+
+# 11. FIX CONTEXT BUDGET ACCOUNTING
+
+Current budget behavior must be audited.
+
+The decision to add a fragment must consider the candidate fragment itself.
+
+Correct concept:
+
+```text
+current_tokens + candidate_tokens <= max_tokens
+```
+
+not only:
+
+```text
+current_tokens < max_tokens
+```
+
+Likewise calculate whether the candidate introduces a new source.
+
+Add tests for:
+
+```text
+exactly at token limit
+one token below
+one token above
+single huge fragment
+many small fragments
+same source repeated
+new source exceeds source count
+fragment count boundary
+content length boundary
+```
+
+No context may exceed the configured budget after a successful `add_fragment()`.
+
+---
+
+# 12. ADD TOKEN ESTIMATOR ABSTRACTION
+
+Do not hardcode token estimation inside TaskContext.
+
+Introduce a simple internal abstraction such as:
+
+```python
+class TokenEstimator(Protocol):
+    def estimate(self, text: str) -> int:
+        ...
+```
+
+Provide a lightweight default estimator.
+
+Do not add heavy tokenization dependencies unless justified.
+
+The estimator should later be replaceable by model-specific tokenizers.
+
+Test deterministic behavior.
+
+---
+
+# 13. REBUILD CONTEXT BUILDER AROUND RELEVANCE
+
+Phase 8 is a critical architecture gate.
+
+Current Context Builder behavior must NOT primarily select memories by:
+
+```text
+most recent
+```
+
+It should select:
+
+```text
+most relevant to current task
+```
+
+The build API therefore needs access to task goal/query.
+
+Conceptually:
+
+```python
+build_context(
+    task_id,
+    task_goal,
+    session_id=None,
+    ...
+)
+```
+
+or retrieve the goal from the task record.
+
+Use simple deterministic relevance first.
+
+Examples allowed:
+
+```text
+FTS5
+keyword/BM25
+existing semantic matcher
+hybrid scoring
+```
+
+Do not require embeddings yet.
+
+---
+
+# 14. MEMORY RETRIEVAL FOR CONTEXT
+
+Replace naive behavior such as:
+
+```sql
+ORDER BY created_at DESC LIMIT 10
+```
+
+as the primary selection mechanism.
+
+Retrieve memory by relevance to the task goal.
+
+Recency may be a secondary scoring factor.
+
+Context must distinguish:
+
+```text
+personal memory
+project memory
+episodic memory
+```
+
+where available.
+
+Do not concatenate unrelated memory blindly.
+
+Each selected memory fragment should include:
+
+```text
+memory id
+memory type
+score
+selection reason
+content
+```
+
+---
+
+# 15. INTEGRATE SKILLS INTO TASK CONTEXT
+
+A selected skill is useless if its instructions are never delivered to planning/execution.
+
+Verify end-to-end flow:
+
+```text
+user task
+→ Skill Fabric search
+→ candidates
+→ selected skills
+→ lazy-load selected SKILL.md
+→ Context Builder
+→ TaskContext
+```
+
+Add a `skill` context source.
+
+Do not load bodies for unselected skills.
+
+Context explain mode must show:
+
+```text
+which skill was included
+why
+selection score
+```
+
+---
+
+# 16. INTEGRATE KNOWLEDGE BY TASK QUERY
+
+Current knowledge integration must return actual evidence, not merely citation counts.
+
+Context Builder should request relevant knowledge using:
+
+```text
+task goal/query
+```
+
+Expected fragments contain:
+
+```text
+source id
+chunk/evidence content
+citation
+relevance score
+reason
+```
+
+Do not fabricate citation information.
+
+The executor should receive the content necessary to use the cited evidence.
+
+---
+
+# 17. PHASE 8 STRESS ACCEPTANCE TEST
+
+This test is mandatory.
+
+Build a controlled fixture containing:
+
+```text
+100 memories
+100 knowledge chunks
+50 skills
+repository/file context
+ledger events
+session history
+```
+
+Include:
+
+```text
+clearly relevant records
+semantically similar distractors
+completely irrelevant records
+recent but irrelevant records
+older but highly relevant records
+```
+
+Issue a deterministic test task.
+
+Verify:
+
+```text
+relevant memory selected
+old relevant memory beats new irrelevant memory
+
+relevant knowledge selected
+irrelevant knowledge excluded
+
+correct skills selected
+unrelated skill bodies not loaded
+
+token budget respected
+fragment budget respected
+source budget respected
+
+selected context << total candidate corpus
+
+every included fragment has a reason
+```
+
+This is the Phase 8 architecture gate.
+
+If it fails:
+
+PHASE 10R must fail.
+
+---
+
+# 18. REVIEW TASK GRAPH PHASE 9
+
+Do not add new graph features.
+
+Verify existing graph/scheduler behavior.
+
+Tests must cover:
+
+```text
+linear DAG
+parallel independent nodes
+dependency failure
+downstream blocking
+retry
+resume
+already completed sibling not repeated
+cycle rejection
+missing dependency
+partial completion
+```
+
+Fix bugs only.
+
+---
+
+# 19. COMPLETE REAL PHASE 10 MODEL PROVIDERS
+
+Only after all preceding stabilization gates pass, implement the actual Phase 10 provider layer.
+
+Priority:
+
+```text
+1. generic OpenAI-compatible provider
+2. Ollama-compatible local provider
+3. OpenRouter-compatible configuration
+```
+
+Avoid vendor-specific domain objects.
+
+PAW should own an interface similar to:
+
+```python
+class ModelProvider(Protocol):
+    async def complete(...): ...
+    async def health(...): ...
+```
+
+Normalize:
+
+```text
+response
+usage
+errors
+timeout
+retryable status
+```
+
+Do not add another agent framework.
+
+Do not implement Phase 11 executor integration.
+
+---
+
+# 20. MODEL PROVIDER TESTING
+
+Normal CI must not require paid/cloud APIs.
+
+Use:
+
+```text
+fake HTTP server
+mock transport
+provider contract tests
+```
+
+Test:
+
+```text
+successful completion
+timeout
+connection error
+HTTP failure
+invalid payload
+missing usage
+retryable error
+non-retryable error
+fallback chain
+provider disabled/unavailable
+```
+
+Ollama integration may have an optional live test guarded by environment/config.
+
+---
+
+# 21. PHASE 10 ROUTING ACCEPTANCE
+
+Prove Model Router works with real provider abstractions.
+
+Example controlled registry:
+
+```text
+local-fast
+local-reasoning
+remote-cheap
+remote-strong
+```
+
+Verify:
+
+```text
+simple task → cheap/local preferred
+
+privacy required → local preferred
+
+complex reasoning → stronger eligible model
+
+model unavailable → fallback
+
+context larger than model capacity → model rejected or heavily penalized
+```
+
+Do not confuse executor selection with model selection.
+
+---
+
+# 22. REBUILD PHASE STATUS TRUTHFULLY
+
+After fixes, evaluate each phase independently.
+
+Return:
+
+```text
+PHASE 0  PASS/PARTIAL/FAIL
+PHASE 1  PASS/PARTIAL/FAIL
+...
+PHASE 10 PASS/PARTIAL/FAIL
+```
+
+A phase is PASS only if acceptance behavior is demonstrated.
+
+Do not infer PASS because source files exist.
+
+---
+
+# 23. FULL REGRESSION SUITE
+
+Before completion run all applicable:
+
+```text
+pytest
+ruff check .
+type checker if configured
+package build
+wheel inspection
+isolated install smoke test
+dependency invariant test
+security adversarial suite
+Phase 8 stress context test
+Task Graph acceptance tests
+model provider contract tests
+```
+
+Report exact results.
+
+Do not hide skipped/failing tests.
+
+---
+
+# 24. ARCHITECTURE REVIEW
+
+Perform a mandatory architecture gate review using `paw-phase-gate-review`.
+
+Evaluate:
+
+```text
+coupling
+cohesion
+dependency direction
+provider leakage
+model/executor separation
+skill integration
+context relevance
+policy authority
+packaging correctness
+test quality
+false-green risk
+replaceability
+complexity
+```
+
+---
+
+# 25. REQUIRED FINAL REPORT
+
+Return:
+
+```text
+PHASE:
+10R
+
+STATUS:
+PASS | PARTIAL | FAIL
+
+PACKAGING:
+...
+
+REPOSITORY HYGIENE:
+...
+
+PHASE 0-10 STATUS:
+...
+
+FALSE-GREEN TESTS FOUND:
+...
+
+FALSE-GREEN TESTS FIXED:
+...
+
+SECURITY GATE:
+...
+
+CAPABILITY ROUTER:
+...
+
+MODEL ROUTER:
+...
+
+CONTEXT BUILDER:
+...
+
+SKILL INTEGRATION:
+...
+
+KNOWLEDGE INTEGRATION:
+...
+
+TASK GRAPH:
+...
+
+MODEL PROVIDERS:
+...
+
+TEST RESULTS:
+...
+
+ARCHITECTURE REVIEW:
+...
+
+REMAINING BLOCKERS:
+...
+
+SAFE NEXT PHASE:
+...
+```
+
+`SAFE NEXT PHASE` may be:
+
+```text
+PHASE 11
+```
+
+ONLY if every critical gate is PASS.
+
+Otherwise:
+
+```text
+REPAIR PHASE 10R
+```
+
+---
+
+# 26. ABSOLUTE STOP CONDITION
+
+Do not implement OpenCode.
+
+Do not implement Phase 11.
+
+Do not add new features unrelated to stabilization.
+
+Stop after Phase 10R and report the results.
