@@ -4,6 +4,27 @@ PAW Core — Core domain models and services.
 
 from __future__ import annotations
 
+# Context Compiler (Phase 10)
+# Autonomy Controller (Phase 10)
+from .autonomy import (
+    AutonomyBudget,
+    AutonomyController,
+    AutonomyDecision,
+    AutonomyProfile,
+    AutonomyUsage,
+    StopReason,
+)
+
+# Checkpoint/Resume (Phase 10)
+from .checkpoint import (
+    CheckpointManager,
+    CheckpointStore,
+    ExtendedTaskStatus,
+    ResumeManager,
+    TaskCheckpoint,
+    checkpoint_task,
+)
+
 # Config & Settings
 from .config import PawSettings, settings
 from .context import (
@@ -12,6 +33,38 @@ from .context import (
     ContextFragment,
     ExplainEntry,
     TaskContext,
+)
+
+# Context Compiler (Phase 10)
+from .context_compiler import (
+    ContextCandidate,
+    ContextCompiler,
+    ContextPlan,
+    format_explain_report,
+)
+
+# Detectors (Phase 10)
+from .detectors import (
+    LoopController,
+    ProgressConfig,
+    ProgressDetector,
+    RepetitionConfig,
+    RepetitionDetector,
+    StallConfig,
+    StallDetector,
+)
+
+# Execution Profile (K, Phase 10)
+from .execution_profile import (
+    DEVELOP,
+    FAST,
+    PRECISE,
+    PRESETS,
+    SAFE,
+    ExecutionProfile,
+    PrivacyPreference,
+    get_execution_profile,
+    list_execution_profiles,
 )
 
 # Executor
@@ -23,6 +76,7 @@ from .executor import (
     ExecutorCapabilities,
     ExecutorRegistry,
     ExecutorResult,
+    ExecutorScore,
     MockExecutor,
     execute_task,
     executor_registry,
@@ -34,6 +88,9 @@ from .executor_policy import (
     PolicyEnforcedExecutor,
     get_enforcer,
 )
+
+# Identity (Phase 4 spec)
+from .identity import Identity, IdentityManager
 
 # Intelligent Planner
 from .intelligent_planner import DecompositionResult, DecompositionStep, IntelligentPlanner
@@ -122,53 +179,162 @@ from .task_scheduler import (
 # Task Manager ref
 
 __all__ = [
-    # Config
-    "settings", "PawSettings",
-    # Logging
-    "get_logger", "configure_logging",
+    "BUILTIN_SKILLS",
+    "DEVELOP",
+    "FAST",
     # Models
-    "ID", "ID_LENGTH", "MIN_ID_LENGTH",
-    "Capability", "Identified", "Metadata", "MemoryType", "ModelRole", "ModelCapability",
-    "PolicyDecision", "Result", "SkillRisk", "TaskStatus",
-    "TimestampMixin", "_generate_id", "_validate_id",
-    "Artifact", "Decision", "Evidence", "Citation", "Usage", "ErrorInfo", "TaskResult",
-    "ModelManifest", "ModelSelection", "CapabilityManifest", "CapabilityScore",
-    # Storage
-    "db", "Database", "get_db",
-    # Session
-    "Session", "SessionManager",
-    # Task
-    "Task", "TaskManager",
-    # Ledger
-    "TaskEvent", "TaskLedger", "TaskEventType",
-    # Executor
-    "Executor", "ExecutorResult", "MockExecutor", "executor_registry",
-    "ExecutorCapabilities", "ExecutorRegistry", "ExecutableTask",
-    "execute_task",
-    # Skills
-    "Skill", "SkillManifest", "SkillFabric", "get_skill_fabric", "BUILTIN_SKILLS",
-    # Planner
-    "Plan", "Planner", "TaskNode",
-    # Selector
-    "SkillSelection", "SkillSelector",
-    # Context
-    "ContextBuilder", "ContextFragment", "TaskContext",
-    "ContextBudget", "ExplainEntry",
-    # Policy
-    "PolicyGuard", "PolicyRule", "get_policy_guard", "ensure_policy_table",
-    # Phase 3
-    "IntelligentPlanner", "DecompositionResult", "DecompositionStep",
-    "SemanticMatcher", "SemanticSkillSelector", "SemanticScore",
-    "get_semantic_selector",
-    "MemoryStore", "MemoryRetriever", "MemoryRecord", "create_memory",
-    "ExecutorPolicyEnforcer", "PolicyEnforcedExecutor", "PolicyCheckResult", "get_enforcer",
-    # Model Router
-    "ModelRouter", "ModelRegistry", "get_model_router", "get_model_registry",
-    "ModelScorer", "ModelScore",
+    "ID",
+    "ID_LENGTH",
+    "MIN_ID_LENGTH",
+    "PRECISE",
+    "PRESETS",
+    "SAFE",
+    "Artifact",
+    "AutonomyBudget",
+    # Autonomy Controller (Phase 10)
+    "AutonomyController",
+    # Phase 10 Models
+    "AutonomyDecision",
+    "AutonomyProfile",
+    "AutonomyUsage",
+    "Capability",
+    "CapabilityManifest",
     # Capability Router
-    "CapabilityRouter", "CapabilityScorer", "get_capability_router",
+    "CapabilityRouter",
+    "CapabilityScore",
+    "CapabilityScorer",
+    "CheckpointManager",
+    "CheckpointStore",
+    "Citation",
+    "ContextBudget",
+    # Context
+    "ContextBuilder",
+    "ContextCandidate",
+    # Context Compiler (Phase 10)
+    "ContextCompiler",
+    "ContextFragment",
+    "ContextPlan",
+    "Database",
+    "Decision",
+    "DecompositionResult",
+    "DecompositionStep",
+    "DependencyType",
+    "ErrorInfo",
+    "Evidence",
+    "ExecutableTask",
+    # Execution Profile (K, Phase 10)
+    "ExecutionProfile",
+    # Executor
+    "Executor",
+    "ExecutorCapabilities",
+    "ExecutorPolicyEnforcer",
+    "ExecutorRegistry",
+    "ExecutorResult",
+    "ExecutorScore",
+    "ExplainEntry",
+    "ExtendedTaskStatus",
+    "Identified",
+    "Identity",
+    "IdentityManager",
+    # Phase 3
+    "IntelligentPlanner",
+    "LoopController",
+    "MemoryRecord",
+    "MemoryRetriever",
+    "MemoryStore",
+    "MemoryType",
+    "Metadata",
+    "MockExecutor",
+    "ModelCapability",
+    "ModelManifest",
+    "ModelRegistry",
+    "ModelRole",
+    # Model Router
+    "ModelRouter",
+    "ModelScore",
+    "ModelScorer",
+    "ModelSelection",
+    "PawSettings",
+    # Planner
+    "Plan",
+    "Planner",
+    "PolicyCheckResult",
+    "PolicyDecision",
+    "PolicyEnforcedExecutor",
+    # Policy
+    "PolicyGuard",
+    "PolicyRule",
+    "PrivacyPreference",
+    "ProgressConfig",
+    # Detectors (Phase 10)
+    "ProgressDetector",
+    "RepetitionConfig",
+    "RepetitionDetector",
+    "Result",
+    "ResumeManager",
+    "SemanticMatcher",
+    "SemanticScore",
+    "SemanticSkillSelector",
+    # Session
+    "Session",
+    "SessionManager",
+    # Skills
+    "Skill",
+    "SkillFabric",
+    "SkillManifest",
+    "SkillRisk",
+    # Selector
+    "SkillSelection",
+    "SkillSelector",
+    "StallConfig",
+    "StallDetector",
+    "StopReason",
+    # Task
+    "Task",
+    # Checkpoint/Resume (Phase 10)
+    "TaskCheckpoint",
+    "TaskContext",
+    "TaskDependency",
+    # Ledger
+    "TaskEvent",
+    "TaskEventType",
+    "TaskGraph",
+    "TaskLedger",
+    "TaskManager",
+    "TaskNode",
+    "TaskResult",
+    "TaskScheduleStatus",
     # Knowledge Engine — import from paw.knowledge directly (avoid circular import)
     # Task Scheduler
-    "TaskScheduler", "TaskGraph", "TaskDependency", "TaskScheduleStatus", "DependencyType",
-    "get_task_scheduler", "ensure_task_scheduler_tables",
+    "TaskScheduler",
+    "TaskStatus",
+    "TimestampMixin",
+    "Usage",
+    "_generate_id",
+    "_validate_id",
+    "checkpoint_task",
+    "configure_logging",
+    "create_memory",
+    # Storage
+    "db",
+    "ensure_policy_table",
+    "ensure_task_scheduler_tables",
+    "execute_task",
+    "executor_registry",
+    "format_explain_report",
+    "get_capability_router",
+    "get_db",
+    "get_enforcer",
+    "get_execution_profile",
+    # Logging
+    "get_logger",
+    "get_model_registry",
+    "get_model_router",
+    "get_policy_guard",
+    "get_semantic_selector",
+    "get_skill_fabric",
+    "get_task_scheduler",
+    "list_execution_profiles",
+    # Config
+    "settings",
 ]

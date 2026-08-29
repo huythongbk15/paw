@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
@@ -49,7 +49,7 @@ class TaskDependency:
     to_node_id: str = ""      # The node that depends on it
     dependency_type: str = DependencyType.MUST_COMPLETE.value
     condition: str = ""       # Optional condition
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -62,7 +62,7 @@ class TaskDependency:
         }
 
     @classmethod
-    def from_row(cls, row: dict) -> "TaskDependency":
+    def from_row(cls, row: dict) -> TaskDependency:
         return cls(
             id=row["id"],
             from_node_id=row["from_node_id"],
@@ -81,8 +81,8 @@ class TaskGraph:
     nodes: dict[str, TaskNode] = field(default_factory=dict)
     dependencies: list[TaskDependency] = field(default_factory=list)
     schedule_status: str = TaskScheduleStatus.PENDING.value
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -96,7 +96,7 @@ class TaskGraph:
         }
 
     @classmethod
-    def from_row(cls, row: dict, nodes: list[TaskNode], deps: list[TaskDependency]) -> "TaskGraph":
+    def from_row(cls, row: dict, nodes: list[TaskNode], deps: list[TaskDependency]) -> TaskGraph:
         return cls(
             id=row["id"],
             task_id=row["task_id"],
@@ -303,7 +303,7 @@ class TaskScheduler:
                     elif neighbor in rec_stack:
                         # Found cycle
                         cycle_start = path.index(neighbor)
-                        cycle = path[cycle_start:] + [neighbor]
+                        cycle = [*path[cycle_start:], neighbor]
                         cycles.append(cycle)
 
             path.pop()

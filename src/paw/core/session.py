@@ -5,7 +5,7 @@ PAW Core — Session Management
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
 
@@ -18,11 +18,11 @@ class Session(BaseModel):
     id: ID = Field(default_factory=_generate_id)
     project_id: ID | None = None
     metadata: Metadata = Field(default_factory=Metadata)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     def touch(self) -> None:
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
 
     @classmethod
     def from_row(cls, row: dict) -> Session:

@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from paw.core.logging import get_logger
@@ -28,7 +28,7 @@ class KnowledgeCitation:
     context: str = ""
     position: int = 0
     metadata: dict[str, Any] = field(default_factory=dict)
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -42,7 +42,7 @@ class KnowledgeCitation:
         }
 
     @classmethod
-    def from_row(cls, row: dict) -> "KnowledgeCitation":
+    def from_row(cls, row: dict) -> KnowledgeCitation:
         return cls(
             id=row["id"],
             task_id=row["task_id"],

@@ -12,9 +12,12 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
+from paw.providers import ModelProvider
+
+from .execution_profile import ExecutionProfile
 from .logging import get_logger
 from .models import (
     ModelCapability,
@@ -92,7 +95,10 @@ class ModelScorer:
 
         score = min(max(total, 0.0), 1.0)
 
-        reason = self._generate_reason(manifest, role, score, capability_fit, complexity_fit, privacy_fit, cost_fit, latency_fit)
+        reason = self._generate_reason(
+            manifest, role, score, capability_fit, complexity_fit,
+            privacy_fit, cost_fit, latency_fit,
+        )
 
         return ModelScore(
             model_name=manifest.name,
@@ -123,7 +129,12 @@ class ModelScorer:
                 score += (avg_cap / 10.0) * 0.3  # normalize to 0-1
 
         # Role-specific bonus
-        if (role == ModelRole.REASONING.value and "reasoning" in manifest.roles) or (role == ModelRole.CODING.value and "coding" in manifest.roles) or (role == ModelRole.TOOLS.value and "tools" in manifest.roles):
+        role_match = (
+            (role == ModelRole.REASONING.value and "reasoning" in manifest.roles)
+            or (role == ModelRole.CODING.value and "coding" in manifest.roles)
+            or (role == ModelRole.TOOLS.value and "tools" in manifest.roles)
+        )
+        if role_match:
             score += 0.2
 
         return min(score, 1.0)
@@ -178,14 +189,7 @@ class ModelScorer:
             return 0.7  # neutral when cost doesn't matter
 
         cost = manifest.cost.get("compute", "medium")
-        if cost == "low":
-            return 0.9
-        elif cost == "medium":
-            return 0.6
-        elif cost == "high":
-            return 0.3
-        else:
-            return 0.5
+        return {"low": 0.9, "medium": 0.6, "high": 0.3}.get(cost, 0.5)
 
     def _score_latency(self, manifest: ModelManifest, context_size: int) -> float:
         """Score latency fit."""
@@ -397,18 +401,166 @@ class ModelRegistry:
             self.register(m)
         logger.info("default_models_registered", count=len(defaults))
 
+    async def register_ollama_models(self, provider: Any | None = None) -> int:
+        """Discover and register models from a running Ollama server.
+
+        Returns the number of models registered. If Ollama is unavailable,
+        returns 0 (graceful degradation — core does not depend on Ollama).
+        """
+        if provider is None:
+            # Lazy import keeps core free of provider-layer coupling
+            from paw.providers.ollama.provider import OllamaProvider
+
+            provider = OllamaProvider()
+        await provider.initialize()
+        if not provider.available:
+            logger.info("ollama_skipped_unavailable")
+            return 0
+        manifests = await provider.discover_manifests()
+        for m in manifests:
+            # Don't clobber an existing same-named manifest unless it's local
+            existing = self._models.get(m.name)
+            if existing and existing.provider != "ollama":
+                continue
+            self.register(m)
+        logger.info("ollama_models_registered", count=len(manifests))
+        return len(manifests)
+
+
+# --- Provider Registry (Phase 15) ---
+
+class ProviderRegistry:
+    """Aggregates ``ModelProvider`` instances and discovers their models.
+
+    The core router never imports a concrete provider (zero vendor lock-in):
+    providers are handed in as ``ModelProvider`` instances, and their models
+    are discovered at runtime into the ``ModelRegistry``.
+    """
+
+    def __init__(self):
+        self._providers: dict[str, ModelProvider] = {}
+        self._ready = False
+
+    def register(self, provider: ModelProvider) -> None:
+        self._providers[provider.name] = provider
+        logger.info("provider_registered", name=provider.name)
+
+    def get(self, name: str) -> ModelProvider | None:
+        return self._providers.get(name)
+
+    def list(self) -> list[ModelProvider]:
+        return list(self._providers.values())
+
+    async def initialize_all(self) -> None:
+        """Initialize every provider so availability is known."""
+        for provider in self._providers.values():
+            try:
+                if hasattr(provider, "initialize"):
+                    await provider.initialize()
+            except Exception as exc:
+                logger.warning("provider_init_failed", name=provider.name, error=str(exc))
+        self._ready = True
+
+    async def discover_models(self, registry: ModelRegistry) -> int:
+        """Discover models from every *available* provider into ``registry``.
+
+        Unavailable providers are skipped (graceful degradation). Returns the
+        number of manifests registered.
+        """
+        count = 0
+        for provider in self._providers.values():
+            try:
+                if not getattr(provider, "available", True):
+                    logger.info("provider_skipped_unavailable", name=provider.name)
+                    continue
+                for manifest in await provider.discover_manifests():
+                    registry.register(manifest)
+                    count += 1
+            except Exception as exc:
+                logger.warning("provider_discover_failed", name=provider.name, error=str(exc))
+        logger.info("provider_models_discovered", count=count)
+        return count
+
 
 # --- Model Router ---
 
 class ModelRouter:
     """Selects the best model for a task based on multi-dimensional scoring."""
 
-    def __init__(self, registry: ModelRegistry | None = None):
+    def __init__(self, registry: ModelRegistry | None = None, providers: Any | None = None):
         self.registry = registry or ModelRegistry()
         self._custom_registry = registry is not None
         self._selections: dict[str, ModelSelection] = {}
         self._scores: dict[str, list[ModelScore]] = {}
         self._scorer = ModelScorer()
+        # Phase 15: provider-aware routing. ``providers`` may be a
+        # ProviderRegistry or an iterable of ModelProvider instances.
+        self._provider_registry: ProviderRegistry | None = None
+        if providers is not None:
+            if isinstance(providers, ProviderRegistry):
+                self._provider_registry = providers
+            else:
+                pr = ProviderRegistry()
+                for p in providers:
+                    pr.register(p)
+                self._provider_registry = pr
+        self._providers_ready = False
+        self._providers_discovered = False
+
+    @property
+    def scorer(self) -> ModelScorer:
+        """Public accessor used by the routing paths."""
+        return self._scorer
+
+    async def ensure_providers_ready(self) -> None:
+        """Initialize providers once so availability is known."""
+        if self._provider_registry is not None and not self._providers_ready:
+            await self._provider_registry.initialize_all()
+            self._providers_ready = True
+
+    async def _available_provider_names(self) -> set[str] | None:
+        """Names of providers currently available, or ``None`` if the router
+        is not provider-aware (no filtering applied). ``local`` is always
+        considered available."""
+        if self._provider_registry is None:
+            return None
+        await self.ensure_providers_ready()
+        names: set[str] = {"local"}
+        for provider in self._provider_registry.list():
+            try:
+                if provider.available:
+                    names.add(provider.name)
+            except Exception:
+                logger.warning(
+                    "provider_availability_check_failed", name=getattr(provider, "name", "?")
+                )
+        return names
+
+    async def _filter_for_availability(
+        self,
+        scored: list[tuple[ModelManifest, ModelScore]],
+        role: str,
+        context_size: int,
+        complexity: str,
+        privacy_required: bool,
+        prefer_cheap: bool,
+    ) -> list[tuple[ModelManifest, ModelScore]]:
+        """Drop candidates whose provider is unavailable, falling back to
+        ``local`` models when nothing else is reachable."""
+        available = await self._available_provider_names()
+        if available is None:
+            return scored
+        filtered = [(m, s) for (m, s) in scored if m.provider in available]
+        if filtered:
+            return filtered
+        local_scored = [
+            (m, s)
+            for (m, s) in self.registry.find_best_for_task(
+                role, context_size, complexity, privacy_required, prefer_cheap
+            )
+            if m.provider == "local"
+        ]
+        return local_scored
 
     async def route(
         self,
@@ -419,14 +571,69 @@ class ModelRouter:
         complexity: str = "medium",
         privacy_required: bool = False,
         prefer_cheap: bool = True,
+        execution_profile: ExecutionProfile | None = None,
     ) -> ModelSelection:
         """Route a task to the best model using multi-dimensional scoring."""
         # Only register defaults if using default registry
         if not self._custom_registry:
             self.registry.register_defaults()
+            # Phase 15: discover models from providers into the registry once
+            if self._provider_registry is not None and not self._providers_discovered:
+                await self._provider_registry.discover_models(self.registry)
+                self._providers_discovered = True
+
+        # Provider availability snapshot (used by both preferred + scored paths)
+        available = await self._available_provider_names()
+
+        # Apply execution profile preferences
+        if execution_profile is not None:
+            # Map privacy preference to privacy_required
+            if execution_profile.privacy_preference.value == "local_only":
+                privacy_required = True
+            # Map cost/latency priority to prefer_cheap
+            prefer_cheap = execution_profile.cost_priority >= execution_profile.latency_priority
+            # Use preferred models first if they exist for this role
+            if execution_profile.preferred_models:
+                for preferred in execution_profile.preferred_models:
+                    manifest = self.registry.get(preferred)
+                    if manifest and manifest.supports_role(role):
+                        # Phase 15: skip preferred model if its provider is down
+                        if available is not None and manifest.provider not in available:
+                            continue
+                        privacy_required = privacy_required or (
+                            not manifest.local
+                            and execution_profile.privacy_preference.value == "local_only"
+                        )
+                        # Build a selection directly from preferred model
+                        score = self.scorer.score_model_for_task(
+                            manifest, role, context_size, complexity, privacy_required, prefer_cheap
+                        )
+                        # Fallback chain excludes unavailable providers
+                        chain = [
+                            m.name
+                            for m in self.registry.find_for_role(role)
+                            if available is None or m.provider in available
+                        ]
+                        selection = ModelSelection(
+                            model_name=manifest.name,
+                            model_manifest=manifest,
+                            role=role,
+                            reason=f"Preferred by execution profile '{execution_profile.name}': {score.reason}",
+                            fallback_chain=chain,
+                            score=score.score,
+                        )
+                        self._selections[task_id] = selection
+                        await self.persist_selection(task_id, selection)
+                        logger.info("model_routed_preferred", task_id=task_id, model=manifest.name)
+                        return selection
 
         scored = self.registry.find_best_for_task(
             role, context_size, complexity, privacy_required, prefer_cheap
+        )
+
+        # Phase 15: exclude models from unavailable providers
+        scored = await self._filter_for_availability(
+            scored, role, context_size, complexity, privacy_required, prefer_cheap
         )
 
         if not scored:
@@ -441,7 +648,7 @@ class ModelRouter:
         self._scores[task_id] = [s for _, s in scored]
 
         best_manifest, best_score = scored[0]
-        fallback_chain = self.registry.fallback_chain(role)
+        fallback_chain = [m.name for (m, s) in scored]
 
         selection = ModelSelection(
             model_name=best_manifest.name,
@@ -472,9 +679,17 @@ class ModelRouter:
     ) -> tuple[ModelSelection, list[ModelScore]]:
         """Route with full explainability (all scores returned)."""
         self.registry.register_defaults()
+        if self._provider_registry is not None and not self._providers_discovered:
+            await self._provider_registry.discover_models(self.registry)
+            self._providers_discovered = True
 
         scored = self.registry.find_best_for_task(
             role, context_size, complexity, privacy_required, prefer_cheap
+        )
+
+        # Phase 15: exclude models from unavailable providers
+        scored = await self._filter_for_availability(
+            scored, role, context_size, complexity, privacy_required, prefer_cheap
         )
 
         self._scores[task_id] = [s for _, s in scored]
@@ -483,7 +698,7 @@ class ModelRouter:
             return ModelSelection(model_name="", reason="No models available", role=role), []
 
         best_manifest, best_score = scored[0]
-        fallback_chain = self.registry.fallback_chain(role)
+        fallback_chain = [m.name for (m, s) in scored]
 
         selection = ModelSelection(
             model_name=best_manifest.name,
@@ -511,7 +726,9 @@ class ModelRouter:
         """Persist model selection to DB."""
         await db.execute(
             """
-            INSERT OR REPLACE INTO model_selections (task_id, model_name, role, reason, score, fallback_chain, created_at)
+            INSERT OR REPLACE INTO model_selections (
+                task_id, model_name, role, reason, score, fallback_chain, created_at
+            )
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
@@ -521,7 +738,7 @@ class ModelRouter:
                 selection.reason,
                 selection.score,
                 json.dumps(selection.fallback_chain),
-                datetime.now(timezone.utc).isoformat(),
+                datetime.now(UTC).isoformat(),
             ),
         )
 

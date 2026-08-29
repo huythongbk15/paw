@@ -8,23 +8,13 @@ from __future__ import annotations
 
 import pytest
 
-from paw.core.storage import db, set_db_path, Database
+from paw.core.storage import db
 
 
 @pytest.fixture
-async def temp_db():
-    """Create a temporary database for testing."""
-    import tempfile
-    from pathlib import Path
-    
-    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
-        db_path = Path(f.name)
-    
-    await set_db_path(db_path)
-    await db.initialize()
-    yield db_path
-    await db.close()
-    db_path.unlink(missing_ok=True)
+async def temp_db(reset_db, session_db):
+    """Shared session DB (Cấp 2, see tests/conftest.py)."""
+    yield session_db
 
 
 class TestStorageGetAll:

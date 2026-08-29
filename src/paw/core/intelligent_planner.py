@@ -10,8 +10,8 @@ from __future__ import annotations
 import json
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
+from typing import Any, ClassVar
 
 from .logging import get_logger
 from .storage import db
@@ -49,7 +49,7 @@ class DecompositionResult:
     steps: list[DecompositionStep] = field(default_factory=list)
     confidence: float = 0.0
     reasoning_summary: str = ""
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -64,7 +64,7 @@ class DecompositionResult:
 class IntentClassifier:
     """Classify user intent into categories for decomposition."""
 
-    INTENT_PATTERNS: dict[str, list[str]] = {
+    INTENT_PATTERNS: ClassVar[dict[str, list[str]]] = {
         "calculation": [
             "tính", "calculate", "compute", "cộng", "trừ", "nhân", "chia",
             "sum", "total", "result", "con số", "số", "math", "equation",
@@ -133,7 +133,7 @@ class StructuredReasoner:
     def _generate_steps(self, goal: str, intents: list[str]) -> list[DecompositionStep]:
         """Generate decomposition steps based on intent."""
         steps: list[DecompositionStep] = []
-        goal_words = goal.lower().split()
+        goal.lower().split()
 
         if "calculation" in intents:
             steps = self._decompose_calculation(goal)
@@ -542,8 +542,8 @@ class IntelligentPlanner:
                 VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 (plan_id, "", session_id, result["goal"],
-                 datetime.now(timezone.utc).isoformat(),
-                 datetime.now(timezone.utc).isoformat()),
+                 datetime.now(UTC).isoformat(),
+                 datetime.now(UTC).isoformat()),
             )
 
             # Save nodes
@@ -570,8 +570,8 @@ class IntelligentPlanner:
                         None,
                         None,
                         "pending",
-                        datetime.now(timezone.utc).isoformat(),
-                        datetime.now(timezone.utc).isoformat(),
+                        datetime.now(UTC).isoformat(),
+                        datetime.now(UTC).isoformat(),
                     ),
                 )
 

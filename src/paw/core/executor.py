@@ -12,20 +12,27 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
+from typing import Any, ClassVar
 
 from .logging import get_logger
 from .models import (
     Capability,
     CapabilityManifest,
     CapabilityScore,
+    ErrorInfo,
     TaskResult,
     Usage,
 )
 from .task import Task
 
 logger = get_logger(__name__)
+
+
+def _get_enforcer():
+    """Lazy import to avoid circular dependency."""
+    from .executor_policy import get_enforcer
+    return get_enforcer()
 
 
 # --- Executor Result ---
@@ -90,7 +97,7 @@ class Executor(ABC):
     """Base protocol for all executors. Per prompt spec."""
 
     name: str = "base"
-    capabilities: list[Capability] = []
+    capabilities: ClassVar[list[Capability]] = []
 
     @abstractmethod
     async def execute(self, task: Task, context: str) -> ExecutorResult:
@@ -129,8 +136,8 @@ class ExecutorCapabilities:
         if not executor_caps:
             return 0.5  # No restrictions = partial match
 
-        required_set = set(c.value for c in required_caps)
-        executor_set = set(c.value for c in executor_caps)
+        required_set = {c.value for c in required_caps}
+        executor_set = {c.value for c in executor_caps}
 
         matched = required_set & executor_set
         if not matched:
@@ -144,8 +151,8 @@ class ExecutorCapabilities:
         required_caps: list[Capability],
     ) -> list[str]:
         """Find capabilities the executor is missing."""
-        required_set = set(c.value for c in required_caps)
-        executor_set = set(c.value for c in executor_caps)
+        required_set = {c.value for c in required_caps}
+        executor_set = {c.value for c in executor_caps}
         return sorted(required_set - executor_set)
 
     @staticmethod
@@ -165,7 +172,7 @@ class MockExecutor(Executor):
     """Mock executor for testing. Returns deterministic responses."""
 
     name = "mock"
-    capabilities = [
+    capabilities: ClassVar[list[Capability]] = [
         Capability.FILESYSTEM_READ,
         Capability.FILESYSTEM_WRITE,
         Capability.SHELL_EXECUTE,
@@ -182,7 +189,7 @@ class MockExecutor(Executor):
             "task_id": task.id,
             "goal": task.goal,
             "context_length": len(context),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         })
 
         # Check for predefined response
@@ -243,17 +250,48 @@ class MockExecutor(Executor):
 
 # --- Capability Router ---
 
+@dataclass
+class ExecutorScore:
+    """Score for an executor with full identity preserved.
+
+    Extends CapabilityScore concept with executor identity for routing decisions.
+    """
+    executor_id: str
+    executor_name: str
+    total_score: float
+    capability_scores: dict[str, float]
+    reason: str
+    matched_capabilities: list[Capability]
+    missing_capabilities: list[Capability]
+
+    def to_capability_score(self) -> CapabilityScore:
+        """Convert to CapabilityScore for backward compatibility."""
+        return CapabilityScore(
+            capability=self.executor_name,
+            required_score=10.0,
+            executor_score=self.total_score,
+            matched=max(self.total_score / 10.0, 0.0),
+            reason=self.reason,
+        )
+
+    def __lt__(self, other: ExecutorScore) -> bool:
+        """For sorting: higher score is better."""
+        return self.total_score > other.total_score
+
+
 class CapabilityRouter:
     """Routes tasks to the best executor based on capability matching.
 
     Per prompt spec: completely separate from Model Router.
-    Uses CapabilityManifest for scoring and CapabilityScore for results.
+    Uses CapabilityManifest for scoring and returns both ExecutorScore (detailed)
+    and CapabilityScore (compatible) formats.
     """
 
-    def __init__(self, registry: "ExecutorRegistry" | None = None):
+    def __init__(self, registry: ExecutorRegistry | None = None):
         from .executor import executor_registry
         self.registry = registry or executor_registry
-        self._scores: dict[str, list[CapabilityScore]] = {}
+        self._executor_scores: dict[str, list[ExecutorScore]] = {}
+        self._capability_scores: dict[str, list[CapabilityScore]] = {}
         self._scorer = CapabilityScorer()
 
     async def route(
@@ -265,31 +303,52 @@ class CapabilityRouter:
         complexity: str = "medium",
         privacy_required: bool = False,
     ) -> list[CapabilityScore]:
-        """Score all executors for a task based on capabilities."""
+        """Score all executors for a task based on capabilities.
+
+        Returns CapabilityScore for backward compatibility.
+        Use route_detailed() for full ExecutorScore with executor identity.
+        """
         executors = self.registry.list()
 
-        scores: list[CapabilityScore] = []
+        executor_scores: list[ExecutorScore] = []
         for executor in executors:
-            score = self._score_executor(
+            score = self._score_executor_detailed(
                 executor, capabilities, context_size, complexity, privacy_required
             )
-            scores.append(score)
+            executor_scores.append(score)
 
         # Sort by score descending
-        scores.sort(key=lambda s: s.matched, reverse=True)
+        executor_scores.sort(reverse=True)
 
-        self._scores[task_id] = scores
-        logger.info("capability_routed", task_id=task_id, executors=len(scores))
-        return scores
+        # Store both formats
+        self._executor_scores[task_id] = executor_scores
+        capability_scores = [s.to_capability_score() for s in executor_scores]
+        self._capability_scores[task_id] = capability_scores
 
-    def _score_executor(
+        logger.info("capability_routed", task_id=task_id, executors=len(capability_scores))
+        return capability_scores
+
+    async def route_detailed(
+        self,
+        task_id: str,
+        goal: str,
+        capabilities: list[Capability],
+        context_size: int = 0,
+        complexity: str = "medium",
+        privacy_required: bool = False,
+    ) -> list[ExecutorScore]:
+        """Score all executors and return detailed ExecutorScore with identity."""
+        await self.route(task_id, goal, capabilities, context_size, complexity, privacy_required)
+        return self._executor_scores.get(task_id, [])
+
+    def _score_executor_detailed(
         self,
         executor: Executor,
         required_capabilities: list[Capability],
         context_size: int,
         complexity: str,
         privacy_required: bool,
-    ) -> CapabilityScore:
+    ) -> ExecutorScore:
         """Score an executor for a given task using CapabilityManifest."""
         cap_scorer = CapabilityScorer()
 
@@ -305,40 +364,76 @@ class CapabilityRouter:
         # Score each capability
         capability_scores = cap_scorer.score_capabilities(manifest, required_capabilities)
 
-        # Aggregate score
-        if capability_scores:
-            avg_matched = sum(s.matched for s in capability_scores) / len(capability_scores)
+        capability_scores_dict: dict[str, float] = {}
+        matched_capabilities: list[Capability] = []
+        missing_capabilities: list[Capability] = []
+
+        if not required_capabilities:
+            # No specific capabilities required - give neutral score
+            for cap in Capability:
+                capability_scores_dict[cap.value] = 0.5
+            avg_matched = 0.5
+            reason = f"No specific capabilities required for {executor.name}; neutral score"
         else:
-            avg_matched = 0.5  # No capability requirements = neutral
+            for cap_score in capability_scores:
+                capability_scores_dict[cap_score.capability] = cap_score.executor_score
+                if cap_score.matched >= 0.8:
+                    matched_capabilities.append(Capability(cap_score.capability))
+                else:
+                    missing_capabilities.append(Capability(cap_score.capability))
 
-        # Complexity penalty
-        complexity_penalty = {"low": 0.0, "medium": -0.1, "high": -0.2}
-        avg_matched += complexity_penalty.get(complexity, 0.0)
+            # Average of capability scores
+            if capability_scores:
+                avg_matched = sum(s.matched for s in capability_scores) / len(capability_scores)
+            else:
+                avg_matched = 0.0
 
-        # Privacy penalty
+            reason = (
+                f"Matched {len(matched_capabilities)}/"
+                f"{len(required_capabilities)} capabilities for {executor.name}"
+            )
+
+        # Complexity factor
+        complexity_factor = {"low": 1.0, "medium": 0.9, "high": 0.8}
+        total_score = avg_matched * 10.0 * complexity_factor.get(complexity, 0.9)
+
+        # Privacy factor
         if privacy_required and not self._executor_supports_privacy(executor):
-            avg_matched -= 0.3
+            total_score *= 0.7
+            reason += " (privacy penalty)"
 
         # Context size factor
         if context_size > 12000:
-            avg_matched -= 0.1
+            total_score *= 0.9
+            reason += " (large context penalty)"
 
-        best_cap_score = capability_scores[0] if capability_scores else CapabilityScore(
-            capability="*", required_score=10.0, executor_score=5.0, matched=0.5,
-            reason="Default score",
+        return ExecutorScore(
+            executor_id=executor.name,  # Use name as ID since executors don't have separate ID
+            executor_name=executor.name,
+            total_score=max(total_score, 0.0),
+            capability_scores=capability_scores_dict,
+            reason=reason,
+            matched_capabilities=matched_capabilities,
+            missing_capabilities=missing_capabilities,
         )
 
-        return CapabilityScore(
-            capability="*",
-            required_score=10.0,
-            executor_score=avg_matched * 10.0,
-            matched=max(avg_matched, 0.0),
-            reason=f"Aggregated score for {executor.name} across {len(capability_scores)} capabilities",
+    def _score_executor(
+        self,
+        executor: Executor,
+        required_capabilities: list[Capability],
+        context_size: int,
+        complexity: str,
+        privacy_required: bool,
+    ) -> CapabilityScore:
+        """Legacy method for backward compatibility - delegates to detailed."""
+        detailed = self._score_executor_detailed(
+            executor, required_capabilities, context_size, complexity, privacy_required
         )
+        return detailed.to_capability_score()
 
     def _executor_supports_privacy(self, executor: Executor) -> bool:
         """Check if executor supports privacy requirements."""
-        return executor.name in ("local", "mock", "opencode")
+        return executor.name in ("local", "mock")
 
     async def best_executor(
         self,
@@ -350,21 +445,18 @@ class CapabilityRouter:
         privacy_required: bool = False,
     ) -> tuple[Executor | None, CapabilityScore | None]:
         """Get the best executor for a task."""
-        scores = await self.route(task_id, goal, capabilities, context_size, complexity, privacy_required)
+        detailed_scores = await self.route_detailed(
+            task_id, goal, capabilities, context_size, complexity, privacy_required
+        )
 
-        if not scores:
+        if not detailed_scores:
             return None, None
 
-        best_score = scores[0]
+        best_detailed = detailed_scores[0]
+        best_executor = self.registry.get(best_detailed.executor_name)
+        best_cap_score = best_detailed.to_capability_score()
 
-        # Find the actual executor by name
-        best_executor = self.registry.get(best_score.capability)
-        for e in self.registry.list():
-            if e.name == best_score.capability:
-                best_executor = e
-                break
-
-        return best_executor, best_score
+        return best_executor, best_cap_score
 
     async def best_executor_for_task(
         self,
@@ -376,8 +468,12 @@ class CapabilityRouter:
         )
 
     def get_scores(self, task_id: str) -> list[CapabilityScore] | None:
-        """Retrieve scores for a task."""
-        return self._scores.get(task_id)
+        """Retrieve scores for a task (CapabilityScore format for backward compatibility)."""
+        return self._capability_scores.get(task_id)
+
+    def get_detailed_scores(self, task_id: str) -> list[ExecutorScore] | None:
+        """Retrieve detailed scores for a task (ExecutorScore format with identity)."""
+        return self._executor_scores.get(task_id)
 
 
 # --- Capability Scorer ---
@@ -519,8 +615,20 @@ async def execute_task(
     context: str,
     capabilities: list[Capability] | None = None,
     executor: Executor | None = None,
+    enforce_policy: bool = True,
 ) -> ExecutorResult:
-    """Execute a task with full lifecycle (route capability → execute → return result)."""
+    """Execute a task with full lifecycle (route capability → execute → return result).
+
+    Args:
+        task: Task to execute
+        context: Context string for the task
+        capabilities: Optional capability override
+        executor: Optional explicit executor (skips routing)
+        enforce_policy: If True, enforce policy before execution (default True)
+    """
+    if capabilities:
+        task.requested_capabilities = capabilities
+
     if executor is None:
         # Route using capability router
         cap_router = CapabilityRouter()
@@ -528,10 +636,33 @@ async def execute_task(
         if best:
             executor = executor_registry.get(best.capability) or executor_registry.list()[0]
         else:
-            executor = executor_registry.get("mock") or list(executor_registry.list())[0]
+            executor = executor_registry.get("mock") or next(iter(executor_registry.list()))
 
-    if capabilities:
-        task.requested_capabilities = capabilities
+    if enforce_policy:
+        # Use policy enforcer (lazy import to avoid circular dependency)
+        enforcer = _get_enforcer()
+        check, result = await enforcer.enforce(
+            executor, task.id, task.goal, task.requested_capabilities, context
+        )
+        if not check.allowed:
+            # Return blocked result
+            task_result = TaskResult(
+                task_id=task.id,
+                status="blocked",
+                summary=f"Execution blocked by policy: {check.message}",
+                error=ErrorInfo(
+                    code="POLICY_BLOCKED",
+                    message=check.message,
+                    recoverable=False,
+                ),
+            )
+            return ExecutorResult(
+                success=False,
+                error=check.message,
+                task_result=task_result,
+                metadata={"policy_check": check.to_dict()},
+            )
+        return result
 
     result = await executor.execute(task, context)
     return result

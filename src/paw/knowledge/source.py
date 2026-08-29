@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
@@ -50,8 +50,8 @@ class KnowledgeSource:
     status: str = KnowledgeSourceStatus.ACTIVE.value
     chunk_count: int = 0
     last_sync: str | None = None
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     checksum: str = ""
 
     def to_dict(self) -> dict[str, Any]:
@@ -70,7 +70,7 @@ class KnowledgeSource:
         }
 
     @classmethod
-    def from_row(cls, row: dict) -> "KnowledgeSource":
+    def from_row(cls, row: dict) -> KnowledgeSource:
         return cls(
             id=row["id"],
             name=row["name"],
@@ -134,7 +134,7 @@ class KnowledgeSourceManager:
         where = "WHERE " + " AND ".join(conditions) if conditions else ""
         rows = await db.fetchall(
             f"SELECT * FROM knowledge_sources {where} ORDER BY created_at DESC LIMIT ?",
-            tuple(params + [limit]),
+            (*params, limit),
         )
         return [KnowledgeSource.from_row(dict(r)) for r in rows]
 
@@ -142,7 +142,7 @@ class KnowledgeSourceManager:
         """Update source status."""
         await db.execute(
             "UPDATE knowledge_sources SET status = ?, updated_at = ? WHERE id = ?",
-            (status, datetime.now(timezone.utc).isoformat(), source_id),
+            (status, datetime.now(UTC).isoformat(), source_id),
         )
         return True
 
@@ -150,7 +150,7 @@ class KnowledgeSourceManager:
         """Update chunk count for a source."""
         await db.execute(
             "UPDATE knowledge_sources SET chunk_count = ?, updated_at = ? WHERE id = ?",
-            (count, datetime.now(timezone.utc).isoformat(), source_id),
+            (count, datetime.now(UTC).isoformat(), source_id),
         )
         return True
 
@@ -167,7 +167,7 @@ class KnowledgeSourceManager:
         if not source.id:
             source.id = uuid.uuid4().hex[:16]
         source.touch() if hasattr(source, 'touch') else None
-        source.updated_at = datetime.now(timezone.utc)
+        source.updated_at = datetime.now(UTC)
 
         await db.execute(
             """

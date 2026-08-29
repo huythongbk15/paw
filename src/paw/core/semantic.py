@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, ClassVar
 
+from .embeddings import cosine_similarity
 from .logging import get_logger
-from .skills import Skill, SkillFabric, SkillManifest
+from .skills import Skill, SkillFabric, SkillManifest, get_skill_fabric
 
 logger = get_logger(__name__)
 
@@ -42,7 +43,7 @@ class SemanticMatcher:
     """Semantic matching between queries and skills using word overlap and TF-IDF-like scoring."""
 
     # Synonym map for common terms
-    SYNONYMS: dict[str, list[str]] = {
+    SYNONYMS: ClassVar[dict[str, list[str]]] = {
         "calculate": ["tính", "compute", "con số", "số", "math"],
         "calculation": ["calculate", "tính", "compute"],
         "search": ["tìm", "search", "tìm kiếm", "look", "find", "dữ liệu"],
@@ -114,7 +115,7 @@ class SemanticMatcher:
             skill_name=manifest.name,
             skill_description=manifest.description,
             skill_trigger=manifest.trigger,
-            query=query,
+            query=query_lower,
             word_overlap_score=round(word_overlap, 3),
             trigger_match_score=round(trigger_match, 3),
             semantic_score=round(semantic, 3),
@@ -267,3 +268,162 @@ def get_semantic_selector(fabric: SkillFabric | None = None) -> SemanticSkillSel
     if _semantic_selector is None or fabric is not None:
         _semantic_selector = SemanticSkillSelector(fabric)
     return _semantic_selector
+
+
+# --- Advanced Semantic Skill Selector with Embeddings (Phase 11 deferred / Phase 12 pattern) ---
+
+
+@dataclass
+class AdvancedSkillResult:
+    """A skill match with transparent lexical/semantic component scores."""
+
+    manifest: SkillManifest
+    lexical_score: float = 0.0
+    semantic_score: float = 0.0
+    final_score: float = 0.0
+    has_embedding: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "skill_name": self.manifest.name,
+            "category": self.manifest.category,
+            "description": self.manifest.description,
+            "capabilities": [c.value for c in self.manifest.capabilities],
+            "risk": self.manifest.risk.value,
+            "lexical_score": round(self.lexical_score, 4),
+            "semantic_score": round(self.semantic_score, 4),
+            "final_score": round(self.final_score, 4),
+            "has_embedding": self.has_embedding,
+        }
+
+
+class AdvancedSkillSelector:
+    """Hybrid skill selector: lexical (SemanticMatcher) + semantic embeddings.
+
+    Reuses the ``AdvancedMemoryRetriever`` pattern from Phase 12. When an
+    ``EmbeddingProvider`` is configured, every enabled skill is scored by
+    semantic similarity (so lexically-distant but semantically relevant skills
+    surface). Without a provider it degrades to lexical-only scoring.
+    """
+
+    def __init__(
+        self,
+        fabric: SkillFabric | None = None,
+        embedding_provider: Any | None = None,
+        lexical_weight: float = 0.5,
+        semantic_weight: float = 0.5,
+        auto_attach_embeddings: bool = True,
+    ):
+        self.fabric = fabric or get_skill_fabric()
+        self.matcher = SemanticMatcher(self.fabric)
+        self.embedding_provider = embedding_provider
+        self.lexical_weight = lexical_weight
+        self.semantic_weight = semantic_weight
+        self.auto_attach_embeddings = auto_attach_embeddings
+        self._embedding_resolved = False
+
+    async def _resolve_embedding_provider(self) -> None:
+        """Lazily attach a local Ollama embedding provider if none was given.
+
+        Runs at most once per selector instance, only when ``embedding_provider``
+        is ``None`` and ``auto_attach_embeddings`` is enabled. If Ollama is not
+        running the provider stays ``None`` and scoring degrades to lexical-only.
+        """
+        if self._embedding_resolved:
+            return
+        self._embedding_resolved = True
+        if self.embedding_provider is not None:
+            return
+        if not self.auto_attach_embeddings:
+            return
+        try:
+            from .embeddings import try_ollama_embedding_provider
+
+            provider = await try_ollama_embedding_provider()
+            if provider is not None:
+                self.embedding_provider = provider
+                logger.info("skill_selector_embedding_auto_attached", name=provider.name)
+        except Exception as exc:
+            logger.warning("skill_selector_embedding_auto_attach_failed", error=str(exc))
+
+    @staticmethod
+    def _skill_doc(manifest: SkillManifest) -> str:
+        caps = " ".join(c.value for c in manifest.capabilities)
+        return f"{manifest.name} {manifest.category} {manifest.description} {manifest.trigger} {caps}"
+
+    async def select(
+        self,
+        query: str,
+        max_results: int = 5,
+        min_score: float = 0.1,
+        requested_capabilities: list[str] | None = None,
+    ) -> list[AdvancedSkillResult]:
+        await self._resolve_embedding_provider()
+        raw_skills = self.fabric.list_skills(enabled_only=True)
+        # list_skills() returns SkillManifest; wrap defensively in case a
+        # caller (or test double) returns Skill objects already.
+        skills = [s if isinstance(s, Skill) else Skill(s) for s in raw_skills]
+
+        # Capability filter
+        if requested_capabilities:
+            req_set = set(requested_capabilities)
+            skills = [
+                s for s in skills
+                if not req_set.isdisjoint({c.value for c in s.manifest.capabilities})
+            ]
+        if not skills:
+            return []
+
+        # Lexical scores for ALL enabled skills (no lexical pre-filter, so
+        # semantic recall can override weak lexical overlap)
+        query_tokens = self.matcher._tokenize(query)
+        query_lower = query.lower()
+        lexical: dict[str, float] = {}
+        for s in skills:
+            sc = self.matcher._score_skill(s, query_tokens, query_lower)
+            lexical[s.manifest.name] = sc.combined_score
+
+        # Semantic scores
+        semantic: dict[str, float] = {}
+        if self.embedding_provider is not None:
+            docs = [self._skill_doc(s.manifest) for s in skills]
+            try:
+                vecs = await self.embedding_provider.embed(docs)
+                qvecs = await self.embedding_provider.embed([query])
+                qvec = qvecs[0] if qvecs else None
+                if qvec:
+                    for s, vec in zip(skills, vecs, strict=False):
+                        if vec:
+                            semantic[s.manifest.name] = max(cosine_similarity(qvec, vec), 0.0)
+            except Exception as exc:
+                logger.warning("skill_embedding_failed", error=str(exc))
+
+        results: list[AdvancedSkillResult] = []
+        for s in skills:
+            name = s.manifest.name
+            lex = lexical.get(name, 0.0)
+            sem = semantic.get(name, 0.0)
+            has_emb = name in semantic
+            final = (
+                self.lexical_weight * lex + self.semantic_weight * sem
+                if has_emb
+                else lex
+            )
+            results.append(AdvancedSkillResult(s.manifest, lex, sem, final, has_emb))
+
+        results.sort(key=lambda r: r.final_score, reverse=True)
+        return [r for r in results if r.final_score >= min_score][:max_results]
+
+
+_semantic_selector_v2: AdvancedSkillSelector | None = None
+
+
+def get_advanced_skill_selector(
+    fabric: SkillFabric | None = None, embedding_provider: Any | None = None
+) -> AdvancedSkillSelector:
+    """Get (or build) the advanced semantic skill selector."""
+    global _semantic_selector_v2
+    if _semantic_selector_v2 is None or fabric is not None or embedding_provider is not None:
+        _semantic_selector_v2 = AdvancedSkillSelector(fabric, embedding_provider=embedding_provider)
+    return _semantic_selector_v2
+

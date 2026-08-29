@@ -164,5 +164,69 @@ def config() -> None:
     console.print(table)
 
 
+@app.command()
+def profiles(
+    name: str = typer.Argument(None, help="Profile name to show details for"),
+) -> None:
+    """List or show execution profiles (Phase 10 K)."""
+    if name:
+        from ..core.execution_profile import get_execution_profile
+        try:
+            profile = get_execution_profile(name)
+        except Exception:
+            console.print(f"[red]Unknown profile:[/red] {name}")
+            raise typer.Exit(code=1) from None
+
+        console.print(f"[bold]Execution Profile:[/bold] {profile.name}\n")
+        console.print(f"Description: {profile.description}")
+        console.print(f"Autonomy Profile: {profile.autonomy_profile.value}")
+        console.print(f"Privacy Preference: {profile.privacy_preference.value}")
+        console.print(f"Cost Priority: {profile.cost_priority}")
+        console.print(f"Latency Priority: {profile.latency_priority}")
+        console.print(f"Skill Risk Tolerance: {profile.skill_risk_tolerance.value}")
+        console.print(f"Skill Confidence Threshold: {profile.skill_confidence_threshold}")
+        console.print(f"Progressive Loading: {profile.progressive_loading}")
+        console.print(f"Max Parallelism: {profile.max_parallelism}")
+        if profile.skill_categories:
+            console.print(f"Skill Categories: {', '.join(profile.skill_categories)}")
+        if profile.preferred_models:
+            console.print(f"Preferred Models: {', '.join(profile.preferred_models)}")
+
+        # Show resolved autonomy budget
+        budget = profile.resolved_autonomy_budget()
+        console.print("\n[bold]Resolved Autonomy Budget:[/bold]")
+        console.print(f"  Max Decisions: {budget.max_decisions}")
+        console.print(f"  Max Model Calls: {budget.max_model_calls}")
+        console.print(f"  Max Tool Calls: {budget.max_tool_calls}")
+        console.print(f"  Max Iterations: {budget.max_iterations}")
+        console.print(f"  Max Wall Time (s): {budget.max_wall_time_seconds}")
+        return
+
+    # List all profiles
+    from ..core.execution_profile import list_execution_profiles
+    console.print("[bold]Available Execution Profiles:[/bold]\n")
+
+    table = Table(show_header=True, header_style="bold cyan")
+    table.add_column("Name")
+    table.add_column("Autonomy")
+    table.add_column("Privacy")
+    table.add_column("Risk")
+    table.add_column("Parallelism")
+
+    for pname in list_execution_profiles():
+        from ..core.execution_profile import get_execution_profile
+        p = get_execution_profile(pname)
+        table.add_row(
+            p.name,
+            p.autonomy_profile.value,
+            p.privacy_preference.value,
+            p.skill_risk_tolerance.value,
+            str(p.max_parallelism),
+        )
+
+    console.print(table)
+    console.print("\nRun [bold]paw profiles <name>[/bold] to see full details.")
+
+
 if __name__ == "__main__":
     app()

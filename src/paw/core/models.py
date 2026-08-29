@@ -7,7 +7,7 @@ All domain objects are owned by PAW. No external framework types leak into these
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Annotated, Any, TypeVar
 
@@ -56,6 +56,15 @@ class TaskEventType(StrEnum):
     MEMORY_PROPOSED = "memory_proposed"
     MEMORY_ACCEPTED = "memory_accepted"
     TASK_COMPLETED = "task_completed"
+    # Phase 10 additions
+    AUTONOMY_DECISION = "autonomy_decision"
+    CONTEXT_COMPILED = "context_compiled"
+    CHECKPOINT_CREATED = "checkpoint_created"
+    TASK_RESUMED = "task_resumed"
+    TASK_PAUSED = "task_paused"
+    TASK_STALLED = "task_stalled"
+    REPETITION_DETECTED = "repetition_detected"
+    PROGRESS_INSUFFICIENT = "progress_insufficient"
 
 
 class PolicyDecision(StrEnum):
@@ -112,6 +121,67 @@ class SkillRisk(StrEnum):
     HIGH = "high"
 
 
+# --- Phase 10: Autonomy Decisions ---
+
+class AutonomyDecision(StrEnum):
+    CONTINUE = "continue"
+    PAUSE = "pause"
+    ASK = "ask"
+    ESCALATE = "escalate"
+    DELEGATE = "delegate"
+    STOP = "stop"
+
+
+class StopReason(StrEnum):
+    # Budget exhaustion
+    BUDGET_DECISIONS_EXHAUSTED = "budget_decisions_exhausted"
+    BUDGET_MODEL_CALLS_EXHAUSTED = "budget_model_calls_exhausted"
+    BUDGET_TOOL_CALLS_EXHAUSTED = "budget_tool_calls_exhausted"
+    BUDGET_TOKENS_EXHAUSTED = "budget_tokens_exhausted"
+    BUDGET_WALL_TIME_EXHAUSTED = "budget_wall_time_exhausted"
+
+    # Loop limits
+    MAX_ITERATIONS_REACHED = "max_iterations_reached"
+    MAX_RETRIES_EXCEEDED = "max_retries_exceeded"
+
+    # Progress issues
+    STALLED = "stalled"
+    INSUFFICIENT_PROGRESS = "insufficient_progress"
+    REPETITION_DETECTED = "repetition_detected"
+
+    # Policy/Safety
+    POLICY_DENIED = "policy_denied"
+    POLICY_ASK_REQUIRED = "policy_ask_required"
+    SAFETY_VIOLATION = "safety_violation"
+
+    # Task completion
+    TASK_COMPLETED = "task_completed"
+    TASK_FAILED = "task_failed"
+    USER_CANCELLED = "user_cancelled"
+
+    # External
+    EXTERNAL_INTERRUPT = "external_interrupt"
+    UNKNOWN = "unknown"
+
+
+# --- Phase 10: Extended Task States ---
+
+class ExtendedTaskStatus(StrEnum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    PARTIAL = "partial"
+    BLOCKED = "blocked"
+    CANCELLED = "cancelled"
+    PAUSED = "paused"
+    AWAITING_INPUT = "awaiting_input"
+    CHECKPOINTED = "checkpointed"
+    RESUMING = "resuming"
+    STALLED = "stalled"
+    REPETITION = "repetition"
+
+
 class MemoryType(StrEnum):
     EPISODIC = "episodic"
     SEMANTIC = "semantic"
@@ -138,11 +208,11 @@ class Result[T](BaseModel):
 
 
 class TimestampMixin(BaseModel):
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     def touch(self) -> None:
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
 
 
 class Identified(BaseModel):
@@ -173,7 +243,7 @@ class Decision(BaseModel):
     """A decision made during task execution."""
     type: str
     rationale: str = ""
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class Evidence(BaseModel):
@@ -239,6 +309,15 @@ class ModelManifest(BaseModel):
     max_context_tokens: int = 128000
     latency_tier: str = "medium"  # low, medium, high
     enabled: bool = True
+
+    @property
+    def local(self) -> bool:
+        """True for providers that run on the user's machine (no cloud)."""
+        return self.provider in ("local", "offline", "vllm", "ollama")
+
+    def supports_role(self, role: str) -> bool:
+        """Whether this model can serve the given PAW role."""
+        return role in self.roles
 
     def to_dict(self) -> dict[str, Any]:
         return self.model_dump()

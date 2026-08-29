@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from .ledger import TaskLedger
@@ -24,10 +24,10 @@ logger = get_logger(__name__)
 
 class TokenEstimator:
     """Simple token estimator. Can be replaced with model-specific tokenizer."""
-    
+
     def estimate(self, text: str) -> int:
         """Estimate token count for text.
-        
+
         Uses simple heuristic: ~3 characters per token for English.
         """
         if not text:
@@ -45,6 +45,8 @@ class ContextBudget:
     max_fragments: int = 50
     max_sources: int = 10
     max_content_length: int = 50000  # characters
+    dedup_threshold: float = 0.85  # lexical/semantic similarity to treat as duplicate
+    dedup_enabled: bool = True
     priority_weights: dict[str, float] = field(default_factory=lambda: {
         "ledger": 0.3,
         "memory": 0.25,
@@ -54,7 +56,7 @@ class ContextBudget:
     })
     token_estimator: TokenEstimator = field(default_factory=TokenEstimator)
 
-    def estimate_fragment_tokens(self, fragment: 'ContextFragment') -> int:
+    def estimate_fragment_tokens(self, fragment: ContextFragment) -> int:
         """Estimate tokens for a fragment."""
         return self.token_estimator.estimate(fragment.content)
 
@@ -63,24 +65,24 @@ class ContextBudget:
         current_tokens: int,
         current_fragments: int,
         current_sources: int,
-        candidate_fragment: 'ContextFragment | None' = None,
+        candidate_fragment: ContextFragment | None = None,
     ) -> bool:
         """Check if adding a fragment would exceed budget.
-        
+
         Considers the candidate fragment's estimated tokens.
         """
         if current_fragments >= self.max_fragments:
             return False
         if current_sources >= self.max_sources:
             return False
-        
+
         if candidate_fragment is not None:
             estimated = self.estimate_fragment_tokens(candidate_fragment)
             if current_tokens + estimated > self.max_tokens:
                 return False
         elif current_tokens >= self.max_tokens:
             return False
-            
+
         return True
 
 
@@ -93,7 +95,7 @@ class ContextFragment:
     event_type: TaskEventType | None = None
     content: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     relevance_score: float = 0.5
     explanation: str = ""  # Phase 8: why this fragment was included
 
@@ -136,7 +138,7 @@ class TaskContext:
     budget: ContextBudget = field(default_factory=ContextBudget)
     exceeded: bool = False
     explain_mode: bool = False
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -158,8 +160,8 @@ class TaskContext:
     def add_fragment(self, fragment: ContextFragment) -> bool:
         """Add a context fragment, respecting budget. Returns True if added."""
         if not self.budget.can_add_fragment(
-            self.token_count, 
-            len(self.fragments), 
+            self.token_count,
+            len(self.fragments),
             self._source_count(),
             fragment,  # pass candidate for token estimation
         ):
@@ -202,13 +204,13 @@ class TaskContext:
         return "\n".join(lines)
 
     def _source_count(self) -> int:
-        return len(set(f.source for f in self.fragments))
+        return len({f.source for f in self.fragments})
 
     def _update_summary(self) -> None:
         if not self.fragments:
             self.summary = ""
             return
-        sources = set(f.source for f in self.fragments)
+        sources = {f.source for f in self.fragments}
         self.summary = f"Context from {', '.join(sources)}: {len(self.fragments)} fragments"
 
     def _count_tokens(self) -> None:
@@ -427,3 +429,6 @@ def get_context_builder(budget: ContextBudget | None = None) -> ContextBuilder:
     if _context_builder is None or budget is not None:
         _context_builder = ContextBuilder(budget)
     return _context_builder
+
+# Alias for backward compatibility with tests
+ContextItem = ContextFragment

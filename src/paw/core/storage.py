@@ -90,6 +90,17 @@ CREATE TABLE IF NOT EXISTS task_events (
 
 CREATE INDEX IF NOT EXISTS idx_ledger_task ON task_events(task_id);
 
+-- Policy Engine (Phase 6 / 14)
+CREATE TABLE IF NOT EXISTS policy_rules (
+    id TEXT PRIMARY KEY,
+    capability TEXT NOT NULL,
+    decision TEXT NOT NULL,
+    conditions TEXT,  -- JSON
+    priority INTEGER NOT NULL DEFAULT 0,
+    enabled BOOLEAN NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL
+);
+
 -- Executor Registry
 CREATE TABLE IF NOT EXISTS executors (
     id TEXT PRIMARY KEY,
@@ -104,14 +115,26 @@ CREATE TABLE IF NOT EXISTS executors (
 CREATE TABLE IF NOT EXISTS skills (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
+    version TEXT NOT NULL DEFAULT '1.0.0',
+    description TEXT,
+    category TEXT NOT NULL DEFAULT 'general',
+    capabilities TEXT,  -- JSON array
+    risk TEXT NOT NULL DEFAULT 'low',
+    network BOOLEAN NOT NULL DEFAULT 0,
+    write BOOLEAN NOT NULL DEFAULT 0,
     trigger TEXT NOT NULL,
-    manifest TEXT NOT NULL,
+    body TEXT NOT NULL DEFAULT '',  -- Body content (was 'manifest')
     source TEXT,
     enabled BOOLEAN NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    executors TEXT
+    executors TEXT,  -- JSON array
+    dependencies TEXT,  -- JSON array of skill names
+    metadata TEXT  -- JSON object for nested metadata.paw/
 );
+
+-- Migrate existing 'manifest' column to 'body' if needed
+-- (SQLite doesn't support RENAME COLUMN before 3.25, so we handle in code)
 
 CREATE TABLE IF NOT EXISTS skill_registry (
     id TEXT PRIMARY KEY,
@@ -335,24 +358,63 @@ class Database:
     async def transaction(self):
         """Context manager for database transactions."""
         await self.connect()
-        async with self._conn.execute("BEGIN") as _:
-            try:
-                yield self._conn
-                await self._conn.commit()
-            except Exception:
-                await self._conn.rollback()
-                raise
+        try:
+            yield self._conn
+            await self._conn.commit()
+        except Exception:
+            await self._conn.rollback()
+            raise
 
+    # --- Explicit Storage Mutation Contract (Part A6) ---
+    # Read operations - no mutation, safe to call without transaction
+    async def fetch_one(self, sql: str, params: tuple = ()) -> dict | None:
+        """Execute a SELECT query and return one row as dict."""
+        await self.connect()
+        async with self._conn.execute(sql, params) as cursor:
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+
+    async def fetch_all(self, sql: str, params: tuple = ()) -> list[dict]:
+        """Execute a SELECT query and return all rows as list of dicts."""
+        await self.connect()
+        async with self._conn.execute(sql, params) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+
+    # Write operations - MUST be inside a transaction
+    async def write(self, sql: str, params: tuple = ()) -> int:
+        """Execute a single INSERT/UPDATE/DELETE statement.
+        Must be called within a transaction context.
+        Returns: rowcount
+        """
+        await self.connect()
+        cursor = await self._conn.execute(sql, params)
+        return cursor.rowcount
+
+    async def write_many(self, sql: str, params_list: list[tuple]) -> int:
+        """Execute multiple INSERT/UPDATE/DELETE statements.
+        Must be called within a transaction context.
+        Returns: rowcount
+        """
+        await self.connect()
+        cursor = await self._conn.executemany(sql, params_list)
+        return cursor.rowcount
+
+    # Backward compatibility - may be removed in future
     async def execute(self, sql: str, params: tuple = ()) -> aiosqlite.Cursor:
+        """Legacy: executes any SQL. Prefer fetch_one/fetch_all for reads,
+        write/write_many for writes inside transactions."""
         await self.connect()
         return await self._conn.execute(sql, params)
 
     async def fetchone(self, sql: str, params: tuple = ()) -> aiosqlite.Row | None:
+        """Legacy: fetch one row. Prefer fetch_one."""
         await self.connect()
         async with self._conn.execute(sql, params) as cursor:
             return await cursor.fetchone()
 
     async def fetchall(self, sql: str, params: tuple = ()) -> list[aiosqlite.Row]:
+        """Legacy: fetch all rows. Prefer fetch_all."""
         await self.connect()
         async with self._conn.execute(sql, params) as cursor:
             return await cursor.fetchall()
@@ -369,7 +431,7 @@ class Database:
         columns: str = "*",
     ) -> list[dict]:
         """Get all rows from a table with optional filtering and ordering.
-        
+
         Args:
             table: Table name
             where: WHERE clause (without "WHERE")
@@ -386,7 +448,7 @@ class Database:
             sql += f" ORDER BY {order_by}"
         if limit is not None:
             sql += f" LIMIT {limit}"
-        
+
         async with self._conn.execute(sql, params) as cursor:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
@@ -410,7 +472,7 @@ class Database:
         defaults: dict | None = None,
     ) -> tuple[dict, bool]:
         """Get existing row or create new one.
-        
+
         Returns:
             Tuple of (row_dict, created_boolean)
         """
@@ -418,25 +480,25 @@ class Database:
         row = await self.get_one(table, where, params)
         if row:
             return row, False
-        
+
         # Create new
         if defaults is None:
             defaults = {}
-        
+
         # Build insert from where params + defaults
         # Parse simple WHERE clauses like "id = ?" or "name = ? AND version = ?"
         insert_data = dict(defaults)
         # We can't easily parse WHERE, so user should provide full data in defaults
         # For safety, we'll just use defaults
-        
+
         columns = list(insert_data.keys())
         placeholders = ", ".join(["?" for _ in columns])
         values = [insert_data[col] for col in columns]
-        
+
         sql = f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({placeholders})"
         await self.execute(sql, tuple(values))
         await self._conn.commit()
-        
+
         # Fetch the created row
         row = await self.get_one(table, where, params)
         return row, True
@@ -448,29 +510,29 @@ class Database:
         columns: list[str] | None = None,
     ) -> int:
         """Bulk insert multiple rows.
-        
+
         Args:
             table: Table name
             rows: List of dicts with column->value
             columns: Optional column order (default: keys of first row)
-            
+
         Returns:
             Number of rows inserted
         """
         if not rows:
             return 0
-        
+
         if columns is None:
             columns = list(rows[0].keys())
-        
+
         placeholders = ", ".join(["?" for _ in columns])
         sql = f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({placeholders})"
-        
+
         await self.connect()
         params_list = [tuple(row.get(col) for col in columns) for row in rows]
         await self._conn.executemany(sql, params_list)
         await self._conn.commit()
-        
+
         return len(rows)
 
     async def upsert(
@@ -481,33 +543,33 @@ class Database:
         update_columns: list[str] | None = None,
     ) -> dict:
         """Insert or update a row (UPSERT).
-        
+
         Args:
             table: Table name
             row: Row data as dict
             conflict_columns: Columns that define uniqueness (for ON CONFLICT)
             update_columns: Columns to update on conflict (default: all except conflict)
-            
+
         Returns:
             The row after upsert
         """
         columns = list(row.keys())
         placeholders = ", ".join(["?" for _ in columns])
-        
+
         if update_columns is None:
             update_columns = [c for c in columns if c not in conflict_columns]
-        
+
         update_clause = ", ".join([f"{col}=excluded.{col}" for col in update_columns])
         conflict_clause = ", ".join(conflict_columns)
-        
+
         sql = f"""
             INSERT INTO {table} ({', '.join(columns)}) VALUES ({placeholders})
             ON CONFLICT({conflict_clause}) DO UPDATE SET {update_clause}
         """
-        
+
         await self.execute(sql, tuple(row[col] for col in columns))
         await self._conn.commit()
-        
+
         # Fetch the row
         where = " AND ".join([f"{col} = ?" for col in conflict_columns])
         params = tuple(row[col] for col in conflict_columns)

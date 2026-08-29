@@ -18,23 +18,19 @@ from paw.core import (
     PolicyDecision,
     get_policy_guard,
     ensure_policy_table,
+    ExecutorPolicyEnforcer,
 )
-from paw.core.storage import db, set_db_path
+from paw.core.storage import db
 from paw.core.policy import DefaultConditionEvaluator
+from paw.core.executor import MockExecutor
 
 
-# Fixture for temporary database
+# Fixture: shared session DB (Cấp 2, see tests/conftest.py) + seeded rules.
 @pytest.fixture
-async def temp_db():
+async def temp_db(reset_db, session_db):
     """Create a temporary database for testing."""
-    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
-        db_path = f.name
-    await set_db_path(db_path)
-    await db.initialize()
     await ensure_policy_table()
-    yield db_path
-    await db.close()
-    Path(db_path).unlink(missing_ok=True)
+    yield session_db
 
 
 class TestPhase6DefaultPosture:
@@ -406,6 +402,127 @@ class TestPhase6RuleOverride:
 
 class TestPhase6Adversarial:
     """Adversarial tests - attempts to bypass policy."""
+
+    @pytest.mark.asyncio
+    async def test_ask_denied_in_non_interactive_mode(self, temp_db):
+        """ASK capabilities should be denied in non-interactive (default) mode."""
+        guard = PolicyGuard()
+        # Default is non-interactive
+        assert guard.interactive is False
+
+        # filesystem.write defaults to ASK
+        decision = await guard.check(Capability.FILESYSTEM_WRITE)
+        assert decision == PolicyDecision.ASK
+
+        # But enforcer should deny in non-interactive mode
+        enforcer = ExecutorPolicyEnforcer(guard)
+        check = await enforcer.pre_execute_check(
+            "task-1", "test", [Capability.FILESYSTEM_WRITE]
+        )
+        assert check.allowed is False
+        assert check.decision == "deny"
+
+    @pytest.mark.asyncio
+    async def test_ask_allowed_in_interactive_mode(self, temp_db):
+        """ASK capabilities should be allowed in interactive mode with confirmation."""
+        guard = PolicyGuard(interactive=True)
+        assert guard.interactive is True
+
+        enforcer = ExecutorPolicyEnforcer(guard)
+        check = await enforcer.pre_execute_check(
+            "task-1", "test", [Capability.FILESYSTEM_WRITE]
+        )
+        assert check.allowed is True
+        assert check.decision == "ask"
+
+    @pytest.mark.asyncio
+    async def test_sandbox_denies_shell_execute(self, temp_db):
+        """SANDBOX mode should deny shell.execute."""
+        guard = PolicyGuard()
+
+        # Add rule for SANDBOX on shell.execute
+        await guard.add_rule(
+            Capability.SHELL_EXECUTE,
+            PolicyDecision.SANDBOX,
+            priority=10,
+        )
+
+        enforcer = ExecutorPolicyEnforcer(guard)
+        check = await enforcer.pre_execute_check(
+            "task-001", "test", [Capability.SHELL_EXECUTE]
+        )
+        assert check.allowed is True
+        assert check.decision == "sandbox"
+        assert check.sandbox is True
+        assert "shell.execute" in check.sandbox_capabilities
+
+        # Now test enforcement - should deny shell.execute in sandbox
+        mock_executor = MockExecutor()
+        check, result = await enforcer.enforce(
+            mock_executor, "task-001", "test", [Capability.SHELL_EXECUTE], "context"
+        )
+        assert check.allowed is False
+        assert check.decision == "deny"
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_sandbox_allows_other_capabilities(self, temp_db):
+        """SANDBOX mode should allow non-shell capabilities."""
+        guard = PolicyGuard()
+
+        await guard.add_rule(
+            Capability.FILESYSTEM_WRITE,
+            PolicyDecision.SANDBOX,
+            priority=10,
+        )
+
+        enforcer = ExecutorPolicyEnforcer(guard)
+        mock_executor = MockExecutor()
+        check, result = await enforcer.enforce(
+            mock_executor, "task-002", "test", [Capability.FILESYSTEM_WRITE], "context"
+        )
+        assert check.allowed is True
+        assert result is not None
+        assert result.success is True
+
+    @pytest.mark.asyncio
+    async def test_execute_task_enforces_policy_by_default(self, temp_db):
+        """Default execute_task should enforce policy."""
+        from paw.core import Task
+        from paw.core.executor import execute_task
+
+        # Create a task with ASK capability (filesystem.write)
+        task = Task(
+            id="task-003",
+            session_id="sess-001",
+            project_id="proj-001",
+            goal="Write a file",
+            requested_capabilities=[Capability.FILESYSTEM_WRITE],
+        )
+
+        # Default should enforce policy and block ASK in non-interactive mode
+        result = await execute_task(task, "test context")
+        assert result.success is False
+        assert "blocked" in result.error.lower() or "policy" in result.error.lower()
+
+    @pytest.mark.asyncio
+    async def test_execute_task_can_skip_enforcement(self, temp_db):
+        """execute_task with enforce_policy=False should skip policy."""
+        from paw.core import Task
+        from paw.core.executor import execute_task
+
+        task = Task(
+            id="task-004",
+            session_id="sess-001",
+            project_id="proj-001",
+            goal="Write a file",
+            requested_capabilities=[Capability.FILESYSTEM_WRITE],
+        )
+
+        # Skip enforcement
+        result = await execute_task(task, "test context", enforce_policy=False)
+        assert result.success is True
+        assert result.task_result is not None
 
     @pytest.mark.asyncio
     async def test_path_traversal_blocked(self):

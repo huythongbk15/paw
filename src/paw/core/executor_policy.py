@@ -24,6 +24,7 @@ class PolicyCheckResult:
     decision: str = "allow"
     blocked_capabilities: list[str] = field(default_factory=list)
     asked_capabilities: list[str] = field(default_factory=list)
+    sandbox_capabilities: list[str] = field(default_factory=list)
     message: str = ""
     sandbox: bool = False
 
@@ -33,6 +34,7 @@ class PolicyCheckResult:
             "decision": self.decision,
             "blocked_capabilities": self.blocked_capabilities,
             "asked_capabilities": self.asked_capabilities,
+            "sandbox_capabilities": self.sandbox_capabilities,
             "message": self.message,
             "sandbox": self.sandbox,
         }
@@ -83,29 +85,51 @@ class ExecutorPolicyEnforcer:
 
         blocked = [cap.value for cap, dec in results.items() if dec == PolicyDecision.DENY]
         asked = [cap.value for cap, dec in results.items() if dec == PolicyDecision.ASK]
+        sandbox_caps = [cap.value for cap, dec in results.items() if dec == PolicyDecision.SANDBOX]
         allowed = [cap.value for cap, dec in results.items() if dec == PolicyDecision.ALLOW]
 
-        all_allowed = len(blocked) == 0
-        any_asked = len(asked) > 0
         any_blocked = len(blocked) > 0
+        any_asked = len(asked) > 0
+        any_sandbox = len(sandbox_caps) > 0
 
+        # In non-interactive mode, ASK = DENY (fail-closed)
+        # In interactive mode, ASK = ALLOW but with confirmation prompt
+        interactive = getattr(self.guard, 'interactive', False)
+        ask_allowed = interactive
+
+        # Determine overall decision
         if any_blocked:
+            decision = "deny"
+            allowed_overall = False
             message = f"Execution blocked. Denied capabilities: {', '.join(blocked)}"
-        elif any_asked:
+        elif any_asked and not ask_allowed:
+            decision = "deny"
+            allowed_overall = False
+            message = f"Execution blocked (non-interactive mode). Asked capabilities: {', '.join(asked)}"
+        elif any_asked and ask_allowed:
+            decision = "ask"
+            allowed_overall = True
             message = f"Execution requires confirmation. Asked capabilities: {', '.join(asked)}"
+        elif any_sandbox:
+            decision = "sandbox"
+            allowed_overall = True
+            message = f"Execution in sandbox mode. Sandbox capabilities: {', '.join(sandbox_caps)}"
         else:
+            decision = "allow"
+            allowed_overall = True
             message = f"All capabilities allowed: {', '.join(allowed)}"
 
         check_result = PolicyCheckResult(
-            allowed=all_allowed,
-            decision="deny" if any_blocked else ("ask" if any_asked else "allow"),
+            allowed=allowed_overall,
+            decision=decision,
             blocked_capabilities=blocked,
             asked_capabilities=asked,
+            sandbox_capabilities=sandbox_caps,
             message=message,
-            sandbox=any(cap.value == "shell.execute" for cap in capabilities),
+            sandbox=any_sandbox,
         )
 
-        logger.info("policy_pre_check", task_id=task_id, allowed=all_allowed)
+        logger.info("policy_pre_check", task_id=task_id, allowed=allowed_overall, decision=decision)
         return check_result
 
     async def enforce(
@@ -120,12 +144,19 @@ class ExecutorPolicyEnforcer:
         check = await self.pre_execute_check(task_id, goal, capabilities)
 
         if not check.allowed:
-            logger.info("execution_blocked_by_policy", task_id=task_id)
+            logger.info("execution_blocked_by_policy", task_id=task_id, decision=check.decision)
             return check, None
 
-        if check.sandbox:
-            # Force sandbox mode for shell execution
-            logger.info("sandbox_mode_enabled", task_id=task_id)
+        if check.sandbox and Capability.SHELL_EXECUTE in capabilities:
+            # Sandbox mode: restrict dangerous operations
+            # For now, deny shell.execute in sandbox mode
+            logger.warning("shell_execute_denied_in_sandbox", task_id=task_id)
+            return PolicyCheckResult(
+                allowed=False,
+                decision="deny",
+                blocked_capabilities=["shell.execute"],
+                message="shell.execute not allowed in sandbox mode",
+            ), None
 
         # Execute the task
         result = await executor.execute(
