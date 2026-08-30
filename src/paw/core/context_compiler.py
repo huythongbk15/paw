@@ -369,17 +369,30 @@ class ContextCompiler:
 
             candidates = []
             for result in results:
-                if not result.content:
+                # Fetch the chunk together with its linked evidence/citations via
+                # the chunk_id foreign key. (Joining by chunk_id here — not by
+                # textually matching the chunk id inside an evidence claim — is
+                # the correct, reliable linkage.)
+                chunk = await idx.get_chunk_with_evidence(result.chunk_id)
+                if not chunk:
+                    continue
+                chunk_dict = chunk.get("chunk", {})
+                content = chunk_dict.get("content", "")
+                if not content:
                     continue
 
-                # Include evidence in content if available
-                evidence_text = ""
-                if result.evidence_count > 0:
-                    evidence = await idx.search_evidence(result.chunk_id, limit=3)
-                    for ev in evidence[:3]:
-                        evidence_text += f"\nEvidence: {ev.claim}"
+                evidence_list = chunk.get("evidence", [])
+                citation_list = chunk.get("citations", [])
 
-                full_content = result.content + evidence_text
+                evidence_text = ""
+                for ev in evidence_list[:3]:
+                    claim = ev.get("claim", "")
+                    if not claim:
+                        continue
+                    confidence = ev.get("confidence")
+                    evidence_text += f"\nEvidence: {claim} (confidence={confidence})"
+
+                full_content = content + evidence_text
 
                 candidates.append(ContextCandidate(
                     source="knowledge",
@@ -391,8 +404,9 @@ class ContextCompiler:
                     priority=self.budget.priority_weights.get("knowledge", 0.2),
                     metadata={
                         "source_id": result.source_id,
-                        "evidence_count": result.evidence_count,
+                        "evidence_count": len(evidence_list),
                         "citations": result.citations,
+                        "citation_count": len(citation_list),
                     },
                     reference=result.chunk_id,
                 ))
