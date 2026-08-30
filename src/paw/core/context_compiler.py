@@ -185,8 +185,8 @@ class ContextCompiler:
         # 5. Budget Allocation & Selection
         selected, excluded = self._allocate_budget(candidates)
 
-        # 6. Build TaskContext
-        context = await self._build_context(task_id, selected, explain_mode)
+        # 6. Build TaskContext (upgrades skills L0->L1 and re-budgets payload)
+        context = await self._build_context(task_id, selected, excluded, explain_mode)
 
         # 7. Add explain entries for all candidates
         if explain_mode:
@@ -621,6 +621,7 @@ class ContextCompiler:
         self,
         task_id: str,
         selected: list[ContextCandidate],
+        excluded: list[ContextCandidate],
         explain_mode: bool,
     ) -> TaskContext:
         """Build TaskContext from selected candidates."""
@@ -632,11 +633,10 @@ class ContextCompiler:
             explain_mode=explain_mode,
         )
 
+        # 1. Progressive disclosure: selected Level-0 skills are upgraded to
+        #    Level 1 (load the skill body so the context carries actionable
+        #    instructions, not just metadata).
         for cand in selected:
-            # Progressive disclosure: selected skills at Level 0 are upgraded to
-            # Level 1 (load the skill body so the context carries actionable
-            # instructions, not just metadata).
-            content = cand.content
             if cand.source == "skill" and cand.skill_level == 0:
                 fabric = await get_skill_fabric()
                 skill = fabric.get_skill(cand.source_id)
@@ -645,7 +645,6 @@ class ContextCompiler:
                     body_tokens = self._token_estimator.estimate(body)
                     # Respect max content length; otherwise keep metadata summary
                     if body_tokens <= self.budget.max_content_length:
-                        content = body
                         cand.content = body
                         cand.skill_level = 1
                         cand.token_estimate = body_tokens
@@ -653,9 +652,18 @@ class ContextCompiler:
                     else:
                         cand.metadata["body_skipped"] = "exceeds_max_content_length"
 
+        # 2. Re-budget the final payload. Upgrading skill bodies can push the
+        #    total token count over ``max_tokens``; re-allocate and drop the
+        #    lowest-priority survivors so the assembled context stays within
+        #    budget. ``excluded`` is extended so explain reports stay accurate.
+        selected, newly_excluded = self._allocate_budget(selected)
+        excluded.extend(newly_excluded)
+
+        # 3. Build fragments from the final (post-re-budget) selected set.
+        for cand in selected:
             fragment = ContextFragment(
                 source=cand.source,
-                content=content,
+                content=cand.content,
                 metadata=cand.metadata,
                 relevance_score=cand.relevance_score,
                 explanation=cand.reason,

@@ -175,7 +175,7 @@ async def test_progressive_skill_level1_upgrade(tmp_path, monkeypatch):
     cand = _cand("skill", "git_commit", "git_commit does something useful",
                  relevance=0.9, priority=0.15)
     cand.skill_level = 0
-    context = await compiler._build_context("t1", [cand], explain_mode=False)
+    context = await compiler._build_context("t1", [cand], [], explain_mode=False)
 
     assert cand.skill_level == 1
     assert cand.metadata.get("body_loaded") is True
@@ -208,7 +208,7 @@ async def test_progressive_skill_body_too_large_skipped(tmp_path, monkeypatch):
     cand = _cand("skill", "big_skill", "big_skill does something",
                  relevance=0.9, priority=0.15)
     cand.skill_level = 0
-    await compiler._build_context("t1", [cand], explain_mode=False)
+    await compiler._build_context("t1", [cand], [], explain_mode=False)
 
     assert cand.skill_level == 0  # not upgraded
     assert cand.metadata.get("body_skipped") == "exceeds_max_content_length"
