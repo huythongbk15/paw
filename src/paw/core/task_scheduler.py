@@ -73,6 +73,14 @@ class TaskDependency:
         )
 
 
+class TaskGraphValidationError(ValueError):
+    """Raised when a TaskGraph is structurally invalid.
+
+    Covers missing dependencies, self-cycles, and general cycles — all of
+    which must be rejected before the graph is persisted or executed.
+    """
+
+
 @dataclass
 class TaskGraph:
     """A directed acyclic graph (DAG) of task dependencies."""
@@ -137,6 +145,60 @@ class TaskGraph:
     def dependency_count(self) -> int:
         return len(self.dependencies)
 
+    def validate(self) -> None:
+        """Reject structurally invalid graphs before persistence/execution.
+
+        Raises TaskGraphValidationError when any of:
+          - a node depends on a non-existent node (missing dependency)
+          - a node depends on itself (self-cycle)
+          - the dependency graph contains a cycle
+        """
+        node_ids = set(self.nodes.keys())
+
+        for node in self.nodes.values():
+            for dep_id in node.dependencies:
+                if dep_id == node.id:
+                    raise TaskGraphValidationError(
+                        f"Node {node.id!r} depends on itself (self-cycle)"
+                    )
+                if dep_id not in node_ids:
+                    raise TaskGraphValidationError(
+                        f"Node {node.id!r} depends on missing node {dep_id!r}"
+                    )
+
+        cycles = self._detect_cycles_sync()
+        if cycles:
+            raise TaskGraphValidationError(
+                f"Task graph contains cycle(s): {cycles}"
+            )
+
+    def _detect_cycles_sync(self) -> list[list[str]]:
+        """Synchronous cycle detection over in-memory dependencies."""
+        cycles: list[list[str]] = []
+        visited: set[str] = set()
+        rec_stack: set[str] = set()
+        path: list[str] = []
+
+        def dfs(node_id: str) -> None:
+            visited.add(node_id)
+            rec_stack.add(node_id)
+            path.append(node_id)
+            for dep in self.dependencies:
+                if dep.from_node_id == node_id and dep.to_node_id in self.nodes:
+                    nbr = dep.to_node_id
+                    if nbr not in visited:
+                        dfs(nbr)
+                    elif nbr in rec_stack:
+                        start = path.index(nbr)
+                        cycles.append([*path[start:], nbr])
+            path.pop()
+            rec_stack.discard(node_id)
+
+        for nid in self.nodes:
+            if nid not in visited:
+                dfs(nid)
+        return cycles
+
 
 class TaskScheduler:
     """Schedules and executes task graphs with dependency resolution."""
@@ -164,6 +226,9 @@ class TaskScheduler:
                     dependency_type=DependencyType.MUST_COMPLETE.value,
                 )
                 graph.add_dependency(dep)
+
+        # Validate BEFORE persisting: reject missing deps / self-cycle / cycle.
+        graph.validate()
 
         await self._save_graph(graph)
         self._graph = graph
