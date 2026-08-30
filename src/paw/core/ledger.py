@@ -316,3 +316,136 @@ async def log_progress_insufficient(
         TaskEventType.PROGRESS_INSUFFICIENT,
         {"current": current, "required": required, "stagnation": stagnation},
     )
+
+
+# ── Phase 19: Runtime Loop Ledger Events ──
+async def log_step_proposed(
+    task_id: ID,
+    action_id: str,
+    goal: str,
+    capabilities: list[str],
+    estimated_cost: dict[str, Any] | None = None,
+) -> None:
+    """Record a proposed action before policy/autonomy gate."""
+    await TaskLedger.record(
+        task_id,
+        TaskEventType.STEP_PROPOSED,
+        {
+            "action_id": action_id,
+            "goal": goal,
+            "capabilities": capabilities,
+            "estimated_cost": estimated_cost or {},
+        },
+    )
+
+
+async def log_step_executed(
+    task_id: ID,
+    action_id: str,
+    success: bool,
+    resources_used: dict[str, Any] | None = None,
+    error: str | None = None,
+) -> None:
+    """Record step execution result."""
+    await TaskLedger.record(
+        task_id,
+        TaskEventType.STEP_EXECUTED,
+        {
+            "action_id": action_id,
+            "success": success,
+            "resources_used": resources_used or {},
+            "error": error,
+        },
+    )
+
+
+async def log_step_completed(
+    task_id: ID,
+    action_id: str,
+    done: bool,
+    progress: float,
+) -> None:
+    """Record step completion with progress."""
+    await TaskLedger.record(
+        task_id,
+        TaskEventType.STEP_COMPLETED,
+        {
+            "action_id": action_id,
+            "done": done,
+            "progress": progress,
+        },
+    )
+
+
+async def log_operation_recorded(
+    task_id: ID,
+    op_id: str,
+    op_type: str,
+    status: str,
+    checkpoint_id: str | None = None,
+) -> None:
+    """Record that an operation was persisted for replay safety."""
+    await TaskLedger.record(
+        task_id,
+        TaskEventType.OPERATION_RECORDED,
+        {
+            "op_id": op_id,
+            "op_type": op_type,
+            "status": status,
+            "checkpoint_id": checkpoint_id,
+        },
+    )
+
+
+async def log_checkpoint_restored(
+    task_id: ID,
+    checkpoint_id: str,
+    progress_ratio: float,
+    skipped_ops: int,
+) -> None:
+    """Record checkpoint restore with replay info."""
+    await TaskLedger.record(
+        task_id,
+        TaskEventType.CHECKPOINT_RESTORED,
+        {
+            "checkpoint_id": checkpoint_id,
+            "progress_ratio": progress_ratio,
+            "skipped_operations": skipped_ops,
+        },
+    )
+
+
+async def log_policy_gate_evaluated(
+    task_id: ID,
+    action_id: str,
+    verdict: str,
+    capabilities: list[str],
+) -> None:
+    """Record policy gate evaluation result."""
+    await TaskLedger.record(
+        task_id,
+        TaskEventType.POLICY_GATE_EVALUATED,
+        {
+            "action_id": action_id,
+            "verdict": verdict,
+            "capabilities": capabilities,
+        },
+    )
+
+
+async def log_autonomy_gate_evaluated(
+    task_id: ID,
+    action_id: str,
+    decision: str,
+    stop_reason: str | None,
+) -> None:
+    """Record autonomy gate evaluation result."""
+    await TaskLedger.record(
+        task_id,
+        TaskEventType.AUTONOMY_GATE_EVALUATED,
+        {
+            "action_id": action_id,
+            "decision": decision,
+            "stop_reason": stop_reason,
+        },
+    )

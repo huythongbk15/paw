@@ -334,7 +334,7 @@ class ResumeManager:
         )
 
         # Log resume event
-        await TaskLedger.log(
+        await TaskLedger.record(
             task_id=task_id,
             event_type=TaskEventType.TASK_RESUMED,
             payload={
@@ -561,6 +561,12 @@ class CheckpointManager:
         # Same as maybe_checkpoint but always creates
         prev = await CheckpointStore.get_latest(task_id)
         parent_id = prev.checkpoint_id if prev else None
+
+        # Convert AutonomyUsage to dict if needed
+        if "autonomy_usage" in kwargs:
+            au = kwargs["autonomy_usage"]
+            if hasattr(au, "to_dict"):
+                kwargs["autonomy_usage"] = au.to_dict()
 
         checkpoint = TaskCheckpoint(
             task_id=task_id,

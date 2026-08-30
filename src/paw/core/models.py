@@ -65,6 +65,14 @@ class TaskEventType(StrEnum):
     TASK_STALLED = "task_stalled"
     REPETITION_DETECTED = "repetition_detected"
     PROGRESS_INSUFFICIENT = "progress_insufficient"
+    # Phase 19 additions - runtime loop events
+    STEP_PROPOSED = "step_proposed"
+    STEP_EXECUTED = "step_executed"
+    STEP_COMPLETED = "step_completed"
+    OPERATION_RECORDED = "operation_recorded"
+    CHECKPOINT_RESTORED = "checkpoint_restored"
+    POLICY_GATE_EVALUATED = "policy_gate_evaluated"
+    AUTONOMY_GATE_EVALUATED = "autonomy_gate_evaluated"
 
 
 class PolicyDecision(StrEnum):
@@ -352,3 +360,75 @@ class CapabilityScore(BaseModel):
     executor_score: float = 0.0
     matched: float = 0.0
     reason: str = ""
+
+
+# --- Phase 19: Runtime Loop Types ---
+
+class ResourceUsage(BaseModel):
+    """Fine-grained resource usage for a single step/observation."""
+    model_calls: int = 0
+    tool_calls: int = 0
+    tokens: int = 0
+    wall_time_ms: int = 0
+    network_bytes: int = 0
+    destructive_ops: int = 0
+
+    def total_cost(self) -> float:
+        """Weighted total for budget accounting."""
+        return (
+            self.model_calls * 1.0
+            + self.tool_calls * 0.5
+            + self.tokens * 0.001
+            + self.wall_time_ms * 0.0001
+            + self.network_bytes * 0.000001
+            + self.destructive_ops * 10.0
+        )
+
+    def __add__(self, other: ResourceUsage) -> ResourceUsage:
+        return ResourceUsage(
+            model_calls=self.model_calls + other.model_calls,
+            tool_calls=self.tool_calls + other.tool_calls,
+            tokens=self.tokens + other.tokens,
+            wall_time_ms=self.wall_time_ms + other.wall_time_ms,
+            network_bytes=self.network_bytes + other.network_bytes,
+            destructive_ops=self.destructive_ops + other.destructive_ops,
+        )
+
+    def __iadd__(self, other: ResourceUsage) -> ResourceUsage:
+        self.model_calls += other.model_calls
+        self.tool_calls += other.tool_calls
+        self.tokens += other.tokens
+        self.wall_time_ms += other.wall_time_ms
+        self.network_bytes += other.network_bytes
+        self.destructive_ops += other.destructive_ops
+        return self
+
+
+class ExecutionObservation(BaseModel):
+    """Typed observation from a single execution step (replaces arbitrary dict)."""
+    step_id: str
+    action_id: str  # ProposedAction.operation_id
+    result: dict[str, Any] = Field(default_factory=dict)  # step_fn return value
+    resources_used: ResourceUsage = Field(default_factory=ResourceUsage)
+    success: bool = True
+    error: str | None = None
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    def to_dict(self) -> dict[str, Any]:
+        return self.model_dump(mode="json")
+
+
+class ProposedAction(BaseModel):
+    """A proposed action with all metadata needed for policy/autonomy gating."""
+    goal: str
+    capabilities: list[Capability] = Field(default_factory=list)
+    context: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    # Idempotency & operation tracking
+    operation_id: str = Field(default_factory=_generate_id)
+    idempotency_key: str | None = None
+    # Estimated cost for autonomy budget pre-check
+    estimated_cost: ResourceUsage = Field(default_factory=ResourceUsage)
+
+    def to_dict(self) -> dict[str, Any]:
+        return self.model_dump(mode="json")
