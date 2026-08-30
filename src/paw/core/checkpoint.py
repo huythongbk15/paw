@@ -370,6 +370,121 @@ class ResumeManager:
         return []
 
 
+# --- Operation Records (replay safety) ---
+
+@dataclass
+class OperationRecord:
+    """A record of a completed primitive operation, enabling idempotent replay.
+
+    On resume, the runtime consults these records to skip operations that have
+    already completed — proving replay safety (no double-execution of effects).
+    """
+
+    task_id: str
+    op_id: str
+    op_type: str = "step"               # step | tool_call | model_call | side_effect
+    status: str = "completed"           # completed | failed | skipped
+    checkpoint_id: str | None = None
+    result_ref: str | None = None       # where the operation result lives
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "task_id": self.task_id,
+            "op_id": self.op_id,
+            "op_type": self.op_type,
+            "status": self.status,
+            "checkpoint_id": self.checkpoint_id,
+            "result_ref": self.result_ref,
+            "created_at": self.created_at.isoformat(),
+            "metadata": self.metadata,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> OperationRecord:
+        rec = cls(
+            task_id=d["task_id"],
+            op_id=d["op_id"],
+            op_type=d.get("op_type", "step"),
+            status=d.get("status", "completed"),
+            checkpoint_id=d.get("checkpoint_id"),
+            result_ref=d.get("result_ref"),
+            metadata=d.get("metadata", {}),
+        )
+        if "created_at" in d:
+            rec.created_at = datetime.fromisoformat(d["created_at"])
+        return rec
+
+
+class OperationRecordStore:
+    """Persists operation records so replays skip already-completed work."""
+
+    TABLE_NAME = "operation_records"
+
+    @classmethod
+    async def ensure_table(cls) -> None:
+        await db.execute(f"""
+            CREATE TABLE IF NOT EXISTS {cls.TABLE_NAME} (
+                task_id TEXT NOT NULL,
+                op_id TEXT NOT NULL,
+                op_type TEXT NOT NULL DEFAULT 'step',
+                status TEXT NOT NULL DEFAULT 'completed',
+                checkpoint_id TEXT,
+                result_ref TEXT,
+                created_at TEXT NOT NULL,
+                metadata TEXT NOT NULL DEFAULT '{{}}',
+                PRIMARY KEY (task_id, op_id)
+            )
+        """)
+        await db.execute(
+            f"CREATE INDEX IF NOT EXISTS idx_oprec_task ON {cls.TABLE_NAME}(task_id, status)"
+        )
+
+    @classmethod
+    async def record(cls, rec: OperationRecord) -> None:
+        await cls.ensure_table()
+        await db.execute(
+            f"""
+            INSERT OR REPLACE INTO {cls.TABLE_NAME}
+            (task_id, op_id, op_type, status, checkpoint_id, result_ref, created_at, metadata)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                rec.task_id, rec.op_id, rec.op_type, rec.status,
+                rec.checkpoint_id, rec.result_ref, rec.created_at.isoformat(),
+                json.dumps(rec.metadata),
+            ),
+        )
+
+    @classmethod
+    async def is_completed(cls, task_id: str, op_id: str) -> bool:
+        await cls.ensure_table()
+        row = await db.fetchone(
+            f"SELECT status FROM {cls.TABLE_NAME} WHERE task_id = ? AND op_id = ?",
+            (task_id, op_id),
+        )
+        return bool(row) and row["status"] == "completed"
+
+    @classmethod
+    async def get_completed_op_ids(cls, task_id: str) -> set[str]:
+        await cls.ensure_table()
+        rows = await db.fetchall(
+            f"SELECT op_id FROM {cls.TABLE_NAME} WHERE task_id = ? AND status = 'completed'",
+            (task_id,),
+        )
+        return {r["op_id"] for r in rows}
+
+    @classmethod
+    async def get_all(cls, task_id: str) -> list[OperationRecord]:
+        await cls.ensure_table()
+        rows = await db.fetchall(
+            f"SELECT * FROM {cls.TABLE_NAME} WHERE task_id = ? ORDER BY created_at",
+            (task_id,),
+        )
+        return [OperationRecord.from_dict(dict(r)) for r in rows]
+
+
 # --- Checkpoint Manager ---
 
 class CheckpointManager:
@@ -455,6 +570,33 @@ class CheckpointManager:
 
         await CheckpointStore.save(checkpoint)
         return checkpoint
+
+    async def record_operation(
+        self,
+        task_id: str,
+        op_id: str,
+        op_type: str = "step",
+        status: str = "completed",
+        checkpoint_id: str | None = None,
+        result_ref: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> OperationRecord:
+        """Persist a completed primitive operation (idempotent replay record)."""
+        rec = OperationRecord(
+            task_id=task_id,
+            op_id=op_id,
+            op_type=op_type,
+            status=status,
+            checkpoint_id=checkpoint_id,
+            result_ref=result_ref,
+            metadata=metadata or {},
+        )
+        await OperationRecordStore.record(rec)
+        return rec
+
+    async def is_operation_completed(self, task_id: str, op_id: str) -> bool:
+        """True if the operation already completed — safe to skip on replay."""
+        return await OperationRecordStore.is_completed(task_id, op_id)
 
 
 # --- Integration with Task Manager ---
