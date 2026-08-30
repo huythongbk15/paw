@@ -49,6 +49,7 @@ class RuntimeOutcome:
     step_called: bool
     iterations: int = 0
     waiting_for_approval: bool = False
+    decision: AutonomyDecision | str | None = None
     last_observation: Any = None
 
 
@@ -130,11 +131,14 @@ class PawRuntime:
             await self.autonomy.record_iteration(progress)
 
             if self._is_done(observation):
+                # Task observed complete -> autonomy owns the terminal decision.
+                decision, stop = await self.autonomy.mark_complete()
                 return RuntimeOutcome(
                     stopped=True,
-                    reason=StopReason.TASK_COMPLETED,
+                    reason=stop,
                     step_called=True,
                     iterations=i + 1,
+                    decision=decision,
                     last_observation=observation,
                 )
 

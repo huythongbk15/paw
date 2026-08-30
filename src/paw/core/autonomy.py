@@ -188,6 +188,7 @@ class AutonomyDecision(StrEnum):
     ESCALATE = "escalate"              # Escalate to higher authority/review
     DELEGATE = "delegate"              # Delegate to another agent/executor
     STOP = "stop"                      # Hard stop - budget exhausted or error
+    STOP_SUCCESS = "stop_success"      # Task completed successfully (terminal)
 
 
 class StopReason(StrEnum):
@@ -369,6 +370,17 @@ class AutonomyController:
         # For now, assume continue if budgets OK
 
         return AutonomyDecision.CONTINUE, None
+
+    async def mark_complete(self) -> tuple[AutonomyDecision, StopReason]:
+        """Task observed complete -> deterministic successful stop.
+
+        Returns ``(STOP_SUCCESS, TASK_COMPLETED)``. This is distinct from
+        ``STOP`` (which signals budget/safety/error): completion is a
+        *successful* terminal state. Kept free of any ledger side-effect so it
+        is safe to call in an offline / DB-less context; the runtime loop is
+        responsible for persisting the outcome.
+        """
+        return AutonomyDecision.STOP_SUCCESS, StopReason.TASK_COMPLETED
 
     def _map_progress_reason(self, reason: StopReason) -> AutonomyDecision:
         """Map progress-related stop reason to autonomy decision."""

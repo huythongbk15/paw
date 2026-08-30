@@ -102,6 +102,7 @@ async def test_runtime_executes_step_when_allowed_and_completes():
     # Allowed -> step executed exactly once, then completion.
     assert outcome.step_called is True
     assert outcome.reason == StopReason.TASK_COMPLETED
+    assert outcome.decision == AutonomyDecision.STOP_SUCCESS
     assert called == [action]
     # Policy gate received the proposed capabilities.
     assert guard.calls[0]["capabilities"] == [Capability.FILESYSTEM_READ]
@@ -127,6 +128,7 @@ async def test_runtime_loops_until_completion_across_multiple_steps():
     assert outcome.step_called is True
     assert counter["n"] == 3
     assert outcome.reason == StopReason.TASK_COMPLETED
+    assert outcome.decision == AutonomyDecision.STOP_SUCCESS
 
 
 @pytest.mark.asyncio
@@ -147,3 +149,34 @@ async def test_runtime_hard_iteration_bound_stops_loop():
     assert outcome.step_called is True
     assert counter["n"] == 3
     assert outcome.reason == StopReason.MAX_ITERATIONS_REACHED
+
+
+@pytest.mark.asyncio
+async def test_runtime_emits_stop_success_on_completion():
+    """#7: completion yields a deterministic STOP_SUCCESS (not ambiguous STOP)."""
+    guard = RecordingPolicyGuard(verdict="go")
+    ac = AutonomyController(policy_guard=guard)
+    runtime = PawRuntime(ac)
+
+    called: list[ProposedAction] = []
+    action = ProposedAction(goal="finish", capabilities=[Capability.FILESYSTEM_READ])
+    outcome = await runtime.run("t1", proposed_action=action, step_fn=_spy_step(called))
+
+    assert outcome.stopped is True
+    assert outcome.step_called is True
+    assert outcome.reason == StopReason.TASK_COMPLETED
+    assert outcome.decision == AutonomyDecision.STOP_SUCCESS
+    assert outcome.waiting_for_approval is False
+    assert called == [action]
+
+
+@pytest.mark.asyncio
+async def test_autonomy_mark_complete_is_stop_success():
+    """#7: mark_complete is a deterministic successful stop, budget-independent."""
+    ac = AutonomyController()  # default budget
+    # Exhaust the decision budget to prove completion overrides it.
+    for _ in range(ac.budget.max_decisions + 5):
+        ac.usage.record_decision()
+    decision, stop = await ac.mark_complete()
+    assert decision == AutonomyDecision.STOP_SUCCESS
+    assert stop == StopReason.TASK_COMPLETED
