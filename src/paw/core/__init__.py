@@ -148,6 +148,9 @@ from .models import (
 # Planner
 from .planner import Plan, Planner, TaskNode
 from .policy import PolicyGuard, PolicyRule, ensure_policy_table, get_policy_guard
+
+# Runtime Loop (Phase 19, #1/#8) — black-box execution entry point
+from .runtime import PawRuntime, ProposedAction, RuntimeOutcome
 from .selector import SkillSelection, SkillSelector
 from .semantic import SemanticMatcher, SemanticScore, SemanticSkillSelector, get_semantic_selector
 
@@ -254,6 +257,7 @@ __all__ = [
     "ModelScore",
     "ModelScorer",
     "ModelSelection",
+    "PawRuntime",
     "PawSettings",
     # Planner
     "Plan",
@@ -268,10 +272,12 @@ __all__ = [
     "ProgressConfig",
     # Detectors (Phase 10)
     "ProgressDetector",
+    "ProposedAction",
     "RepetitionConfig",
     "RepetitionDetector",
     "Result",
     "ResumeManager",
+    "RuntimeOutcome",
     "SemanticMatcher",
     "SemanticScore",
     "SemanticSkillSelector",
