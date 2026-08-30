@@ -23,3 +23,24 @@
 /scripts/
 /demo_paw.py
 /config.json
+
+# Python build artifacts
+__pycache__/
+*.pyc
+*.pyo
+build/
+dist/
+*.egg-info/
+
+# Databases (runtime + test) — never commit
+*.db
+*.db-shm
+*.db-wal
+
+# Local agent workspace memory files (not part of PAW source)
+AGENTS.md
+MEMORY.md
+PROFILE.md
+SOUL.md
+HEARTBEAT.md
+PHASE*.md
