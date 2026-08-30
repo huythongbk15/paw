@@ -110,7 +110,7 @@ selection = await router.route(role=ModelRole.REASONING, query="explain X")
 from paw.core.model_executor import ModelExecutor
 
 executor = ModelExecutor()
-out = await executor.execute(selection, prompt="...")   # dispatches to provider
+out = await executor.complete(selection, [{"role": "user", "content": "..."}])   # dispatches to provider
 ```
 
 ## Skills

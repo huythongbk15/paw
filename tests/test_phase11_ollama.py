@@ -206,7 +206,7 @@ async def test_model_executor_local_fallback():
     selection.reason = ""
     selection.fallback_chain = []
     selection.score = 0.0
-    result = await executor.complete(selection, "translate hello")
+    result = await executor.complete(selection, [{"role": "user", "content": "translate hello"}])
     assert "local-standin" in result["response"]
 
 
@@ -229,7 +229,7 @@ async def test_model_executor_ollama_dispatch(mock_ollama):
     selection.fallback_chain = []
     selection.score = 0.0
 
-    result = await executor.complete(selection, "hi")
+    result = await executor.complete(selection, [{"role": "user", "content": "hi"}])
     assert result["response"] == "hello world"
 
 
@@ -246,5 +246,5 @@ async def test_model_executor_unknown_provider_falls_back():
     selection.reason = ""
     selection.fallback_chain = []
     selection.score = 0.0
-    result = await executor.complete(selection, "hi")
+    result = await executor.complete(selection, [{"role": "user", "content": "hi"}])
     assert "local-standin" in result["response"]

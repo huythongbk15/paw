@@ -61,8 +61,8 @@ async def run():
     # 5. Model routing + execution (provider-aware, local fallback)
     router = ModelRouter()                      # discovers local + any provider models
     selection = await router.route(task.id, "Summarize", role="fast")
-    executor = ModelExecutor()                  # local stand-in by default
-    result = await executor.complete(selection, "Summarize now")
+    executor = ModelExecutor()                  # local stand-in (shares router's ProviderRegistry)
+    result = await executor.complete(selection, [{"role": "user", "content": "Summarize now"}])
     return result
 
 asyncio.run(run())

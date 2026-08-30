@@ -154,8 +154,8 @@ async def test_phase16_full_runtime_loop(tmp_path):
     assert selection.model_name  # non-empty -> a model was routed
     await log_model_selected(task.id, selection.model_name, selection.role)
 
-    executor = ModelExecutor()  # default registers LocalModelExecutor fallback
-    result = await executor.complete(selection, "Summarize now")
+    executor = ModelExecutor(provider_registry=router._provider_registry)
+    result = await executor.complete(selection, [{"role": "user", "content": "Summarize now"}])
     assert result.get("response")
     await log_execution_completed(task.id, True, result.get("response"))
 

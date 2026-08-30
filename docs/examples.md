@@ -87,7 +87,7 @@ async def main():
     await registry.register_ollama_models()        # graceful if Ollama absent
     router = get_model_router()
     selection = await router.route(role=ModelRole.REASONING, query="explain recursion")
-    out = await ModelExecutor().execute(selection, prompt="explain recursion")
+    out = await ModelExecutor().complete(selection, [{"role": "user", "content": "explain recursion"}])
     print(out.text[:120])
 ```
 
