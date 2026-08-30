@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from paw.providers.qwenpaw.adapter import (
+from integrations.qwenpaw.adapter import (
     QwenPawSkillAdapter,
     QwenPawSkillProvider,
     QwenPawMemoryAdapter,
@@ -19,8 +19,8 @@ from paw.providers.qwenpaw.adapter import (
     QwenPawPersonaAdapter as QwenPawPersonaAdapterQP,
     QwenPawPersonaProvider,
 )
-from paw.providers.reme.adapter import ReMeMemoryAdapter, ReMeMemoryProvider
-from paw.providers.persona.adapter import (
+from integrations.reme.adapter import ReMeMemoryAdapter, ReMeMemoryProvider
+from integrations.persona.adapter import (
     Persona,
     PersonaAdapter,
     QwenPawPersonaAdapter,
@@ -494,9 +494,9 @@ class TestNoProhibitedDependencies:
     def test_providers_isolated(self):
         """Providers directory should be separate from core."""
         assert Path("src/paw/providers").exists()
-        assert Path("src/paw/providers/qwenpaw").exists()
-        assert Path("src/paw/providers/reme").exists()
-        assert Path("src/paw/providers/persona").exists()
+        assert Path("integrations/qwenpaw").exists()
+        assert Path("integrations/reme").exists()
+        assert Path("integrations/persona").exists()
 
 
 # Import yaml for test
