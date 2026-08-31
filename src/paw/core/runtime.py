@@ -41,23 +41,25 @@ every PAW subsystem into one feedback loop:
 At each iteration ``run_agent``:
   1. compiles context (ContextCompiler) from memory/knowledge/skills/ledger
   2. selects relevant skills (SkillFabric + semantic selector)
-  3. routes + executes a model (ModelRouter + ModelExecutor) to decide the next
-     action (the agent "brain")
+  3. creates a side-effect-free proposal from skills and compiled context
   4. gates the proposed action through Policy (single authority) + Autonomy
-  5. executes the action via the selected skill / executor
+  5. routes/executes the approved model and action via the selected executor
   6. observes the result, feeds it back into context, logs to ledger,
      checkpoints, and repeats until completion / stop.
 """
 
 from __future__ import annotations
 
+import copy
 import json
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from typing import Any
 
 from .autonomy import AutonomyController, AutonomyDecision, StopReason
 from .checkpoint import CheckpointManager, OperationRecordStore
+from .executor import CapabilityRouter, get_capability_router
 from .ledger import (
     TaskEventType,
     TaskLedger,
@@ -75,9 +77,13 @@ from .logging import get_logger
 from .models import (
     Capability,
     ExecutionObservation,
+    PolicyDecision,
     ProposedAction,
     ResourceUsage,
+    TaskStatus,
 )
+from .policy import RequestVerdict
+from .task import TaskManager
 from .task_scheduler import TaskScheduleStatus
 
 logger = get_logger(__name__)
@@ -196,16 +202,13 @@ class ActionProposer:
 
 class AgentActionProposer:
     """
-    The agent "brain": produces the next ``ProposedAction`` by wiring the real
-    PAW subsystems (ContextCompiler -> SkillFabric -> ModelRouter ->
-    ModelExecutor). It is the single source of truth for the next action when
-    ``PawRuntime`` runs as a genuine agent loop (``run_agent``).
+    The agent "brain": produces the next ``ProposedAction`` from the real PAW
+    context and skill subsystems. It is the single source of truth for the next
+    action when ``PawRuntime`` runs as a genuine agent loop (``run_agent``).
 
-    The ``propose`` step is where the model is consulted to decide WHAT to do
-    next given the compiled context, the selected skills, and the last
-    observation. The returned ``ProposedAction`` carries the goal continuation,
-    the selected skill, the capabilities the action needs (for the policy gate),
-    and the model selection so the executor step does not re-route.
+    Proposal is intentionally pure. The returned action carries the selected
+    skill and required capabilities for the policy gate; ModelRouter and
+    ModelExecutor are invoked only by the approved execution stage.
 
     Offline / local-first note: when no real LLM provider is reachable the
     ``ModelExecutor`` resolves to ``LocalModelExecutor`` (deterministic echo),
@@ -249,15 +252,15 @@ class AgentActionProposer:
         Consult the subsystems and produce the next action.
 
         The runtime loop owns ContextCompiler and passes the already-compiled
-        ``context`` (a ``TaskContext``) plus ``candidates`` into this method, so
-        the proposer focuses on the agent "brain": skill selection -> model
-        routing -> model execution -> parse into a ``ProposedAction``.
+        ``context`` (a ``TaskContext``) plus ``candidates`` into this method.
+        Proposal is deliberately side-effect free: model/provider routing and
+        inference happen only after the runtime policy gate in
+        :meth:`PawRuntime._execute_action`.
 
         Pipeline:
-          1. SkillFabric / semantic selector     -> selected skill manifest(s)
-          2. ModelRouter.route(task_goal, role)  -> ModelSelection
-          3. ModelExecutor.complete(selection, messages) -> model response
-          4. parse response -> ProposedAction (goal / skill / capabilities / done)
+          1. SkillFabric / semantic selector -> selected skill manifest(s)
+          2. selected skills + context -> ProposedAction (goal/capabilities)
+          3. policy/autonomy gate -> execution stage performs model/tool calls
         """
         self._proposal_count += 1
 
@@ -268,29 +271,8 @@ class AgentActionProposer:
         # --- 1. Select skills (from compiled candidates or SkillFabric) ---
         selected_skills = await self._select_skills(task_goal, candidates)
 
-        # --- 2. Route model (planning-side call; the runtime logs the
-        #         execution-side MODEL_SELECTED in _execute_action) ---
-        token_count = _token_count_from_context(compiled_ctx)
-        selection = await self.model_router.route(
-            task_id,
-            task_goal,
-            role=self.default_role,
-            context_size=token_count,
-            complexity=self.complexity,
-            privacy_required=self.privacy_required,
-            execution_profile=self.execution_profile,
-        )
-
-        # --- 3. Execute model (the agent "think" step) ---
-        messages = self._build_messages(task_goal, compiled_ctx, last_observation, selected_skills)
+        # --- 2. Build a typed proposal (no provider/model side effect) ---
         model_result: dict[str, Any] = {}
-        if selection.model_name:
-            try:
-                model_result = await self.model_executor.complete(selection, messages) or {}
-            except Exception as exc:  # pragma: no cover - defensive
-                logger.warning("agent_model_exec_failed", error=str(exc))
-
-        # --- 5. Parse response -> ProposedAction ---
         return self._to_proposed_action(
             task_id, task_goal, model_result, selected_skills, compiled_ctx
         )
@@ -504,6 +486,7 @@ class RuntimeOutcome:
     step_called: bool
     iterations: int = 0
     waiting_for_approval: bool = False
+    approval_id: str | None = None
     decision: AutonomyDecision | str | None = None
     last_observation: ExecutionObservation | None = None
     checkpoint_id: str | None = None
@@ -570,6 +553,8 @@ class PawRuntime:
         model_router: Any | None = None,
         model_executor: Any | None = None,
         skill_fabric: Any | None = None,
+        capability_router: CapabilityRouter | None = None,
+        approval_store: Any | None = None,
         task_scheduler: Any | None = None,
         max_iterations: int | None = None,
         checkpoint_interval: int = 5,
@@ -577,6 +562,7 @@ class PawRuntime:
         default_role: str = "fast",
         complexity: str = "medium",
         privacy_required: bool = False,
+        preferred_provider: str | None = None,
         execution_profile: Any | None = None,
     ):
         self.autonomy = autonomy
@@ -590,10 +576,13 @@ class PawRuntime:
         self.model_router = model_router
         self.model_executor = model_executor
         self.skill_fabric = skill_fabric
+        self.capability_router = capability_router or get_capability_router()
+        self.approval_store = approval_store
         self.task_scheduler = task_scheduler
         self.default_role = default_role
         self.complexity = complexity
         self.privacy_required = privacy_required
+        self.preferred_provider = preferred_provider
         self.execution_profile = execution_profile or None
 
         self._max_iterations = max_iterations
@@ -699,6 +688,12 @@ class PawRuntime:
                 "model_executor to be set on PawRuntime"
             )
 
+        # Context compilation must remain deterministic before policy. In
+        # particular, do not auto-discover a remote embedding/provider during
+        # the pre-gate phase of an agent loop.
+        if hasattr(self.context_compiler, "auto_attach_embeddings"):
+            self.context_compiler.auto_attach_embeddings = False
+
         role = role or self.default_role
 
         agent_proposer = AgentActionProposer(
@@ -783,11 +778,32 @@ class PawRuntime:
         """
         if self.task_scheduler is None:
             raise RuntimeError("run_graph requires task_scheduler to be set on PawRuntime")
+        if self.context_compiler is not None and hasattr(
+            self.context_compiler, "auto_attach_embeddings"
+        ):
+            self.context_compiler.auto_attach_embeddings = False
 
         goal = task_goal or f"graph:{task_id}"
-        # build_graph validates (rejects missing deps / self-cycle / cycle)
-        # before any node runs.
-        await self.task_scheduler.build_graph(task_id, nodes)
+        completed_op_ids: set[str] = set()
+        restored_context: dict[str, Any] = {}
+        if resume_from_checkpoint:
+            from .checkpoint import ResumeManager
+            checkpoint, restored_context = await ResumeManager().resume(
+                task_id, resume_from_checkpoint
+            )
+            self.autonomy.restore_state(
+                checkpoint.autonomy_usage,
+                checkpoint.loop_decision_history,
+            )
+            completed_op_ids = await OperationRecordStore.get_completed_op_ids(task_id)
+
+        # On resume preserve the persisted graph/node statuses. A fresh graph
+        # is built (and validated) only when no durable graph exists yet.
+        existing_graph = await self.task_scheduler.get_graph(task_id) if resume_from_checkpoint else None
+        if existing_graph is None:
+            # build_graph validates (rejects missing deps / self-cycle / cycle)
+            # before any node runs.
+            await self.task_scheduler.build_graph(task_id, nodes)
         ordered = await self.task_scheduler.topological_sort(task_id)
 
         step_called = False
@@ -796,14 +812,59 @@ class PawRuntime:
         model_selections: list[str] = []
         skills_used: list[str] = []
         context_compiled = False
+        completed_nodes = {
+            node.id for node in ordered
+            if getattr(getattr(node, "status", None), "value", getattr(node, "status", None))
+            == TaskScheduleStatus.COMPLETED.value
+        }
+        failed_nodes = {
+            node.id for node in ordered
+            if getattr(getattr(node, "status", None), "value", getattr(node, "status", None))
+            in (TaskScheduleStatus.FAILED.value, TaskScheduleStatus.BLOCKED.value)
+        }
 
         await TaskLedger.record(
             task_id,
             TaskEventType.TASK_RESUMED if resume_from_checkpoint else TaskEventType.TASK_CREATED,
             {"goal": goal, "graph_nodes": len(ordered), "resumed_from": resume_from_checkpoint},
         )
+        await self._set_task_status(task_id, TaskStatus.RUNNING)
 
         for idx, node in enumerate(ordered):
+            node_operation_id = f"node_{task_id}_{node.id}"
+            if node.id in completed_nodes or node_operation_id in completed_op_ids:
+                completed_nodes.add(node.id)
+                continue
+
+            dependencies = list(getattr(node, "dependencies", []) or [])
+            failed_dependencies = [dep for dep in dependencies if dep in failed_nodes]
+            if failed_dependencies:
+                await self.task_scheduler.update_node_status(node.id, TaskScheduleStatus.BLOCKED)
+                failed_nodes.add(node.id)
+                error = f"blocked by failed dependency: {', '.join(failed_dependencies)}"
+                await TaskLedger.record(
+                    task_id,
+                    TaskEventType.EXECUTION_COMPLETED,
+                    {"node": node.id, "executed": False, "blocked": True, "error": error},
+                )
+                checkpoint = await self._create_checkpoint(
+                    task_id, restored_context, idx, 0.0, "graph_failed"
+                )
+                await log_task_completed(task_id, "failed", error)
+                await self._set_task_status(task_id, TaskStatus.FAILED, error)
+                return RuntimeOutcome(
+                    stopped=True,
+                    reason=StopReason.TASK_FAILED,
+                    step_called=step_called,
+                    iterations=idx,
+                    last_observation=last_observation,
+                    checkpoint_id=checkpoint.checkpoint_id if checkpoint else None,
+                    operations_completed=operations_completed,
+                    model_selections=model_selections,
+                    skills_used=skills_used,
+                    context_compiled=context_compiled,
+                )
+
             node_goal = getattr(node, "goal", goal) or goal
             # --- Compile context for this node (runtime owns ContextCompiler) ---
             compiled_ctx = None
@@ -835,6 +896,10 @@ class PawRuntime:
                     task_id, node_goal, context=compiled_ctx, candidates=candidates,
                     last_observation=last_observation, autonomy_usage=self.autonomy.usage.to_dict(),
                 )
+
+            # Graph node operation IDs are stable across process restarts;
+            # this is the idempotency key used by graph resume.
+            proposed.operation_id = node_operation_id
 
             if proposed.metadata.get("selected_skill"):
                 skills_used.append(proposed.metadata["selected_skill"])
@@ -869,6 +934,17 @@ class PawRuntime:
                 observation.resources_used.model_dump() if observation.resources_used else None,
                 observation.error,
             )
+            if observation.resources_used:
+                self.autonomy.usage.model_calls += observation.resources_used.model_calls
+                self.autonomy.usage.tool_calls += observation.resources_used.tool_calls
+                self.autonomy.usage.total_tokens += observation.resources_used.tokens
+                self.autonomy.usage.wall_time_seconds += (
+                    observation.resources_used.wall_time_ms / 1000.0
+                )
+            graph_progress = 0.0
+            if isinstance(observation.result, dict):
+                graph_progress = float(observation.result.get("progress", 0.0))
+            await self.autonomy.record_iteration(graph_progress)
             if observation.success:
                 await self.checkpoint_mgr.record_operation(
                     task_id=task_id, op_id=proposed.operation_id, op_type="node",
@@ -876,19 +952,44 @@ class PawRuntime:
                 )
                 await log_operation_recorded(task_id, proposed.operation_id, "node", "completed")
                 operations_completed += 1
+                completed_op_ids.add(proposed.operation_id)
+                completed_nodes.add(node.id)
                 await self.task_scheduler.update_node_status(node.id, TaskScheduleStatus.COMPLETED)
             else:
                 await self.task_scheduler.update_node_status(node.id, TaskScheduleStatus.FAILED)
+                failed_nodes.add(node.id)
+                checkpoint = await self._create_checkpoint(
+                    task_id, restored_context, idx + 1, 0.0, "graph_failed"
+                )
+                await log_task_completed(task_id, "failed", observation.error or f"node {node.id} failed")
+                await self._set_task_status(task_id, TaskStatus.FAILED, observation.error)
+                return RuntimeOutcome(
+                    stopped=True,
+                    reason=StopReason.TASK_FAILED,
+                    step_called=True,
+                    iterations=idx + 1,
+                    last_observation=observation,
+                    checkpoint_id=checkpoint.checkpoint_id if checkpoint else None,
+                    operations_completed=operations_completed,
+                    model_selections=model_selections,
+                    skills_used=skills_used,
+                    context_compiled=context_compiled,
+                )
 
             last_observation = observation
+            if isinstance(observation.result, dict) and observation.result.get("model"):
+                model_selections.append(str(observation.result["model"]))
 
         # All nodes executed -> terminal completion (autonomy owns the decision)
         decision, stop = await self.autonomy.mark_complete()
-        checkpoint = await self._create_checkpoint(task_id, {}, len(ordered), 1.0, "graph_completed")
+        checkpoint = await self._create_checkpoint(
+            task_id, restored_context, len(ordered), 1.0, "graph_completed"
+        )
         await log_task_completed(task_id, "completed", f"graph:{len(ordered)} nodes")
+        await self._set_task_status(task_id, TaskStatus.COMPLETED)
 
         return RuntimeOutcome(
-            stopped=True, reason=stop, step_called=True, iterations=len(ordered),
+            stopped=True, reason=stop, step_called=step_called, iterations=len(ordered),
             decision=decision, last_observation=last_observation,
             checkpoint_id=checkpoint.checkpoint_id if checkpoint else None,
             operations_completed=operations_completed, model_selections=model_selections,
@@ -912,10 +1013,35 @@ class PawRuntime:
         never reaches ``step_fn``.
         """
         # --- Policy Gate (single authority, before any side effect) ---
+        verdict = None
+        approval_request = None
         if self.autonomy.policy_guard is not None and proposed.capabilities:
             verdict = await self.autonomy.policy_guard.evaluate_request(
                 proposed.capabilities, proposed.context, task_id=task_id
             )
+            needs_approval = verdict.verdict == "ask" or (
+                verdict.verdict == "block"
+                and verdict.stop_reason == StopReason.POLICY_ASK_REQUIRED
+            )
+            if needs_approval and self.approval_store is not None:
+                if await self.approval_store.is_approved(task_id, proposed):
+                    # A durable approval only overrides ASK for this exact
+                    # fingerprint. A hard DENY can never reach this branch.
+                    verdict = RequestVerdict(
+                        verdict="go",
+                        allowed=True,
+                        decision=PolicyDecision.ALLOW,
+                        blocked=[],
+                        asked=verdict.asked,
+                        details=verdict.details,
+                        reason="Exact proposed operation approved by user",
+                    )
+                else:
+                    approval_request = await self.approval_store.request(
+                        task_id,
+                        proposed,
+                        metadata={"policy_reason": verdict.reason},
+                    )
             await log_policy_gate_evaluated(
                 task_id, proposed.operation_id, verdict.verdict,
                 [c.value for c in proposed.capabilities],
@@ -925,6 +1051,11 @@ class PawRuntime:
                     task_id, proposed.operation_id, "STOP",
                     verdict.stop_reason.value if verdict.stop_reason else "policy_denied",
                 )
+                await self.autonomy.record_decision(
+                    AutonomyDecision.STOP,
+                    verdict.stop_reason or StopReason.POLICY_DENIED,
+                    context={"task_id": task_id, "action_id": proposed.operation_id},
+                )
                 waiting = verdict.stop_reason == StopReason.POLICY_ASK_REQUIRED
                 return RuntimeOutcome(
                     stopped=True,
@@ -932,11 +1063,15 @@ class PawRuntime:
                     step_called=False,
                     iterations=i,
                     waiting_for_approval=waiting,
+                    approval_id=approval_request.id if approval_request else None,
                 )
 
         # --- Autonomy Gate (budget, progress, repetition, stall) ---
         decision, stop_reason = await self.autonomy.decide(
-            task_id, context=proposed.context, required_capabilities=proposed.capabilities
+            task_id,
+            context=proposed.context,
+            required_capabilities=proposed.capabilities,
+            policy_verdict=verdict,
         )
         await log_autonomy_gate_evaluated(
             task_id, proposed.operation_id, decision.value,
@@ -961,6 +1096,7 @@ class PawRuntime:
                 step_called=False,
                 iterations=i,
                 waiting_for_approval=True,
+                approval_id=approval_request.id if approval_request else None,
             )
         if decision in (
             AutonomyDecision.PAUSE,
@@ -998,7 +1134,11 @@ class PawRuntime:
         max_iterations: int | None = None,
     ) -> RuntimeOutcome:
         """The single runtime loop body shared by ``run`` and ``run_agent``."""
-        context = initial_context or {}
+        # Runtime-owned state must never alias/mutate the caller's proposal
+        # context. In particular, checkpoint restore adds keys to ``context``;
+        # mutating ProposedAction.context would invalidate an exact approval
+        # fingerprint between ASK and resume.
+        context = copy.deepcopy(initial_context or {})
         step_called = False
         iterations = 0
         operations_completed = 0
@@ -1007,6 +1147,10 @@ class PawRuntime:
         skills_used: list[str] = []
         context_compiled = False
         max_iter = max_iterations or self._max_iterations or self.autonomy.budget.max_iterations
+        completed_op_ids: set[str] = set()
+        progress = 0.0
+
+        await self._set_task_status(task_id, TaskStatus.RUNNING)
 
         # --- Resume from checkpoint if requested ---
         if resume_from_checkpoint:
@@ -1016,6 +1160,10 @@ class PawRuntime:
                 task_id, resume_from_checkpoint
             )
             context.update(restored_context)
+            self.autonomy.restore_state(
+                checkpoint.autonomy_usage,
+                checkpoint.loop_decision_history,
+            )
 
             # Get completed operation IDs to skip on replay
             completed_op_ids = await OperationRecordStore.get_completed_op_ids(task_id)
@@ -1031,9 +1179,6 @@ class PawRuntime:
                 task_id, checkpoint.checkpoint_id, checkpoint.progress_ratio, len(completed_op_ids)
             )
 
-            # Skip already-completed operations by advancing proposal count
-            self.proposer._proposal_count = len(completed_op_ids)
-
         # Log task started
         await TaskLedger.record(
             task_id,
@@ -1041,8 +1186,13 @@ class PawRuntime:
             {"goal": task_goal, "resumed_from": resume_from_checkpoint},
         )
 
-        for i in range(max_iter):
-            iterations = i + 1
+        # ``attempts`` is bounded independently from executed iterations so a
+        # resume can skip an arbitrary number of completed operation IDs without
+        # consuming the new-run iteration budget or looping forever.
+        attempts = 0
+        max_attempts = max_iter + len(completed_op_ids) + 1
+        while iterations < max_iter and attempts < max_attempts:
+            attempts += 1
 
             # --- 1. Compile context (the runtime owns ContextCompiler) ---
             compiled_ctx = None
@@ -1064,6 +1214,8 @@ class PawRuntime:
                     },
                 )
                 context_compiled = True
+                if hasattr(compiled_ctx, "to_dict"):
+                    context = compiled_ctx.to_dict()
 
             # --- 2. Propose next action ---
             propose_ctx: Any = compiled_ctx if compiled_ctx is not None else context
@@ -1075,6 +1227,16 @@ class PawRuntime:
                 last_observation,
                 self.autonomy.usage.to_dict(),
             )
+
+            # A completed primitive operation is an idempotency boundary. It
+            # is skipped before policy/autonomy/executor side effects on resume.
+            if proposed.operation_id in completed_op_ids:
+                await log_operation_recorded(
+                    task_id, proposed.operation_id, "step", "skipped"
+                )
+                continue
+
+            iterations += 1
             # Track agent-loop signals
             if proposed.metadata.get("selected_skill"):
                 skills_used.append(proposed.metadata["selected_skill"])
@@ -1096,8 +1258,22 @@ class PawRuntime:
             )
 
             # --- Policy + Autonomy gate (single authority, before side effect) ---
-            gate = await self._gate_action(task_id, proposed, i)
+            gate = await self._gate_action(task_id, proposed, iterations - 1)
             if gate is not None:
+                if gate.waiting_for_approval:
+                    checkpoint = await self._create_checkpoint(
+                        task_id,
+                        context,
+                        iterations,
+                        progress,
+                        "awaiting_approval",
+                    )
+                    gate.checkpoint_id = checkpoint.checkpoint_id if checkpoint else None
+                await self._set_task_status(
+                    task_id,
+                    TaskStatus.BLOCKED if gate.waiting_for_approval else TaskStatus.FAILED,
+                    str(gate.reason) if gate.reason else None,
+                )
                 return gate
 
             # --- 4. CONTINUE -> Execute step ---
@@ -1130,10 +1306,23 @@ class PawRuntime:
                     task_id, proposed.operation_id, "step", "completed"
                 )
                 operations_completed += 1
+                completed_op_ids.add(proposed.operation_id)
+                if self.approval_store is not None:
+                    await self.approval_store.consume(task_id, proposed)
+            else:
+                await self.checkpoint_mgr.record_operation(
+                    task_id=task_id,
+                    op_id=proposed.operation_id,
+                    op_type="step",
+                    status="failed",
+                    result_ref=f"observation:{observation.step_id}",
+                )
+                await log_operation_recorded(
+                    task_id, proposed.operation_id, "step", "failed"
+                )
 
             # --- 6. Update autonomy usage from observation ---
             if observation.resources_used:
-                self.autonomy.usage.record_decision(observation.resources_used.tokens)
                 self.autonomy.usage.model_calls += observation.resources_used.model_calls
                 self.autonomy.usage.tool_calls += observation.resources_used.tool_calls
                 self.autonomy.usage.total_tokens += observation.resources_used.tokens
@@ -1150,6 +1339,27 @@ class PawRuntime:
             await log_step_completed(task_id, proposed.operation_id, done, progress)
 
             last_observation = observation
+            if isinstance(observation.result, dict) and observation.result.get("model"):
+                model_selections.append(str(observation.result["model"]))
+
+            if not observation.success:
+                checkpoint = await self._create_checkpoint(
+                    task_id, context, iterations, progress, "failed"
+                )
+                await log_task_completed(task_id, "failed", observation.error or "execution failed")
+                await self._set_task_status(task_id, TaskStatus.FAILED, observation.error)
+                return RuntimeOutcome(
+                    stopped=True,
+                    reason=StopReason.TASK_FAILED,
+                    step_called=True,
+                    iterations=iterations,
+                    last_observation=observation,
+                    checkpoint_id=checkpoint.checkpoint_id if checkpoint else None,
+                    operations_completed=operations_completed,
+                    model_selections=model_selections,
+                    skills_used=skills_used,
+                    context_compiled=context_compiled,
+                )
 
             # --- 8. Check for task completion ---
             if done:
@@ -1162,6 +1372,7 @@ class PawRuntime:
                 )
 
                 await log_task_completed(task_id, "completed", _summary(observation))
+                await self._set_task_status(task_id, TaskStatus.COMPLETED)
 
                 return RuntimeOutcome(
                     stopped=True,
@@ -1207,14 +1418,14 @@ class PawRuntime:
 
         # --- Max iterations reached ---
         checkpoint = await self._create_checkpoint(
-            task_id, context, max_iter, progress, "max_iterations"
+            task_id, context, iterations, progress, "max_iterations"
         )
 
         return RuntimeOutcome(
             stopped=True,
             reason=StopReason.MAX_ITERATIONS_REACHED,
             step_called=step_called,
-            iterations=max_iter,
+            iterations=iterations,
             last_observation=last_observation,
             checkpoint_id=checkpoint.checkpoint_id if checkpoint else None,
             operations_completed=operations_completed,
@@ -1222,6 +1433,18 @@ class PawRuntime:
             skills_used=skills_used,
             context_compiled=context_compiled,
         )
+
+    @staticmethod
+    async def _set_task_status(
+        task_id: str,
+        status: TaskStatus,
+        error: str | None = None,
+    ) -> None:
+        """Persist lifecycle status when the task exists; tolerate synthetic IDs."""
+        try:
+            await TaskManager.update_status(task_id, status, error=error)
+        except Exception as exc:  # pragma: no cover - defensive for DB-less callers
+            logger.warning("runtime_task_status_update_failed", task_id=task_id, error=str(exc))
 
     # ------------------------------------------------------------------
     # Action execution (the "do" half of the agent loop)
@@ -1233,21 +1456,18 @@ class PawRuntime:
         proposed: ProposedAction,
     ) -> ExecutionObservation:
         """
-        Execute a proposed action via the selected skill / executor.
+        Execute a proposed action through the canonical CapabilityRouter.
 
-        For the agent loop this is where the action is actually performed:
-          * if ``proposed.metadata["selected_skill"]`` names a skill in the
-            fabric, the skill's body (instructions / code) is loaded and run;
-          * otherwise the action is recorded as a reasoning/tool step.
-
-        Offline / local-first: skills ship as markdown bodies (instructions),
-        so execution returns the body + the model response as the observation.
-        Real executors (code modules, tool adapters) plug in here without
-        changing the loop contract.
+        Skill markdown is context/instruction only; loading it is not an
+        execution success. A compatible registered executor must be selected
+        and invoked. Model routing/inference also lives here, after
+        ``_gate_action`` has completed, so no provider side effect occurs before
+        policy authorization.
         """
         skill_name = proposed.metadata.get("selected_skill")
         skill_body = ""
-        executed = False
+        model_result: dict[str, Any] = {}
+        selected_model_name: str | None = None
 
         # The runtime selects the model/executor that will carry out the action.
         # This is the execution-side model routing (distinct from the proposer's
@@ -1264,8 +1484,10 @@ class PawRuntime:
                     complexity=self.complexity,
                     privacy_required=self.privacy_required,
                     execution_profile=self.execution_profile,
+                    preferred_provider=self.preferred_provider,
                 )
                 if selection.model_name:
+                    selected_model_name = selection.model_name
                     await TaskLedger.record(
                         task_id,
                         TaskEventType.MODEL_SELECTED,
@@ -1277,6 +1499,11 @@ class PawRuntime:
                             "stage": "execution",
                         },
                     )
+                    if self.model_executor is not None:
+                        messages = proposed.metadata.get("messages") or [
+                            {"role": "user", "content": proposed.goal},
+                        ]
+                        model_result = await self.model_executor.complete(selection, messages) or {}
             except Exception as exc:  # pragma: no cover - defensive
                 logger.warning("execute_model_route_failed", error=str(exc))
 
@@ -1285,26 +1512,88 @@ class PawRuntime:
                 skill = self.skill_fabric.get_skill(skill_name)
                 if skill is not None and skill.manifest.body:
                     skill_body = skill.manifest.body
-                    executed = True
             except Exception as exc:  # pragma: no cover - defensive
                 logger.warning("execute_skill_failed", skill=skill_name, error=str(exc))
+
+        # Route and invoke the actual executor. The policy gate has already
+        # authorized the exact capability set at this point.
+        detailed_scores = await self.capability_router.route_detailed(
+            task_id,
+            proposed.goal,
+            proposed.capabilities,
+            context_size=_token_count_from_context(proposed.context),
+            complexity=self.complexity,
+            privacy_required=self.privacy_required,
+        )
+        best_detail = detailed_scores[0] if detailed_scores else None
+        executor = (
+            self.capability_router.registry.get(best_detail.executor_name)
+            if best_detail is not None else None
+        )
+        executor_score = best_detail.to_capability_score() if best_detail else None
+        if executor is None or (best_detail is not None and best_detail.missing_capabilities):
+            error = "no executor supports the proposed capabilities"
+            await TaskLedger.record(
+                task_id,
+                TaskEventType.EXECUTOR_SELECTED,
+                {
+                    "skill": skill_name,
+                    "executor": None,
+                    "executed": False,
+                    "error": error,
+                    "capabilities": [c.value for c in proposed.capabilities],
+                },
+            )
+            await TaskLedger.record(
+                task_id,
+                TaskEventType.EXECUTION_COMPLETED,
+                {"skill": skill_name, "executor": None, "executed": False, "error": error},
+            )
+            return ExecutionObservation(
+                step_id="",
+                action_id=proposed.operation_id,
+                result={"done": False, "progress": 0.0, "skill": skill_name},
+                resources_used=proposed.estimated_cost or ResourceUsage(tool_calls=1),
+                success=False,
+                error=error,
+            )
 
         await TaskLedger.record(
             task_id,
             TaskEventType.EXECUTOR_SELECTED,
             {
                 "skill": skill_name,
-                "executed": executed,
+                "executor": executor.name,
+                "score": executor_score.executor_score if executor_score else None,
                 "capabilities": [c.value for c in proposed.capabilities],
             },
         )
 
+        context_value = proposed.context
+        if hasattr(context_value, "to_dict"):
+            context_value = context_value.to_dict()
+        if not isinstance(context_value, str):
+            context_value = json.dumps(context_value or {}, default=str)
+        executor_task = SimpleNamespace(
+            id=task_id,
+            goal=proposed.goal,
+            requested_capabilities=proposed.capabilities,
+        )
+        executor_result = await executor.execute(executor_task, context_value)
+        executed = bool(executor_result.success)
+
+        done = bool(proposed.metadata.get("done", False)) or bool(model_result.get("done", False))
         result: dict[str, Any] = {
-            "done": bool(proposed.metadata.get("done", False)),
-            "progress": 1.0 if proposed.metadata.get("done", False) else 0.0,
+            "done": done,
+            "progress": 1.0 if done else 0.0,
             "skill": skill_name,
             "skill_body": skill_body[:500] if skill_body else None,
-            "model_response": proposed.metadata.get("model_response", ""),
+            "model_response": model_result.get(
+                "response", proposed.metadata.get("model_response", "")
+            ),
+            "model": selected_model_name,
+            "output": executor_result.output,
+            "executor": executor.name,
         }
 
         await TaskLedger.record(
@@ -1314,6 +1603,7 @@ class PawRuntime:
                 "skill": skill_name,
                 "executed": executed,
                 "done": result["done"],
+                "error": executor_result.error,
             },
         )
 
@@ -1323,7 +1613,8 @@ class PawRuntime:
             action_id=proposed.operation_id,
             result=result,
             resources_used=resources,
-            success=True,
+            success=executed,
+            error=executor_result.error,
         )
 
     async def _create_checkpoint(
@@ -1344,9 +1635,9 @@ class PawRuntime:
             context=context,
             autonomy_usage=self.autonomy.usage,
             autonomy_profile=self.autonomy.profile.value,
-            progress_history=[],
-            repetition_state={},
-            stall_state={},
+            progress_history=self.autonomy.usage.progress_history,
+            repetition_state={"decision_history": self.autonomy._decision_history[-10:]},
+            stall_state={"last_activity": self.autonomy.usage.last_activity.isoformat()},
             loop_iteration=iteration,
             loop_decision_history=self.autonomy._decision_history,
             tags=[tag],

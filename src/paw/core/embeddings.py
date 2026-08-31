@@ -197,16 +197,7 @@ async def try_ollama_embedding_provider(
 
 async def ensure_embedding_table() -> None:
     """Create the (optional) embeddings table if it does not exist."""
-    await db.execute(
-        """
-        CREATE TABLE IF NOT EXISTS memory_embeddings (
-            memory_id TEXT PRIMARY KEY,
-            model TEXT NOT NULL,
-            vector TEXT NOT NULL,
-            created_at TEXT NOT NULL
-        )
-        """
-    )
+    await db.initialize()
 
 
 async def store_embedding(memory_id: str, model: str, vector: list[float]) -> None:

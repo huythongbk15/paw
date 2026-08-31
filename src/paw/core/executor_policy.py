@@ -9,12 +9,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from .executor import Executor, ExecutorResult
+from .executor import ExecutableTask, Executor, ExecutorResult
 from .logging import get_logger
 from .models import Capability, PolicyDecision
 from .policy import PolicyGuard, get_policy_guard
 
 logger = get_logger(__name__)
+
+__all__ = ["ExecutableTask", "ExecutorPolicyEnforcer", "PolicyCheckResult", "PolicyEnforcedExecutor"]
 
 
 @dataclass
@@ -37,34 +39,6 @@ class PolicyCheckResult:
             "sandbox_capabilities": self.sandbox_capabilities,
             "message": self.message,
             "sandbox": self.sandbox,
-        }
-
-
-class ExecutableTask:
-    """A task wrapped with policy enforcement metadata."""
-
-    def __init__(
-        self,
-        task_id: str,
-        goal: str,
-        capabilities: list[str],
-        policy_check: PolicyCheckResult,
-    ):
-        self.task_id = task_id
-        self.goal = goal
-        self.capabilities = capabilities
-        self.policy_check = policy_check
-        self.executed = False
-        self.result: ExecutorResult | None = None
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "task_id": self.task_id,
-            "goal": self.goal,
-            "capabilities": self.capabilities,
-            "policy_check": self.policy_check.to_dict(),
-            "executed": self.executed,
-            "result": self.result.to_dict() if self.result else None,
         }
 
 
@@ -143,7 +117,9 @@ class ExecutorPolicyEnforcer:
         """Enforce policy and optionally execute."""
         check = await self.pre_execute_check(task_id, goal, capabilities)
 
-        if not check.allowed:
+        # ASK is a decision boundary, never an implicit permission to execute.
+        # Callers must persist/obtain approval and invoke the executor again.
+        if not check.allowed or check.decision == "ask":
             logger.info("execution_blocked_by_policy", task_id=task_id, decision=check.decision)
             return check, None
 
@@ -197,7 +173,8 @@ class PolicyEnforcedExecutor:
             "policy_check": check.to_dict(),
             "executor": self.executor.name,
             "result": result.to_dict() if result else None,
-            "blocked": not check.allowed,
+            "blocked": not check.allowed or check.decision == "ask",
+            "awaiting_approval": check.decision == "ask",
         }
 
 

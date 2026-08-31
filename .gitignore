@@ -38,7 +38,6 @@ dist/
 *.db-wal
 
 # Local agent workspace memory files (not part of PAW source)
-AGENTS.md
 MEMORY.md
 PROFILE.md
 SOUL.md

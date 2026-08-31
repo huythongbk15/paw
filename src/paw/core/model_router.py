@@ -572,6 +572,7 @@ class ModelRouter:
         privacy_required: bool = False,
         prefer_cheap: bool = True,
         execution_profile: ExecutionProfile | None = None,
+        preferred_provider: str | None = None,
     ) -> ModelSelection:
         """Route a task to the best model using multi-dimensional scoring."""
         # Only register defaults if using default registry
@@ -635,6 +636,15 @@ class ModelRouter:
         scored = await self._filter_for_availability(
             scored, role, context_size, complexity, privacy_required, prefer_cheap
         )
+
+        if preferred_provider:
+            preferred = [
+                (manifest, score)
+                for manifest, score in scored
+                if manifest.provider == preferred_provider
+            ]
+            if preferred:
+                scored = preferred
 
         if not scored:
             logger.warning("no_model_for_role", role=role)
@@ -754,18 +764,7 @@ class ModelRouter:
 # Initialize model_selections table
 async def ensure_model_selections_table() -> None:
     """Ensure model_selections table exists."""
-    await db.execute("""
-        CREATE TABLE IF NOT EXISTS model_selections (
-            task_id TEXT,
-            model_name TEXT NOT NULL,
-            role TEXT NOT NULL,
-            reason TEXT,
-            score REAL NOT NULL DEFAULT 0.0,
-            fallback_chain TEXT,
-            created_at TEXT NOT NULL,
-            PRIMARY KEY (task_id, role, created_at)
-        )
-    """)
+    await db.initialize()
 
 
 # Global instances

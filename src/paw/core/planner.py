@@ -274,13 +274,4 @@ class Planner:
 # Initialize plans table if needed
 async def ensure_plans_table() -> None:
     """Ensure the plans table exists."""
-    await db.execute("""
-        CREATE TABLE IF NOT EXISTS plans (
-            id TEXT PRIMARY KEY,
-            task_id TEXT,
-            session_id TEXT NOT NULL,
-            goal TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        )
-    """)
+    await db.initialize()

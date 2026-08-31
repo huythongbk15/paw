@@ -210,10 +210,18 @@ class TaskScheduler:
 
     async def build_graph(self, task_id: str, nodes: list[TaskNode]) -> TaskGraph:
         """Build a task graph from nodes."""
-        graph = TaskGraph(task_id=task_id)
+        existing = await db.fetchone(
+            "SELECT id FROM task_graphs WHERE task_id = ? ORDER BY updated_at DESC LIMIT 1",
+            (task_id,),
+        )
+        graph = TaskGraph(
+            id=existing["id"] if existing else uuid.uuid4().hex[:16],
+            task_id=task_id,
+        )
 
         # Load nodes from TaskNode list
         for node in nodes:
+            node.task_id = task_id
             graph.add_node(node)
 
         # Load dependencies from node dependencies
@@ -426,6 +434,12 @@ class TaskScheduler:
     async def _save_graph(self, graph: TaskGraph) -> None:
         """Save graph to database."""
         async with db.transaction() as conn:
+            # A graph definition is replaced atomically; stale dependency rows
+            # must not inflate in-degree on subsequent topological sorts.
+            await conn.execute(
+                "DELETE FROM task_dependencies WHERE task_id = ?",
+                (graph.task_id,),
+            )
             await conn.execute(
                 """
                 INSERT OR REPLACE INTO task_graphs
@@ -485,35 +499,17 @@ class TaskScheduler:
         self._execution_status[node_id] = status
         if self._graph is not None and node_id in self._graph.nodes:
             self._graph.nodes[node_id].status = TaskStatus(status.value)
+            self._graph.nodes[node_id].updated_at = datetime.now(UTC)
+        await db.write(
+            "UPDATE task_nodes SET status = ?, updated_at = ? WHERE id = ?",
+            (status.value, datetime.now(UTC).isoformat(), node_id),
+        )
 
 
 # Initialize task_graphs and task_dependencies tables
 async def ensure_task_scheduler_tables() -> None:
-    """Ensure task graph tables exist (drop and recreate)."""
-    await db.execute("DROP TABLE IF EXISTS task_dependencies")
-    await db.execute("DROP TABLE IF EXISTS task_graphs")
-    await db.execute("""
-        CREATE TABLE task_graphs (
-            id TEXT PRIMARY KEY,
-            task_id TEXT NOT NULL,
-            schedule_status TEXT NOT NULL DEFAULT 'pending',
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        )
-    """)
-    await db.execute("""
-        CREATE TABLE task_dependencies (
-            id TEXT PRIMARY KEY,
-            task_id TEXT NOT NULL,
-            from_node_id TEXT NOT NULL,
-            to_node_id TEXT NOT NULL,
-            dependency_type TEXT NOT NULL DEFAULT 'must_complete',
-            condition TEXT,
-            created_at TEXT NOT NULL
-        )
-    """)
-    await db.execute("CREATE INDEX IF NOT EXISTS idx_dep_from ON task_dependencies(from_node_id)")
-    await db.execute("CREATE INDEX IF NOT EXISTS idx_dep_to ON task_dependencies(to_node_id)")
+    """Ensure canonical task graph tables exist without destructive DDL."""
+    await db.initialize()
 
 
 # Global instance

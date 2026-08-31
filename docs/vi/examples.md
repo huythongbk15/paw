@@ -1,14 +1,14 @@
-# PAW examples
+# Ví dụ PAW
 
-## CLI chat demo
+## Demo CLI chat
 
-The default provider is deterministic and offline:
+Provider mặc định xác định và chạy offline:
 
 ```bash
 paw chat
 ```
 
-Inside the REPL:
+Trong REPL:
 
 ```text
 you> xin chào
@@ -22,25 +22,25 @@ you> /history
 you> /exit
 ```
 
-The write request above is simulated by the bundled mock executor: the demo
-proves authorization, routing, observation and resume without changing a real
-file. To resume from another process, copy the session ID and run:
+Yêu cầu ghi file trên được bundled mock executor mô phỏng: demo chứng minh
+authorization, routing, observation và resume nhưng không sửa file thật. Để tiếp
+tục từ process khác, copy session ID rồi chạy:
 
 ```bash
 paw chat --session <session-id> --status
 paw chat --session <session-id> --approve
 ```
 
-One-shot JSON mode is suitable for smoke tests:
+Chế độ JSON một lần phù hợp smoke test:
 
 ```bash
 paw chat --message "xin chào PAW" --json
 ```
 
-## Library runtime
+## Runtime qua library
 
-The following example uses only the canonical runtime and a deterministic step
-function, so it is safe to run without a provider or network access.
+Ví dụ sau chỉ dùng runtime canonical và step function xác định, an toàn khi chạy
+không cần provider hoặc network:
 
 ```python
 import asyncio
@@ -91,7 +91,7 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-For agent execution, inject `ContextCompiler`, `ModelRouter`, and
-`ModelExecutor` into `PawRuntime` and call `run_agent`; do not call a provider
-directly from a proposer. For a restart, pass the returned checkpoint ID as
-`resume_from_checkpoint`; completed operation IDs are skipped durably.
+Để chạy agent, inject `ContextCompiler`, `ModelRouter` và `ModelExecutor` vào
+`PawRuntime`, rồi gọi `run_agent`; không gọi provider trực tiếp từ proposer. Khi
+restart, truyền checkpoint ID trả về vào `resume_from_checkpoint`; operation ID
+đã hoàn thành được bỏ qua một cách bền vững.

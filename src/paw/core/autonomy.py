@@ -7,6 +7,7 @@ typed autonomy decisions with StopReason classification.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -14,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from .ledger import TaskEventType, TaskLedger
 from .logging import get_logger
+from .models import AutonomyDecision, StopReason
 
 if TYPE_CHECKING:
     from .detectors import ProgressDetector, RepetitionDetector, StallDetector
@@ -177,51 +179,23 @@ class AutonomyUsage:
             "last_progress_ratio": self.last_progress_ratio,
         }
 
-
-# --- Autonomy Decisions ---
-
-class AutonomyDecision(StrEnum):
-    """Typed autonomy decisions - replaces generic allow/deny."""
-    CONTINUE = "continue"              # Proceed with autonomous execution
-    PAUSE = "pause"                    # Pause and wait for user input
-    ASK = "ask"                        # Request user clarification/approval
-    ESCALATE = "escalate"              # Escalate to higher authority/review
-    DELEGATE = "delegate"              # Delegate to another agent/executor
-    STOP = "stop"                      # Hard stop - budget exhausted or error
-    STOP_SUCCESS = "stop_success"      # Task completed successfully (terminal)
-
-
-class StopReason(StrEnum):
-    """Classified reasons for stopping autonomous execution."""
-    # Budget exhaustion
-    BUDGET_DECISIONS_EXHAUSTED = "budget_decisions_exhausted"
-    BUDGET_MODEL_CALLS_EXHAUSTED = "budget_model_calls_exhausted"
-    BUDGET_TOOL_CALLS_EXHAUSTED = "budget_tool_calls_exhausted"
-    BUDGET_TOKENS_EXHAUSTED = "budget_tokens_exhausted"
-    BUDGET_WALL_TIME_EXHAUSTED = "budget_wall_time_exhausted"
-
-    # Loop limits
-    MAX_ITERATIONS_REACHED = "max_iterations_reached"
-    MAX_RETRIES_EXCEEDED = "max_retries_exceeded"
-
-    # Progress issues
-    STALLED = "stalled"
-    INSUFFICIENT_PROGRESS = "insufficient_progress"
-    REPETITION_DETECTED = "repetition_detected"
-
-    # Policy/Safety
-    POLICY_DENIED = "policy_denied"
-    POLICY_ASK_REQUIRED = "policy_ask_required"
-    SAFETY_VIOLATION = "safety_violation"
-
-    # Task completion
-    TASK_COMPLETED = "task_completed"
-    TASK_FAILED = "task_failed"
-    USER_CANCELLED = "user_cancelled"
-
-    # External
-    EXTERNAL_INTERRUPT = "external_interrupt"
-    UNKNOWN = "unknown"
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any] | None) -> AutonomyUsage:
+        """Restore usage counters from a durable checkpoint payload."""
+        if not data:
+            return cls()
+        usage = cls()
+        for name in (
+            "decisions", "model_calls", "tool_calls", "total_tokens",
+            "wall_time_seconds", "idle_time_seconds", "iterations", "retries",
+            "last_progress_ratio",
+        ):
+            if name in data:
+                setattr(usage, name, data[name])
+        history = data.get("progress_history", [])
+        usage.progress_history = [float(item) for item in history]
+        usage.last_activity = datetime.now(UTC)
+        return usage
 
 
 # --- Autonomy Controller ---
@@ -306,6 +280,7 @@ class AutonomyController:
         task_id: str,
         context: dict[str, Any] | None = None,
         required_capabilities: list[ Capability] | None = None,
+        policy_verdict: Any | None = None,
     ) -> tuple[AutonomyDecision, StopReason | None]:
         """
         Main decision point for autonomous execution.
@@ -320,10 +295,12 @@ class AutonomyController:
         gate on policy (legacy behavior / pure budget-driven control).
         """
         # 0. Policy gate — single authority, fail-closed, before any side effect
-        if self.policy_guard is not None and required_capabilities:
-            verdict = await self.policy_guard.evaluate_request(
+        if policy_verdict is None and self.policy_guard is not None and required_capabilities:
+            policy_verdict = await self.policy_guard.evaluate_request(
                 required_capabilities, context or {}, task_id=task_id
             )
+        if policy_verdict is not None:
+            verdict = policy_verdict
             if verdict.verdict == "block":
                 self._stop_reason = verdict.stop_reason
                 # Both hard DENY and non-interactive ASK halt the loop — ASK
@@ -370,6 +347,15 @@ class AutonomyController:
         # For now, assume continue if budgets OK
 
         return AutonomyDecision.CONTINUE, None
+
+    def restore_state(
+        self,
+        usage: Mapping[str, Any] | None = None,
+        decision_history: list[dict[str, Any]] | None = None,
+    ) -> None:
+        """Restore durable autonomy state before resuming a task."""
+        self.usage = AutonomyUsage.from_dict(usage)
+        self._decision_history = list(decision_history or [])
 
     async def mark_complete(self) -> tuple[AutonomyDecision, StopReason]:
         """Task observed complete -> deterministic successful stop.

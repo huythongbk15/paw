@@ -583,15 +583,4 @@ class IntelligentPlanner:
 # Initialize plans table if needed
 async def ensure_intelligent_planner_table() -> None:
     """Ensure tables exist."""
-    await db.execute("""
-        CREATE TABLE IF NOT EXISTS intelligent_plans (
-            id TEXT PRIMARY KEY,
-            session_id TEXT NOT NULL,
-            goal TEXT NOT NULL,
-            intents TEXT, -- JSON
-            confidence REAL,
-            reasoning_summary TEXT,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        )
-    """)
+    await db.initialize()

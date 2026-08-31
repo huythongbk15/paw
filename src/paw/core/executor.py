@@ -173,6 +173,7 @@ class MockExecutor(Executor):
 
     name = "mock"
     capabilities: ClassVar[list[Capability]] = [
+        Capability.MODEL_INFERENCE,
         Capability.FILESYSTEM_READ,
         Capability.FILESYSTEM_WRITE,
         Capability.SHELL_EXECUTE,

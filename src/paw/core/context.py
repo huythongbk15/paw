@@ -7,12 +7,10 @@ Includes explain mode and budget management per prompt spec.
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from .ledger import TaskLedger
 from .logging import get_logger
 from .models import TaskEventType
 from .storage import db
@@ -230,14 +228,27 @@ class ExplainEntry:
     content_preview: str = ""
 
 
-# --- Context Builder ---
+# --- Context Builder compatibility facade ---
 
 class ContextBuilder:
-    """Builds complete task context from multiple sources with budget."""
+    """Compatibility facade over the canonical :class:`ContextCompiler`.
+
+    New code must use ``ContextCompiler.compile`` directly. Keeping this thin
+    adapter avoids a second context assembly algorithm for older callers.
+    """
 
     def __init__(self, budget: ContextBudget | None = None):
         self.budget = budget or ContextBudget()
-        self._explain_entries: list[ExplainEntry] = []
+        self._compiler = None
+
+    def _get_compiler(self):
+        if self._compiler is None:
+            from .context_compiler import ContextCompiler
+            self._compiler = ContextCompiler(
+                budget=self.budget,
+                auto_attach_embeddings=False,
+            )
+        return self._compiler
 
     async def build_context(
         self,
@@ -245,39 +256,10 @@ class ContextBuilder:
         session_id: str | None = None,
         explain_mode: bool = False,
     ) -> TaskContext:
-        """Build complete context for a task."""
-        context = TaskContext(task_id=task_id)
-        context.explain_mode = explain_mode
-        self._explain_entries = []
-
-        # 1. Load ledger events
-        events = await TaskLedger.get_events(task_id, limit=100)
-        for event in events:
-            if not context.add_fragment(ContextFragment(
-                source="ledger",
-                event_type=event.event_type,
-                content=json.dumps(event.payload) if event.payload else "",
-                metadata={"event_type": event.event_type.value},
-                relevance_score=self._event_relevance(event.event_type),
-                explanation=f"Ledger event: {event.event_type.value}",
-            )):
-                logger.warning("context_budget_exceeded", source="ledger")
-                break
-
-        # 2. Load session context
-        if session_id:
-            session_ctx = await self._load_session_context(session_id)
-            context.add_fragment(session_ctx)
-
-        # 3. Load memory context
-        memory_ctx = await self._load_memory_context(task_id)
-        context.add_fragment(memory_ctx)
-
-        # 4. Load knowledge context
-        knowledge_ctx = await self._load_knowledge_context(task_id)
-        context.add_fragment(knowledge_ctx)
-
-        logger.info("context_built", task_id=task_id, fragments=len(context.fragments))
+        context, _ = await self._get_compiler().compile(
+            task_id, f"task:{task_id}", session_id=session_id,
+            explain_mode=explain_mode,
+        )
         return context
 
     async def build_context_for_execution(
@@ -285,138 +267,36 @@ class ContextBuilder:
         task_id: str,
         explain_mode: bool = False,
     ) -> TaskContext:
-        """Build context specifically for executor execution."""
-        context = await self.build_context(task_id, explain_mode=explain_mode)
-
-        # Filter to only relevant fragments
-        relevant = [
-            f for f in context.fragments
-            if f.source in ("ledger", "memory", "knowledge")
-            and f.relevance_score >= 0.3
-        ][:self.budget.max_fragments]
-
-        exec_context = TaskContext(task_id=task_id, budget=self.budget)
-        exec_context.explain_mode = explain_mode
-        for frag in relevant:
-            exec_context.add_fragment(frag)
-
-        return exec_context
+        context, _ = await self._get_compiler().compile(
+            task_id, f"task:{task_id}", explain_mode=explain_mode,
+        )
+        return context
 
     async def build_context_explain(
         self,
         task_id: str,
         session_id: str | None = None,
     ) -> tuple[TaskContext, str]:
-        """Build context with full explain mode."""
         context = await self.build_context(task_id, session_id, explain_mode=True)
-        report = context.get_explain_report()
-        return context, report
+        return context, context.get_explain_report()
 
     async def build_context_with_budget(
         self,
         task_id: str,
         budget: ContextBudget,
     ) -> TaskContext:
-        """Build context with custom budget."""
-        context = TaskContext(task_id=task_id, budget=budget)
-
-        # Load and add fragments respecting budget
-        events = await TaskLedger.get_events(task_id, limit=100)
-        for event in events:
-            frag = ContextFragment(
-                source="ledger",
-                event_type=event.event_type,
-                content=json.dumps(event.payload) if event.payload else "",
-                metadata={"event_type": event.event_type.value},
-                relevance_score=self._event_relevance(event.event_type),
-            )
-            if not context.add_fragment(frag):
-                break
-
+        from .context_compiler import ContextCompiler
+        context, _ = await ContextCompiler(
+            budget=budget, auto_attach_embeddings=False,
+        ).compile(task_id, f"task:{task_id}")
         return context
 
-    def _event_relevance(self, event_type: TaskEventType) -> float:
-        scores = {
-            TaskEventType.EXECUTION_COMPLETED: 0.9,
-            TaskEventType.TASK_COMPLETED: 0.9,
-            TaskEventType.EXECUTION_STARTED: 0.7,
-            TaskEventType.EXECUTOR_SELECTED: 0.8,
-            TaskEventType.MODEL_SELECTED: 0.7,
-            TaskEventType.POLICY_CHECKED: 0.6,
-            TaskEventType.TOOL_CALLED: 0.5,
-            TaskEventType.SKILL_SELECTED: 0.8,
-            TaskEventType.PLAN_CREATED: 0.7,
-            TaskEventType.SKILL_CANDIDATES_FOUND: 0.6,
-            TaskEventType.CONTEXT_BUILT: 0.5,
-            TaskEventType.MEMORY_PROPOSED: 0.4,
-            TaskEventType.MEMORY_ACCEPTED: 0.4,
-            TaskEventType.ARTIFACT_CREATED: 0.5,
-            TaskEventType.TASK_CREATED: 0.3,
-        }
-        return scores.get(event_type, 0.2)
-
-    async def _load_session_context(self, session_id: str) -> ContextFragment:
-        row = await db.fetchone("SELECT * FROM sessions WHERE id = ?", (session_id,))
-        if row:
-            return ContextFragment(
-                source="session",
-                content=f"Session {session_id}",
-                metadata={"project_id": row.get("project_id")},
-                relevance_score=0.4,
-                explanation=f"Session context for {session_id}",
-            )
-        return ContextFragment(source="session", content="", relevance_score=0.1)
-
-    async def _load_memory_context(self, task_id: str) -> ContextFragment:
-        rows = await db.fetchall(
-            """
-            SELECT * FROM memory_records
-            WHERE project_id IN (
-                SELECT project_id FROM tasks WHERE id = ?
-            ) OR id IN (
-                SELECT memory_id FROM memory_task_map WHERE task_id = ?
-            )
-            ORDER BY created_at DESC LIMIT 10
-            """,
-            (task_id, task_id),
-        )
-        if rows:
-            contents = [r["content"] for r in rows if r["content"]]
-            if contents:
-                return ContextFragment(
-                    source="memory",
-                    content="; ".join(contents[:5]),
-                    metadata={"count": len(contents)},
-                    relevance_score=0.6,
-                    explanation=f"Loaded {len(contents)} memory records",
-                )
-        return ContextFragment(source="memory", content="", relevance_score=0.1)
-
-    async def _load_knowledge_context(self, task_id: str) -> ContextFragment:
-        """Load knowledge context for a task."""
-        try:
-            from paw.knowledge.index import get_knowledge_index
-            idx = get_knowledge_index()
-            citations = await idx.get_citations_for_task(task_id)
-            if citations:
-                return ContextFragment(
-                    source="knowledge",
-                    content=f"Citations for task {task_id}: {len(citations)} entries",
-                    metadata={"citation_count": len(citations)},
-                    relevance_score=0.5,
-                    explanation="Knowledge citations linked to task",
-                )
-        except Exception as e:
-            logger.warning("knowledge_context_failed", error=str(e))
-        return ContextFragment(source="knowledge", content="", relevance_score=0.1)
-
     async def get_citations_for_task(self, task_id: str) -> list[dict]:
-        """Get citations for a task from DB."""
         rows = await db.fetchall(
             "SELECT * FROM citations WHERE task_id = ? ORDER BY position",
             (task_id,),
         )
-        return [dict(r) for r in rows]
+        return [dict(row) for row in rows]
 
 
 # Global instance

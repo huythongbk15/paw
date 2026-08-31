@@ -257,6 +257,7 @@ class PolicyGuard:
         interactive: bool = False,
     ):
         self._default_decisions: dict[str, PolicyDecision] = {
+            Capability.MODEL_INFERENCE: PolicyDecision.ALLOW,
             Capability.FILESYSTEM_READ: PolicyDecision.ALLOW,
             Capability.FILESYSTEM_WRITE: PolicyDecision.ASK,
             Capability.FILESYSTEM_DELETE: PolicyDecision.DENY,
@@ -608,17 +609,7 @@ class PolicyGuard:
 # Default policy rules initialization
 async def ensure_policy_table() -> None:
     """Ensure policy_rules table exists."""
-    await db.execute("""
-        CREATE TABLE IF NOT EXISTS policy_rules (
-            id TEXT PRIMARY KEY,
-            capability TEXT NOT NULL,
-            decision TEXT NOT NULL,
-            conditions TEXT, -- JSON
-            priority INTEGER NOT NULL DEFAULT 0,
-            enabled BOOLEAN NOT NULL DEFAULT 1,
-            created_at TEXT NOT NULL
-        )
-    """)
+    await db.initialize()
 
     # Insert default rules if table is empty
     count = await db.fetchone("SELECT COUNT(*) FROM policy_rules")

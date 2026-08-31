@@ -16,6 +16,8 @@ from .logging import get_logger
 
 logger = get_logger(__name__)
 
+SCHEMA_VERSION = 3
+
 SCHEMA = """
 -- Core tables for PAW
 
@@ -172,6 +174,55 @@ CREATE TABLE IF NOT EXISTS sessions (
     updated_at TEXT NOT NULL
 );
 
+-- Durable CLI chat application state. Sessions/tasks remain the canonical
+-- domain records; these tables only keep the chat projection and transcript.
+CREATE TABLE IF NOT EXISTS chat_sessions (
+    session_id TEXT PRIMARY KEY,
+    status TEXT NOT NULL DEFAULT 'active',
+    current_task_id TEXT,
+    pending_approval_id TEXT,
+    last_checkpoint_id TEXT,
+    metadata TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    task_id TEXT,
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    metadata TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_messages_session
+    ON chat_messages(session_id, created_at);
+
+-- ASK is a durable, exact-operation boundary. The fingerprint prevents an
+-- approval from authorizing a changed proposal that reused an operation id.
+CREATE TABLE IF NOT EXISTS approval_requests (
+    id TEXT PRIMARY KEY,
+    task_id TEXT NOT NULL,
+    operation_id TEXT NOT NULL,
+    action TEXT NOT NULL,
+    action_fingerprint TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    requested_at TEXT NOT NULL,
+    decided_at TEXT,
+    consumed_at TEXT,
+    decided_by TEXT,
+    metadata TEXT NOT NULL DEFAULT '{}',
+    UNIQUE (task_id, operation_id),
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_approval_task_status
+    ON approval_requests(task_id, status, requested_at DESC);
+
 -- Model Registry
 CREATE TABLE IF NOT EXISTS model_registry (
     id TEXT PRIMARY KEY,
@@ -190,13 +241,14 @@ CREATE TABLE IF NOT EXISTS model_registry (
 
 -- Model Selections
 CREATE TABLE IF NOT EXISTS model_selections (
-    task_id TEXT PRIMARY KEY,
+    task_id TEXT NOT NULL,
     model_name TEXT NOT NULL,
     role TEXT NOT NULL,
     reason TEXT,
     score REAL NOT NULL DEFAULT 0.0,
     fallback_chain TEXT,
-    created_at TEXT NOT NULL);
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (task_id, role, created_at));
 
 -- Identity & Preferences
 CREATE TABLE IF NOT EXISTS identity (
@@ -214,16 +266,6 @@ CREATE TABLE IF NOT EXISTS plans (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
-
--- Policy Rules
-CREATE TABLE IF NOT EXISTS policy_rules (
-    id TEXT PRIMARY KEY,
-    capability TEXT NOT NULL,
-    decision TEXT NOT NULL,
-    conditions TEXT,
-    priority INTEGER NOT NULL DEFAULT 0,
-    enabled BOOLEAN NOT NULL DEFAULT 1,
-    created_at TEXT NOT NULL);
 
 -- Memory Records (Phase 3)
 CREATE TABLE IF NOT EXISTS memory_records (
@@ -321,6 +363,65 @@ CREATE TABLE IF NOT EXISTS evidence (
     metadata TEXT,
     created_at TEXT NOT NULL);
 
+-- Durable runtime state. Feature modules must use these canonical tables.
+CREATE TABLE IF NOT EXISTS task_checkpoints (
+    checkpoint_id TEXT PRIMARY KEY,
+    task_id TEXT NOT NULL,
+    task_status TEXT NOT NULL,
+    current_step INTEGER NOT NULL DEFAULT 0,
+    total_steps INTEGER NOT NULL DEFAULT 0,
+    progress_ratio REAL NOT NULL DEFAULT 0.0,
+    context TEXT NOT NULL DEFAULT '{}',
+    context_compiler_state TEXT NOT NULL DEFAULT '{}',
+    autonomy_usage TEXT NOT NULL DEFAULT '{}',
+    autonomy_profile TEXT NOT NULL DEFAULT 'balanced',
+    progress_history TEXT NOT NULL DEFAULT '[]',
+    repetition_state TEXT NOT NULL DEFAULT '{}',
+    stall_state TEXT NOT NULL DEFAULT '{}',
+    loop_iteration INTEGER NOT NULL DEFAULT 0,
+    loop_decision_history TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL,
+    parent_checkpoint_id TEXT,
+    tags TEXT NOT NULL DEFAULT '[]',
+    metadata TEXT NOT NULL DEFAULT '{}',
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_checkpoints_task_id
+    ON task_checkpoints (task_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS operation_records (
+    task_id TEXT NOT NULL,
+    op_id TEXT NOT NULL,
+    op_type TEXT NOT NULL DEFAULT 'step',
+    status TEXT NOT NULL DEFAULT 'completed',
+    checkpoint_id TEXT,
+    result_ref TEXT,
+    created_at TEXT NOT NULL,
+    metadata TEXT NOT NULL DEFAULT '{}',
+    PRIMARY KEY (task_id, op_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_oprec_task ON operation_records(task_id, status);
+
+CREATE TABLE IF NOT EXISTS memory_embeddings (
+    memory_id TEXT PRIMARY KEY,
+    model TEXT NOT NULL,
+    vector TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS intelligent_plans (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    goal TEXT NOT NULL,
+    intents TEXT,
+    confidence REAL,
+    reasoning_summary TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
 """
 
 
@@ -330,6 +431,8 @@ class Database:
     def __init__(self, db_path: Path | None = None):
         self.db_path = db_path or settings.db_path
         self._conn: aiosqlite.Connection | None = None
+        self._initialized = False
+        self._transaction_depth = 0
 
     async def connect(self) -> None:
         if self._conn is not None:
@@ -345,24 +448,68 @@ class Database:
         if self._conn:
             await self._conn.close()
             self._conn = None
+            self._initialized = False
+            self._transaction_depth = 0
             logger.info("database_closed")
 
     async def initialize(self) -> None:
         """Create all tables and indexes."""
+        if self._initialized and self._conn is not None:
+            return
         await self.connect()
         await self._conn.executescript(SCHEMA)
+        await self._migrate_schema()
         await self._conn.commit()
+        self._initialized = True
         logger.info("database_initialized")
+
+    async def _migrate_schema(self) -> None:
+        """Repair known pre-v2 layouts without dropping user data."""
+        cursor = await self._conn.execute("PRAGMA user_version")
+        row = await cursor.fetchone()
+        version = int(row[0]) if row else 0
+        if version >= SCHEMA_VERSION:
+            return
+        info_cursor = await self._conn.execute("PRAGMA table_info(model_selections)")
+        columns = await info_cursor.fetchall()
+        primary_key = [column[1] for column in columns if column[5]]
+        if primary_key == ["task_id"]:
+            await self._conn.execute("ALTER TABLE model_selections RENAME TO model_selections_legacy")
+            await self._conn.execute(
+                """CREATE TABLE model_selections (
+                    task_id TEXT NOT NULL,
+                    model_name TEXT NOT NULL,
+                    role TEXT NOT NULL,
+                    reason TEXT,
+                    score REAL NOT NULL DEFAULT 0.0,
+                    fallback_chain TEXT,
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY (task_id, role, created_at)
+                )"""
+            )
+            await self._conn.execute(
+                """INSERT OR IGNORE INTO model_selections
+                (task_id, model_name, role, reason, score, fallback_chain, created_at)
+                SELECT task_id, model_name, role, reason, score, fallback_chain, created_at
+                FROM model_selections_legacy"""
+            )
+            await self._conn.execute("DROP TABLE model_selections_legacy")
+        await self._conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
     @asynccontextmanager
     async def transaction(self):
         """Context manager for database transactions."""
         await self.connect()
+        self._transaction_depth += 1
         try:
             yield self._conn
-            await self._conn.commit()
+            self._transaction_depth -= 1
+            if self._transaction_depth == 0:
+                await self._conn.commit()
         except Exception:
-            await self._conn.rollback()
+            self._transaction_depth = max(0, self._transaction_depth - 1)
+            if self._transaction_depth == 0:
+                await self._conn.rollback()
             raise
 
     # --- Explicit Storage Mutation Contract (Part A6) ---
@@ -381,7 +528,8 @@ class Database:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
 
-    # Write operations - MUST be inside a transaction
+    # Write operations. They commit immediately unless an explicit transaction
+    # is active, so durable state cannot silently remain uncommitted.
     async def write(self, sql: str, params: tuple = ()) -> int:
         """Execute a single INSERT/UPDATE/DELETE statement.
         Must be called within a transaction context.
@@ -389,6 +537,8 @@ class Database:
         """
         await self.connect()
         cursor = await self._conn.execute(sql, params)
+        if self._transaction_depth == 0:
+            await self._conn.commit()
         return cursor.rowcount
 
     async def write_many(self, sql: str, params_list: list[tuple]) -> int:
@@ -398,6 +548,8 @@ class Database:
         """
         await self.connect()
         cursor = await self._conn.executemany(sql, params_list)
+        if self._transaction_depth == 0:
+            await self._conn.commit()
         return cursor.rowcount
 
     # Backward compatibility - may be removed in future
@@ -405,7 +557,12 @@ class Database:
         """Legacy: executes any SQL. Prefer fetch_one/fetch_all for reads,
         write/write_many for writes inside transactions."""
         await self.connect()
-        return await self._conn.execute(sql, params)
+        cursor = await self._conn.execute(sql, params)
+        if self._transaction_depth == 0:
+            keyword = sql.lstrip().split(None, 1)[0].upper() if sql.strip() else ""
+            if keyword in {"CREATE", "INSERT", "UPDATE", "DELETE", "REPLACE", "ALTER", "DROP", "VACUUM", "REINDEX"}:
+                await self._conn.commit()
+        return cursor
 
     async def fetchone(self, sql: str, params: tuple = ()) -> aiosqlite.Row | None:
         """Legacy: fetch one row. Prefer fetch_one."""

@@ -40,6 +40,31 @@ class TaskStatus(StrEnum):
     CANCELLED = "cancelled"
 
 
+class ApprovalStatus(StrEnum):
+    """Durable lifecycle for an exact proposed operation approval."""
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    DENIED = "denied"
+    CONSUMED = "consumed"
+    CANCELLED = "cancelled"
+
+
+class ChatSessionStatus(StrEnum):
+    """Lifecycle of a durable CLI chat session."""
+
+    ACTIVE = "active"
+    CANCELLED = "cancelled"
+
+
+class ChatRole(StrEnum):
+    """Roles accepted by the durable chat transcript."""
+
+    USER = "user"
+    ASSISTANT = "assistant"
+    SYSTEM = "system"
+
+
 class TaskEventType(StrEnum):
     TASK_CREATED = "task_created"
     PLAN_CREATED = "plan_created"
@@ -73,6 +98,9 @@ class TaskEventType(StrEnum):
     CHECKPOINT_RESTORED = "checkpoint_restored"
     POLICY_GATE_EVALUATED = "policy_gate_evaluated"
     AUTONOMY_GATE_EVALUATED = "autonomy_gate_evaluated"
+    APPROVAL_REQUESTED = "approval_requested"
+    APPROVAL_DECIDED = "approval_decided"
+    APPROVAL_CONSUMED = "approval_consumed"
 
 
 class PolicyDecision(StrEnum):
@@ -84,6 +112,7 @@ class PolicyDecision(StrEnum):
 
 class Capability(StrEnum):
     """EXECUTOR capabilities - action permissions that executors can perform."""
+    MODEL_INFERENCE = "model.inference"
     FILESYSTEM_READ = "filesystem.read"
     FILESYSTEM_WRITE = "filesystem.write"
     FILESYSTEM_DELETE = "filesystem.delete"
@@ -138,6 +167,7 @@ class AutonomyDecision(StrEnum):
     ESCALATE = "escalate"
     DELEGATE = "delegate"
     STOP = "stop"
+    STOP_SUCCESS = "stop_success"
 
 
 class StopReason(StrEnum):

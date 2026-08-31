@@ -5,6 +5,8 @@ PAW CLI — Command line interface for Personal Agent Workstation.
 from __future__ import annotations
 
 import asyncio
+import json
+from typing import Any
 
 import structlog
 import typer
@@ -24,6 +26,59 @@ app = typer.Typer(
 )
 
 console = Console()
+
+
+def _print_chat_reply(reply: Any, json_output: bool) -> None:
+    if json_output:
+        typer.echo(json.dumps(reply.to_dict(), ensure_ascii=False))
+        return
+    console.print(f"[bold cyan]paw>[/bold cyan] {reply.content}")
+    details = [f"status={reply.status}", f"session={reply.session_id}"]
+    if reply.task_id:
+        details.append(f"task={reply.task_id}")
+    if reply.model:
+        details.append(f"model={reply.model}")
+    if reply.executor:
+        details.append(f"executor={reply.executor}")
+    console.print(f"[dim]{' | '.join(details)}[/dim]")
+
+
+def _print_chat_status(status: dict[str, Any], json_output: bool = False) -> None:
+    if json_output:
+        typer.echo(json.dumps(status, ensure_ascii=False))
+        return
+    table = Table(show_header=False)
+    table.add_column("Field", style="cyan")
+    table.add_column("Value")
+    for key, value in status.items():
+        table.add_row(key, "-" if value is None else str(value))
+    console.print(table)
+
+
+def _print_chat_history(messages: list[Any], json_output: bool = False) -> None:
+    if json_output:
+        typer.echo(
+            json.dumps(
+                [
+                    {
+                        "id": item.id,
+                        "role": item.role.value,
+                        "content": item.content,
+                        "task_id": item.task_id,
+                        "created_at": item.created_at.isoformat(),
+                    }
+                    for item in messages
+                ],
+                ensure_ascii=False,
+            )
+        )
+        return
+    if not messages:
+        console.print("[dim]Chưa có tin nhắn.[/dim]")
+        return
+    for item in messages:
+        color = "green" if item.role.value == "user" else "cyan"
+        console.print(f"[{color}]{item.role.value}>[/{color}] {item.content}")
 
 
 def version_callback(value: bool) -> None:
@@ -226,6 +281,144 @@ def profiles(
 
     console.print(table)
     console.print("\nRun [bold]paw profiles <name>[/bold] to see full details.")
+
+
+async def _chat_async(
+    *,
+    message: str | None,
+    session_id: str | None,
+    provider: str,
+    json_output: bool,
+    approve: bool,
+    resume: bool,
+    cancel: bool,
+    show_status: bool,
+    show_history: bool,
+) -> None:
+    from ..application.chat import ChatService
+
+    service = ChatService(provider_mode=provider)
+    try:
+        session = await service.open(session_id)
+        if approve:
+            _print_chat_reply(await service.approve(), json_output)
+            return
+        if resume:
+            _print_chat_reply(await service.resume(), json_output)
+            return
+        if cancel:
+            _print_chat_reply(await service.cancel(), json_output)
+            return
+        if show_status:
+            _print_chat_status(await service.status(), json_output)
+            return
+        if show_history:
+            _print_chat_history(await service.history(), json_output)
+            return
+        if message is not None:
+            _print_chat_reply(await service.send(message), json_output)
+            return
+
+        console.print("[bold]PAW Chat[/bold]")
+        console.print(
+            f"[dim]session={session.session_id} | provider={provider} | "
+            "gõ /help để xem lệnh[/dim]"
+        )
+        while True:
+            try:
+                user_input = console.input("[bold green]you>[/bold green] ").strip()
+            except (EOFError, KeyboardInterrupt):
+                console.print()
+                break
+            if not user_input:
+                continue
+            command, _, argument = user_input.partition(" ")
+            if command in {"/exit", "/quit"}:
+                break
+            if command == "/help":
+                console.print(
+                    "/status  /history  /approve [id]  /resume  /cancel  /exit"
+                )
+                continue
+            if command == "/status":
+                _print_chat_status(await service.status())
+                continue
+            if command == "/history":
+                _print_chat_history(await service.history())
+                continue
+            if command == "/approve":
+                _print_chat_reply(await service.approve(argument or None), False)
+                continue
+            if command == "/resume":
+                _print_chat_reply(await service.resume(), False)
+                continue
+            if command == "/cancel":
+                _print_chat_reply(await service.cancel(), False)
+                break
+            if command.startswith("/"):
+                console.print(f"[yellow]Lệnh không hợp lệ: {command}. Dùng /help.[/yellow]")
+                continue
+            _print_chat_reply(await service.send(user_input), False)
+    finally:
+        await service.close()
+        await db.close()
+
+
+@app.command()
+def chat(
+    message: str | None = typer.Option(
+        None,
+        "--message",
+        "-m",
+        help="Send one message and exit instead of opening the REPL.",
+    ),
+    session_id: str | None = typer.Option(
+        None,
+        "--session",
+        "-s",
+        help="Resume a durable chat session.",
+    ),
+    provider: str = typer.Option(
+        "local",
+        "--provider",
+        help="Model provider mode: local, auto, or ollama.",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
+    approve: bool = typer.Option(False, "--approve", help="Approve and resume the pending operation."),
+    resume: bool = typer.Option(False, "--resume", help="Resume an already-approved operation."),
+    cancel: bool = typer.Option(False, "--cancel", help="Cancel this chat session."),
+    show_status: bool = typer.Option(False, "--status", help="Show durable chat/runtime status."),
+    show_history: bool = typer.Option(False, "--history", help="Show the durable transcript."),
+) -> None:
+    """Chat through the full PAW runtime with policy, approval and resume."""
+    modes = [
+        message is not None,
+        approve,
+        resume,
+        cancel,
+        show_status,
+        show_history,
+    ]
+    if sum(modes) > 1:
+        console.print("[red]Choose only one action: message/approve/resume/cancel/status/history.[/red]")
+        raise typer.Exit(code=2)
+    try:
+        asyncio.run(
+            _chat_async(
+                message=message,
+                session_id=session_id,
+                provider=provider,
+                json_output=json_output,
+                approve=approve,
+                resume=resume,
+                cancel=cancel,
+                show_status=show_status,
+                show_history=show_history,
+            )
+        )
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from None
 
 
 if __name__ == "__main__":

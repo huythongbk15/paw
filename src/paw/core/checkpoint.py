@@ -10,35 +10,17 @@ import json
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from enum import StrEnum
 from typing import Any
 
 from .autonomy import AutonomyUsage
 from .ledger import TaskEventType, TaskLedger
 from .logging import get_logger
+from .models import ExtendedTaskStatus
 from .storage import db
 
 logger = get_logger(__name__)
 
-
-# --- Extended Task States ---
-
-class ExtendedTaskStatus(StrEnum):
-    """Extended task states for Phase 10."""
-    # Original states (from TaskStatus)
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-
-    # New states
-    PAUSED = "paused"                 # Paused by autonomy controller
-    AWAITING_INPUT = "awaiting_input" # Waiting for user input (ASK)
-    CHECKPOINTED = "checkpointed"     # Has valid checkpoint, can resume
-    RESUMING = "resuming"             # Currently resuming from checkpoint
-    STALLED = "stalled"               # Detected as stalled
-    REPETITION = "repetition"         # Detected repetition
+__all__ = ["CheckpointStore", "ExtendedTaskStatus", "ResumeManager", "TaskCheckpoint"]
 
 
 # --- Checkpoint ---
@@ -139,37 +121,8 @@ class CheckpointStore:
 
     @classmethod
     async def ensure_table(cls) -> None:
-        """Create checkpoints table if not exists."""
-        await db.execute(f"""
-            CREATE TABLE IF NOT EXISTS {cls.TABLE_NAME} (
-                checkpoint_id TEXT PRIMARY KEY,
-                task_id TEXT NOT NULL,
-                task_status TEXT NOT NULL,
-                current_step INTEGER NOT NULL DEFAULT 0,
-                total_steps INTEGER NOT NULL DEFAULT 0,
-                progress_ratio REAL NOT NULL DEFAULT 0.0,
-                context TEXT NOT NULL DEFAULT '{{}}',
-                context_compiler_state TEXT NOT NULL DEFAULT '{{}}',
-                autonomy_usage TEXT NOT NULL DEFAULT '{{}}',
-                autonomy_profile TEXT NOT NULL DEFAULT 'balanced',
-                progress_history TEXT NOT NULL DEFAULT '[]',
-                repetition_state TEXT NOT NULL DEFAULT '{{}}',
-                stall_state TEXT NOT NULL DEFAULT '{{}}',
-                loop_iteration INTEGER NOT NULL DEFAULT 0,
-                loop_decision_history TEXT NOT NULL DEFAULT '[]',
-                created_at TEXT NOT NULL,
-                parent_checkpoint_id TEXT,
-                tags TEXT NOT NULL DEFAULT '[]',
-                metadata TEXT NOT NULL DEFAULT '{{}}',
-                FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
-            )
-        """)
-
-        # Index for task lookups
-        await db.execute(f"""
-            CREATE INDEX IF NOT EXISTS idx_checkpoints_task_id
-            ON {cls.TABLE_NAME} (task_id, created_at DESC)
-        """)
+        """Ensure the canonical runtime schema is loaded."""
+        await db.initialize()
 
     @classmethod
     async def save(cls, checkpoint: TaskCheckpoint) -> str:
@@ -424,22 +377,7 @@ class OperationRecordStore:
 
     @classmethod
     async def ensure_table(cls) -> None:
-        await db.execute(f"""
-            CREATE TABLE IF NOT EXISTS {cls.TABLE_NAME} (
-                task_id TEXT NOT NULL,
-                op_id TEXT NOT NULL,
-                op_type TEXT NOT NULL DEFAULT 'step',
-                status TEXT NOT NULL DEFAULT 'completed',
-                checkpoint_id TEXT,
-                result_ref TEXT,
-                created_at TEXT NOT NULL,
-                metadata TEXT NOT NULL DEFAULT '{{}}',
-                PRIMARY KEY (task_id, op_id)
-            )
-        """)
-        await db.execute(
-            f"CREATE INDEX IF NOT EXISTS idx_oprec_task ON {cls.TABLE_NAME}(task_id, status)"
-        )
+        await db.initialize()
 
     @classmethod
     async def record(cls, rec: OperationRecord) -> None:
