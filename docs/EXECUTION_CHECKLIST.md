@@ -120,7 +120,7 @@ capability has a disposition. Estimated 15–22 days.
 
 ### Feature disposition
 
-- [ ] `E0-23` Inventory every public CLI command, API entry point, adapter and exported contract. `(0.5d, D0)`
+- [x] `E0-23` Inventory every public CLI command, API entry point, adapter and exported contract. `(0.5d, D0)` — PASS: `docs/benchmarks/e0/feature_inventory.md` enumerates the public surface with stable handles: 5 CLI commands (CLI-01..CLI-05), 11 `paw.core` runtime symbols (API-01..API-11), 18 `paw.bench` benchmark symbols (BENCH-01..BENCH-18), 3 adapters (ADP-01..ADP-03 — Ollama, filesystem, ChatService), 5 knowledge/memory/skill registries (KNO-01..KNO-02, MEM-01, SKI-01..SKI-02), plus an explicit "internal-only" list of modules that are not part of the surface. The inventory is the single source of truth for the E0-25 disposition pass. D0 hygiene: OK; cross-link: PASSED.
 - [ ] `E0-24` Map each item to an engineering scenario and canonical owner. `(0.5d, D0)`
 - [ ] `E0-25` Mark each item core, compatibility-only, quarantine or removal candidate. `(0.5d, D0)`
 - [ ] `E0-26` Review removal candidates for persisted/API compatibility obligations. `(3h, D1)`
