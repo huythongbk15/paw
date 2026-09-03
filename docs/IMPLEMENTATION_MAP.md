@@ -697,6 +697,18 @@ release-gate adoption.
   reports `CONTRACT PASSED`; `./scripts/pt.sh D0 docs`
   reports OK.
 
+### Active decision record: E1-01 ownership audit
+
+Decision class: FAST. Readiness: READY for the audit document only; this does not authorize any new field, migration, or runtime path.
+
+- **Problem:** E1-01 requires a record of which module owns every existing field in Memory, Knowledge, and the Context Compiler, so the E1 reviewer can add a new field without creating a second owner.
+- **Constraints:** one canonical owner per concept (Architecture Safety invariant #1); the audit is read-only (no new field, no migration, no code change); the audit records where a new field would land, not that any new field is committed.
+- **Evidence:** the source files in src/paw/core/memory.py (10 fields in MemoryRecord + MemoryStore), src/paw/knowledge/{source,chunk,evidence,citation,index,normalization}.py (4 row families + boundary), and src/paw/core/context_compiler.py (5 fields in TaskContext shape).
+- **Option A — selected:** a single doc at docs/benchmarks/e1/ownership_audit.md that enumerates the existing fields, names the owner module for each, and records the five-step procedure for adding a new field. The audit is the change-control surface for the E1 ownership contract.
+- **Option B — rejected:** a Python dataclass with audit metadata. It would couple the audit to a runtime import and make the contract a runtime check, which the Architecture forbids for ownership.
+- **Option C — rejected:** a contract test in tests/ that asserts the field count. The audit is a one-time snapshot; the test would re-evaluate on every change and the per-field check is too strict to be useful.
+- **Phase 4 sync contract:** the audit table is the source of truth for E1 ownership; a later E1 item that adds a new field must update the table in the same change. If the new field lives in a module that is not listed, the change is introducing a new owner and the change is wrong.
+
 ### Recorded verification baseline — not current exit proof
 
 The project-only environment is `.venv`, reproduced from `pyproject.toml` and

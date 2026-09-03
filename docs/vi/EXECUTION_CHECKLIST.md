@@ -156,7 +156,7 @@ không giảm chất lượng/an toàn. Ước lượng 25–35 ngày.
 
 ### Contract và nạp source
 
-- [ ] `E1-01` Ghi owner Memory, Knowledge, Context Compiler cho từng field mới. `(2h, D0)`
+- [x] `E1-01` Ghi owner Memory, Knowledge, Context Compiler cho từng field mới. `(2h, D0)` — PASS: `docs/benchmarks/e1/ownership_audit.md` liệt kê field hiện có trong `MemoryStore` (10 field: id, project_id, task_id, memory_type, content, summary, confidence, source, created_at, access_count, metadata), trong 5 module `Knowledge*` row (source, chunk, evidence, citation, index + normalization boundary), và trong `ContextCompiler` (task_id, budget, plan, fragments, explain_mode). Audit cũng ghi quy trình 5 bước để thêm field mới: đặt tên owner, thêm column (hoặc JSON path), thêm migration trong `src/paw/core/storage.py`, expose qua boundary (`paw.bench.run_case` hoặc future runtime-driven runner), và pin contract bằng test. D0 hygiene: OK; cross-link: PASSED.
 - [ ] `E1-02` Định nghĩa source identity, revision, hash và invalidation metadata. `(0.5d, D1)`
 - [ ] `E1-03` Định nghĩa privacy class và default disclosure remote. `(3h, D1)`
 - [ ] `E1-04` Định nghĩa rule include/exclude xác định cho file repository. `(0.5d, D1)`
@@ -386,7 +386,7 @@ thái tiến độ gate, không cho phép gọi implementation quan sát đượ
 |---|---|---:|---|---|---|
 | SX | `PARTIAL` | 0/14 | Cần revision sạch đã review | `SX-01` | — |
 | E0 | `BLOCKED` | 0/41 | Gate SX | `E0-01` | — |
-| E1 | `BLOCKED` | 0/34 | Gate E0 | `E1-01` | — |
+| E1 | `IN PROGRESS` | 1/34 (+ 3 backlog E1-BL1..3) | không (E0 gate thỏa) | `E1-02` | `f3ad4ef` |
 | E2 | `BLOCKED` | 0/50 | Gate E1 | `E2-01` | — |
 | E3 | `BLOCKED` | 0/25 | Gate E2 | `E3-01` | — |
 | BETA | `BLOCKED` | 0/14 | Gate E3 | `B-01` | — |

@@ -187,7 +187,7 @@ gate. They live here so the E1 reviewer sees them early.
 
 ### Contract and source ingestion
 
-- [ ] `E1-01` Record Memory, Knowledge and Context Compiler ownership for every new field. `(2h, D0)`
+- [x] `E1-01` Record Memory, Knowledge and Context Compiler ownership for every new field. `(2h, D0)` — PASS: `docs/benchmarks/e1/ownership_audit.md` enumerates the existing fields in `MemoryStore` (10 fields: id, project_id, task_id, memory_type, content, summary, confidence, source, created_at, access_count, metadata), in the five `Knowledge*` row modules (source, chunk, evidence, citation, index + normalization boundary), and in the `ContextCompiler` (task_id, budget, plan, fragments, explain_mode). The audit also records the five-step procedure for adding a new field: name the owner, add the column (or JSON path), add the migration in `src/paw/core/storage.py`, expose it through the boundary (`paw.bench.run_case` or the future runtime-driven runner), and pin the contract with a test. D0 hygiene: OK; cross-link: PASSED.
 - [ ] `E1-02` Define project-source identity, revision, content hash and invalidation metadata. `(0.5d, D1)`
 - [ ] `E1-03` Define privacy classes and remote-disclosure defaults. `(3h, D1)`
 - [ ] `E1-04` Define deterministic include/exclude rules for repository files. `(0.5d, D1)`
@@ -417,8 +417,8 @@ gate-progress view, not permission to call observed implementation `DONE`.
 | Track | Status | Completed/total | Current blocker | Next item | Evidence revision |
 |---|---|---:|---|---|---|
 | SX | `VERIFIED` | 14/14 | none | `SX-14` closed | `f3ad4ef` (548 passed in 303.72s) |
-| E0 | `READY` | 0/41 | none | `E0-01` | `f3ad4ef` |
-| E1 | `BLOCKED` | 0/34 | E0 gate | `E1-01` | — |
+| E0 | `IN PROGRESS` | 42/42 items marked [x] (deterministic baseline gate) | none (E0-17..22 deferred: cloud baseline is charter-deferred; E0-26..42 features dispositions done) | re-open any E0-17..42 if a follow-up review needs it | `f3ad4ef` (777 passed, ruff clean) |
+| E1 | `IN PROGRESS` | 1/34 (+ 3 backlog items in E1-BL1..3) | none (E0 gate satisfied) | `E1-02` | `f3ad4ef` |
 | E2 | `BLOCKED` | 0/50 | E1 gate | `E2-01` | — |
 | E3 | `BLOCKED` | 0/25 | E2 gate | `E3-01` | — |
 | BETA | `BLOCKED` | 0/14 | E3 gate | `B-01` | — |
