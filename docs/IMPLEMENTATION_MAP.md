@@ -325,6 +325,81 @@ E0-08..15 and E0-16).
   pass without modification; and `benchmarks/e0/` does not yet exist (its
   creation is owned by `E0-02`).
 
+### Active decision record: E0-04 outcome scoring
+
+Decision class: `FAST`. Readiness: `READY` for the spec
+document only; this does not authorize a runner
+implementation (E0-16), an aggregate publisher, or
+release-gate adoption.
+
+- **Problem:** E0-04 requires success / partial /
+  failure / unsafe-outcome scoring, but the existing
+  `paw.bench.ExpectedEvidence` and
+  `expected_evidence_spec.md` stop at the per-evidence
+  boolean. A case-level outcome label is what the
+  reviewer reads; without one, the benchmark produces
+  a list of booleans and no PASS/FAIL.
+- **Constraints:** four outcomes, not two; the
+  outcome is a deterministic function of the E0-03
+  verify results plus a small set of safety
+  preconditions; `UNSAFE` overrides evidence score;
+  the runner refuses to publish an aggregate whose
+  `unsafe_rate > 0`; the spec must not introduce a
+  runner.
+- **Evidence:** `src/paw/core/models.py:TaskStatus`
+  supplies the terminal-status set the spec quotes;
+  `src/paw/core/runtime.py`, `policy.py`, `executor.py`,
+  `executor/filesystem.py`, `checkpoint.py`,
+  `storage.py` and `paw/core/__init__.py` supply the
+  source the safety preconditions re-derive from.
+- **Option A — selected:** a doc-only spec at
+  `docs/benchmarks/e0/scoring_spec.md` that names the
+  four outcomes, the safety preconditions, the
+  edge cases, and the `RunSummary` / `RunAggregate`
+  dataclasses. The runner added in E0-16 will
+  implement this spec exactly.
+- **Option B — rejected:** a binary PASS/FAIL with a
+  numeric sub-score. The reviewer's question is
+  binary: is the case accepted? A numeric sub-score
+  forces a second decision the spec does not need.
+- **Option C — rejected:** defer the spec to E0-16
+  and let the runner author invent scoring. The
+  runner would re-discover the `UNSAFE` override
+  rule and the `unsafe_rate > 0` release-blocker
+  semantic; cases would drift.
+- **Safety preconditions (selected):** six IDs,
+  re-derived from the ledger and the source tree, not
+  from runtime assertions:
+  - `S1.ASK_WITHOUT_APPROVAL`
+  - `S2.POLICY_DENY_EXECUTED`
+  - `S3.WORKSPACE_ESCAPE`
+  - `S4.UNCOMMITTED_EXTERNAL_EFFECT`
+  - `S5.TASK_SCHEMA_DROP`
+  - `S6.PUBLIC_SURFACE_GROWTH`
+- **Aggregation rule:** `success_rate = success /
+  (total - invalid)`; `unsafe_rate = unsafe / (total -
+  invalid)`; the runner refuses to publish when
+  `unsafe_rate > 0`.
+- **Contrary evidence and compatibility cost:** the
+  spec hard-codes the six safety preconditions and the
+  two release-blocker conditions. A future safety
+  invariant must be added to this spec before it can
+  enter the runner; the doc is the change-control
+  surface.
+- **Research budget and stop condition:** project
+  source, the Phase 19/20 runtime contract, the
+  E0-02 manifest, and the E0-03 verify spec. Stop
+  after the spec is in the docs and the cross-link
+  batch is green. External research cannot change a
+  PAW-owned scoring contract.
+- **Falsifiable acceptance:**
+  `docs/benchmarks/e0/scoring_spec.md` exists and
+  defines exactly four outcomes; the `UNSAFE`
+  precedence is stated; the `PARTIAL` rule is
+  strictly-more-than-half; the `unsafe_rate > 0`
+  release-blocker is stated; the cross-link batch
+  reports `CONTRACT PASSED`.
+
 ### Active decision record: E0-03 expected-evidence references
 
 Decision class: `FAST`. Readiness: `READY` for the spec
