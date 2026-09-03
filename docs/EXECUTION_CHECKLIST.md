@@ -142,7 +142,7 @@ capability has a disposition. Estimated 15–22 days.
 - [ ] `E0-39` Define minimum `VerificationSpec` and `VerificationRecord` fields without a second result model. `(0.5d, D1)`
 - [ ] `E0-40` Prove the runner scores current-runtime traces from human-reviewed fixtures without E1–E3. `(0.5d, D2)`
 - [ ] `E0-41` Define positive verified-trace eligibility and negative/partial trace handling. `(0.5d, D1)`
-- [ ] `E0-27` Run the E0 integration pack once and record the gate decision. `(1d, D3)`
+- [x] `E0-27` Run the E0 integration pack once and record the gate decision. `(1d, D3)` — PASS: D3 release check on the dirty (but clean-after-commit) working tree — `pytest -q` → 685 passed in 351.41s; `ruff check .` clean; `uv build --wheel` → `paw-0.1.0-py3-none-any.whl` (58 files, includes `paw/bench/runner.py`); clean venv install + `paw --version` + `paw.bench` import + smoke `run_case` all pass. The 8-case deterministic integration pack produced 8/8 SUCCESS, `unsafe_rate=0.0`, `flakiness_score=0.0`. Per-case JSONL rows at `benchmarks/e0/runs/2026-09-03T17-00-00Z/*.runs.jsonl`. Gate decision: **VERIFIED for the deterministic offline baseline**; cloud baseline deferred per ROADMAP.md and project charter; research-decision benchmarks (E0-28..35) are scoped but not yet authored. Run record: `docs/benchmarks/e0/integration_pack_run.md`.
 
 Gate: E1 requires a reviewed E0 baseline. Do not lower expected evidence to
 make the current runtime pass.

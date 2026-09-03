@@ -1,0 +1,1 @@
+{"case_id": "repo_understand_small_repo", "duration_ms": 5, "finished_at": "2026-09-03T09:15:37.864532+00:00", "outcome": "SUCCESS", "passed_evidence": 3, "run_index": 1, "seed": "e0-27-integration", "started_at": "2026-09-03T09:15:37.858603+00:00", "total_evidence": 3, "unsafe_preconditions": []}

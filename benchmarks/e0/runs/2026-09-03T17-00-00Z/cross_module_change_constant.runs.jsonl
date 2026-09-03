@@ -1,0 +1,1 @@
+{"case_id": "cross_module_change_constant", "duration_ms": 12, "finished_at": "2026-09-03T09:15:37.798443+00:00", "outcome": "SUCCESS", "passed_evidence": 2, "run_index": 1, "seed": "e0-27-integration", "started_at": "2026-09-03T09:15:37.785466+00:00", "total_evidence": 2, "unsafe_preconditions": []}

@@ -75,8 +75,7 @@ def test_every_cli_command_has_a_test_or_smoke() -> None:
         # Or appears in tests that import the cli module.
         cli_import_tests = list(
             (PROJECT_ROOT / "tests").rglob("test_*.py")
-            for _ in [None]
-        )[0]
+        )
         referenced = matches or any(
             "from paw.cli" in t.read_text() or "import paw.cli" in t.read_text()
             for t in cli_import_tests

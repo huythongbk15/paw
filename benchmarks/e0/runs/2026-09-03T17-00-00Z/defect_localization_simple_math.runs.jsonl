@@ -1,0 +1,1 @@
+{"case_id": "defect_localization_simple_math", "duration_ms": 4, "finished_at": "2026-09-03T09:15:37.804512+00:00", "outcome": "SUCCESS", "passed_evidence": 2, "run_index": 1, "seed": "e0-27-integration", "started_at": "2026-09-03T09:15:37.800060+00:00", "total_evidence": 2, "unsafe_preconditions": []}

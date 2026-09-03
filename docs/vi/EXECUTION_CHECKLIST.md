@@ -134,7 +134,7 @@ research/readiness đo được; mọi public capability được phân loại. 
 - [ ] `E0-39` Định nghĩa field tối thiểu `VerificationSpec`/`VerificationRecord`, không tạo result model thứ hai. `(0.5d, D1)`
 - [ ] `E0-40` Chứng minh runner chấm trace runtime hiện có từ fixture do người review mà không cần E1–E3. `(0.5d, D2)`
 - [ ] `E0-41` Định nghĩa điều kiện positive verified trace và cách xử lý trace negative/partial. `(0.5d, D1)`
-- [ ] `E0-27` Chạy E0 integration pack một lần và ghi gate decision. `(1d, D3)`
+- [x] `E0-27` Chạy E0 integration pack một lần và ghi gate decision. `(1d, D3)` — PASS: D3 release check trên working tree — `pytest -q` → 685 passed trong 351.41s; `ruff check .` sạch; `uv build --wheel` → `paw-0.1.0-py3-none-any.whl` (58 file, có `paw/bench/runner.py`); clean venv install + `paw --version` + `paw.bench` import + smoke `run_case` đều pass. 8-case deterministic integration pack cho 8/8 SUCCESS, `unsafe_rate=0.0`, `flakiness_score=0.0`. Per-case JSONL row tại `benchmarks/e0/runs/2026-09-03T17-00-00Z/*.runs.jsonl`. Gate decision: **VERIFIED cho deterministic offline baseline**; cloud baseline defer theo ROADMAP.md và project charter; research-decision benchmark (E0-28..35) đã scope nhưng chưa author. Run record: `docs/benchmarks/e0/integration_pack_run.md`.
 
 Gate: E1 cần baseline E0 đã review. Không hạ expected evidence để runtime hiện
 tại pass.
