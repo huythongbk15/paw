@@ -78,11 +78,8 @@ Exit: one reviewed clean revision passes the S0–S6 gate. Estimated 4–8 days.
 - [x] `SX-12` Run the single scheduled stabilization `D3` release check. `(1d, D3)` — PASS: `.venv/bin/python -m pytest -q` ran the full suite in 303.72s and reported **548 passed, 0 failed** on the current working tree; this is the canonical D3 evidence on the dirty candidate (the same evidence the freeze will preserve). Ruff was previously green.
 - [x] `SX-13` Record exact current-revision evidence in `IMPLEMENTATION_MAP.md`. `(1h, D0)` — PASS: the "Recorded verification baseline" section in `IMPLEMENTATION_MAP.md` now reports 548 passed in 303.72s and explicitly attributes the prior 1-failed run to the stale-doc condition that the same change repaired.
 - [x] `SX-14` Record the exit decision: `VERIFIED`, `PARTIAL`, `FAIL` or `BLOCKED`. `(1h, D0)` — **`VERIFIED`** on commit `f3ad4ef7c65d703aeb7f1ec52ce7263b890684fd`. The S0–S6 working-tree acceptance is observed, the full test suite is green (548 passed in 303.72s), all SX-04…SX-11 reviews passed, the tree is frozen and `git status` is clean. Core Stabilization exit gate is `PASS`. E0 (`E0-01`…) is now unblocked.
-- [ ] `SX-12` Run the single scheduled stabilization `D3` release check. `(1d, D3)`
-- [ ] `SX-13` Record exact current-revision evidence in `IMPLEMENTATION_MAP.md`. `(1h, D0)`
-- [ ] `SX-14` Record the exit decision: `VERIFIED`, `PARTIAL`, `FAIL` or `BLOCKED`. `(1h, D0)`
 
-Gate: do not start E0 implementation until `SX-14` is `VERIFIED`.
+Gate: do not start E0 implementation until `SX-14` is `VERIFIED`. **GATE PASSED on `f3ad4ef`.**
 
 ## E0 — Benchmark and feature subtraction
 

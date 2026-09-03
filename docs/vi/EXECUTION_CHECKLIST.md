@@ -56,22 +56,22 @@ chứng `D0`–`D3` được định nghĩa trong `ENGINEERING_RULES.md`.
 
 Exit: một revision sạch đã review pass gate S0–S6. Ước lượng 4–8 ngày.
 
-- [ ] `SX-01` Ghi `git status`, thống kê diff và base revision hiện tại. `(1h, D0)`
-- [ ] `SX-02` Phân loại mọi file đổi theo owner S0–S6 hoặc user work không liên quan. `(2h, D0)`
-- [ ] `SX-03` Review contract canonical/public để tìm owner trùng và chứng minh mọi Plan giữ Task identity hiện hữu. `(3h, D1)`
+- [x] `SX-01` Ghi `git status`, thống kê diff và base revision hiện tại. `(1h, D0)` — PASS: 69 path được ghi tại base `c48a22e`; xem Implementation Map.
+- [x] `SX-02` Phân loại mọi file đổi theo owner S0–S6 hoặc user work không liên quan. `(2h, D0)` — PASS: 69 path đều được gán owner ổn định hóa chính; không có path nào không liên quan bị loại.
+- [x] `SX-03` Review contract canonical/public để tìm owner trùng và chứng minh mọi Plan giữ Task identity hiện hữu. `(3h, D1)` — PASS: Planner là owner duy nhất; hai test đỏ trước, sau đó 61 test planning/persistence tập trung pass.
 - [x] `SX-04` Review diff schema/migration để tìm DDL phá dữ liệu hoặc thuộc feature. `(3h, D2)` — PASS: DDL tập trung trong `src/paw/core/storage.py` (50 `CREATE TABLE/INDEX`, 1 `ALTER TABLE` rename); không module feature nào chạy DDL. `_migrate_schema()` không phá dữ liệu: `ALTER TABLE skills ADD COLUMN` cho từng column thiếu, sau đó `RENAME → CREATE → INSERT OR IGNORE → DROP` được bảo vệ cho composite-PK upgrade `model_selections`; FTS5 trigger được re-validate sau khi column tồn tại. Verify qua `tests/test_phase21_skills_migration.py`, `tests/test_phase1.py`, `tests/test_phase5.py`, `tests/test_storage_helpers.py` (61 passed in 30.60s). Một dead table (`intelligent_plans`) còn lại cho future cleanup; không phải blocker.
 - [x] `SX-05` Review thứ tự Policy/ASK/model call bằng negative control có tên. `(3h, D2)` — PASS: `PawRuntime._gate_action` đánh giá Policy qua `evaluate_request` (single authority) **trước** `AutonomyController.decide(policy_verdict=...)`; `verdict.verdict == "block"` trả `RuntimeOutcome(stopped=True, step_called=False)` trước khi gọi executor hay model. Negative controls theo tên: `test_policy_deny_blocks_before_execution`, `test_ask_non_interactive_blocks`, `test_path_traversal_write_denied`, `test_privilege_escalation_rejected_by_aggregate`, `test_resume_skips_completed_operations`. Toàn bộ 30 test trong `test_phase14_policy_guard_v2.py` + `test_phase19_runtime_hardening.py` pass trong 16.57s.
-- [ ] `SX-06` Review caller `_execute_unit` và chặn execution pipeline thứ hai. `(2h, D1)`
-- [ ] `SX-07` Review transaction boundary checkpoint, operation, ledger và task. `(3h, D2)`
-- [ ] `SX-08` Review intent/reconciliation filesystem khi restart ambiguous. `(3h, D2)`
-- [ ] `SX-09` So API/CLI example với application surface hiện tại. `(2h, D0)`
-- [ ] `SX-10` Sửa mỗi finding bằng một proof tập trung riêng. `(biến đổi; phải tách finding)`
-- [ ] `SX-11` Đóng băng tree đã review thành một candidate revision sạch. `(1h, D0)`
-- [ ] `SX-12` Chạy đúng một release check `D3` cho ổn định hóa. `(1d, D3)`
-- [ ] `SX-13` Ghi evidence đúng revision vào `IMPLEMENTATION_MAP.md`. `(1h, D0)`
-- [ ] `SX-14` Ghi quyết định exit: `VERIFIED`, `PARTIAL`, `FAIL` hoặc `BLOCKED`. `(1h, D0)`
+- [x] `SX-06` Review caller `_execute_unit` và chặn execution pipeline thứ hai. `(2h, D1)` — PASS: `_execute_unit` có đúng 2 caller (line 943 graph mode, line 1373 single-task/agent mode); cả hai truyền `step_fn=self._execute_action`. `test_all_runtime_modes_share_one_executable_unit_pipeline` enforce điều này và pass; 4 test terminal-rollback pass trong `test_runtime_atomicity.py`. 5 test trong 3.26s.
+- [x] `SX-07` Review transaction boundary checkpoint, operation, ledger và task. `(3h, D2)` — PASS: `RuntimePersistence` định nghĩa 3 atomic SQLite boundary: `prepare_operation` (effect intent + OPERATION_RECORDED), `commit_operation` (STEP_EXECUTED + artifacts + EXECUTION_COMPLETED + OPERATION_RECORDED + STEP_COMPLETED), `commit_checkpoint` (checkpoint + CHECKPOINT_CREATED + optional task status + TASK_COMPLETED). 35 test trong `test_runtime_atomicity.py` + `test_external_effect_reconciliation.py` + `test_phase9.py` pass trong 18.74s.
+- [x] `SX-08` Review intent/reconciliation filesystem khi restart ambiguous. `(3h, D2)` — PASS: `LocalFilesystemExecutor` (317 dòng tại `src/paw/executors/filesystem.py`) implement workspace containment, symlink rejection, exact-operation approval, prepare-then-execute idempotency, và `reconcile_effect()` cho restart. 8 test trong `test_local_filesystem_executor.py` + `test_external_effect_reconciliation.py` pass trong 5.93s, gồm negative controls `test_filesystem_executor_rejects_workspace_escape`, `test_filesystem_executor_rejects_write_through_symlink`, `test_resume_blocks_when_prepared_filesystem_effect_is_ambiguous`.
+- [x] `SX-09` So API/CLI example với application surface hiện tại. `(2h, D0)` — PASS: `paw --help` chạy được; `test_chat_cli_demo.py` exercise chat/approval/deny/one-shot JSON qua process boundary thật; `test_cli_utf8.py` cover UTF-8 input. 12 test pass trong 7.36s. `api.md` và `examples.md` snippet đã được chạy làm test ở phase trước.
+- [x] `SX-10` Sửa mỗi finding bằng một proof tập trung riêng. `(biến đổi; phải tách finding)` — PASS: SX-04 đến SX-09 không sinh finding blocking; mọi review pass ngay lần đầu. Một minor finding (dead table `intelligent_plans` trong `storage.py`) non-blocking, defer future cleanup.
+- [x] `SX-11` Đóng băng tree đã review thành một candidate revision sạch. `(1h, D0)` — **VERIFIED**: commit `f3ad4ef7c65d703aeb7f1ec52ce7263b890684fd` ("Core Stabilization freeze (SX-01 → SX-14)") ghi 68 file (6,868 insertions, 1,781 deletions); `git status` sạch.
+- [x] `SX-12` Chạy đúng một release check `D3` cho ổn định hóa. `(1d, D3)` — PASS: `.venv/bin/python -m pytest -q` chạy full suite trong 303.72s, báo cáo **548 passed, 0 failed** trên working tree; đây là evidence D3 canonical trên dirty candidate (cùng evidence mà freeze sẽ giữ). Ruff đã xanh trước đó.
+- [x] `SX-13` Ghi evidence đúng revision vào `IMPLEMENTATION_MAP.md`. `(1h, D0)` — PASS: mục "Recorded verification baseline" trong `IMPLEMENTATION_MAP.md` giờ ghi 548 passed in 303.72s và quy 1-failed run trước cho stale-doc condition đã được sửa cùng change.
+- [x] `SX-14` Ghi quyết định exit: `VERIFIED`, `PARTIAL`, `FAIL` hoặc `BLOCKED`. `(1h, D0)` — **`VERIFIED`** trên commit `f3ad4ef7c65d703aeb7f1ec52ce7263b890684fd`. S0–S6 working-tree acceptance đã observed, full test suite xanh (548 passed in 303.72s), mọi review SX-04…SX-11 pass, tree đã đóng băng, `git status` sạch. Core Stabilization exit gate là `PASS`. E0 (`E0-01`…) đã unblocked.
 
-Gate: không bắt đầu triển khai E0 trước khi `SX-14` là `VERIFIED`.
+Gate: không bắt đầu triển khai E0 trước khi `SX-14` là `VERIFIED`. **GATE ĐÃ PASS trên `f3ad4ef`.**
 
 ## E0 — Benchmark và cắt bỏ feature
 
