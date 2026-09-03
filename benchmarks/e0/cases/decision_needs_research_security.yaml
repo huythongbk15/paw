@@ -1,0 +1,44 @@
+schema_version: "1.0.0"
+case_id: decision_needs_research_security
+category: architecture_decision
+privacy_class: workspace
+goal: |
+  Decide whether to add a new dependency on a
+  third-party auth library. The reviewer finds that
+  authoritative evidence (CVE database, license
+  compatibility, dependency-size budget) is missing
+  and must be collected before any decision is made.
+decision:
+  readiness: NEEDS_RESEARCH
+  rationale: |
+    The CVE database has not been queried, the
+    license has not been reviewed, and the
+    dependency-size budget has not been checked. The
+    runner must schedule bounded research operations
+    and refuse to enter implementation until the
+    evidence is collected.
+  confidence: 0.0
+  research_constraints:
+    - cve_database_query
+    - license_compatibility_review
+    - dependency_size_budget_check
+fixtures:
+  - path: benchmarks/e0/fixtures/decision_needs_research.txt
+    revision: f3ad4ef
+    purpose: |
+      Evidence folder for the NEEDS_RESEARCH decision;
+      lists the research constraints.
+expected_evidence:
+  - kind: file_contains
+    target: benchmarks/e0/fixtures/decision_needs_research.txt
+    value: "cve database query for the library version"
+    reviewer: alice@example.com
+  - kind: file_contains
+    target: benchmarks/e0/fixtures/decision_needs_research.txt
+    value: "license compatibility review"
+    reviewer: alice@example.com
+timeout_seconds: 60
+max_iterations: 5
+tags:
+  - decision
+  - research

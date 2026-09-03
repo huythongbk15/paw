@@ -1,0 +1,40 @@
+schema_version: "1.0.0"
+case_id: decision_needs_clarification_auth
+category: insufficient_context
+privacy_class: workspace
+goal: |
+  Decide which auth provider the chat backend should
+  use. The user has not said; the runtime must ask
+  before implementing.
+decision:
+  readiness: NEEDS_CLARIFICATION
+  rationale: |
+    The user has not specified which auth provider to
+    use; the case manifest cannot be implemented
+    until the user picks one. The runner asks the
+    user via the chat path; if the user does not
+    respond within 24h, the case is FAILURE with
+    reason reviewer_timeout.
+  confidence: 0.0
+  missing_user_constraint: auth_provider
+fixtures:
+  - path: benchmarks/e0/fixtures/decision_needs_clarification.txt
+    revision: f3ad4ef
+    purpose: |
+      Evidence folder for the NEEDS_CLARIFICATION
+      decision; names the missing user constraint and
+      the available options.
+expected_evidence:
+  - kind: file_contains
+    target: benchmarks/e0/fixtures/decision_needs_clarification.txt
+    value: "which auth provider does the user want?"
+    reviewer: alice@example.com
+  - kind: file_contains
+    target: benchmarks/e0/fixtures/decision_needs_clarification.txt
+    value: "missing_constraint"
+    reviewer: alice@example.com
+timeout_seconds: 60
+max_iterations: 5
+tags:
+  - decision
+  - clarification

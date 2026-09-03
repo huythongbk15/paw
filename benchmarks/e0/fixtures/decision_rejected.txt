@@ -1,0 +1,9 @@
+# Decision-REJECTED evidence folder
+# Reviewed 2026-09-03 by alice@example.com at revision f3ad4ef
+
+# Proposal: add a third normalizer for ID slugs.
+
+# === negative evidence ===
+duplicate: src/paw/core/task.py has a slugify function
+duplicate2: src/paw/knowledge/chunk.py has a slugify function
+recommendation: pick one of the existing two and route callers

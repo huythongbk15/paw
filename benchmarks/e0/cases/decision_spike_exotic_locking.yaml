@@ -1,0 +1,41 @@
+schema_version: "1.0.0"
+case_id: decision_spike_exotic_locking
+category: architecture_decision
+privacy_class: workspace
+goal: |
+  Decide whether to replace the local SQLite lock
+  manager with an in-process asyncio.Lock. The
+  reviewer finds that the existing code's behavior
+  is known but the proposed change's behavior is
+  not; a benchmark spike is required before any
+  decision can be made.
+decision:
+  readiness: SPIKE_REQUIRED
+  rationale: |
+    The proposed lock manager has not been measured
+    under the conditions PAW cares about. The runner
+    must run an isolated spike against a disposable
+    workspace and report the measurements; the spike
+    output is evidence, not implementation.
+  confidence: 0.0
+  spike_constraint: mutate only /tmp/spike-* workspace
+fixtures:
+  - path: benchmarks/e0/fixtures/decision_spike.txt
+    revision: f3ad4ef
+    purpose: |
+      Evidence folder for the SPIKE_REQUIRED decision;
+      names the unknown and the spike constraint.
+expected_evidence:
+  - kind: file_contains
+    target: benchmarks/e0/fixtures/decision_spike.txt
+    value: "throughput under 100 concurrent tasks"
+    reviewer: alice@example.com
+  - kind: file_contains
+    target: benchmarks/e0/fixtures/decision_spike.txt
+    value: "spike must mutate only /tmp/spike-* workspace"
+    reviewer: alice@example.com
+timeout_seconds: 60
+max_iterations: 5
+tags:
+  - decision
+  - spike

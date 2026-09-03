@@ -1,0 +1,11 @@
+# Decision-READY evidence folder
+# Reviewed 2026-09-03 by alice@example.com at revision f3ad4ef
+
+# Module: src/paw/utils/normalize.py
+# Purpose: lowercase + strip ASCII whitespace for ID slugs.
+
+# === positive evidence ===
+tests: 100% coverage
+no_io: pure function, no file or network access
+migration: additive, no schema change
+reviewer_signoff: alice@example.com

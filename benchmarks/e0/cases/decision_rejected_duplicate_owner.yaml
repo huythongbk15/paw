@@ -1,0 +1,41 @@
+schema_version: "1.0.0"
+case_id: decision_rejected_duplicate_owner
+category: architecture_decision
+privacy_class: workspace
+goal: |
+  Decide whether to add a third slugify normalizer. The
+  reviewer finds that two existing modules already
+  perform the same job; adding a third would split
+  ownership and create a fourth owner that the policy
+  forbids. The right answer is to keep using the
+  existing two and pick one of them.
+decision:
+  readiness: REJECTED
+  rationale: |
+    Two existing modules already slugify IDs
+    (`src/paw/core/task.py:slugify` and
+    `src/paw/knowledge/chunk.py:slugify`). A third
+    would create a fourth owner that violates the
+    "one canonical owner per concept" rule.
+  confidence: 0.95
+fixtures:
+  - path: benchmarks/e0/fixtures/decision_rejected.txt
+    revision: f3ad4ef
+    purpose: |
+      Negative evidence folder for the REJECTED
+      decision; lists both existing duplicate owners
+      and a recommendation.
+expected_evidence:
+  - kind: file_contains
+    target: benchmarks/e0/fixtures/decision_rejected.txt
+    value: "src/paw/core/task.py has a slugify function"
+    reviewer: alice@example.com
+  - kind: file_contains
+    target: benchmarks/e0/fixtures/decision_rejected.txt
+    value: "src/paw/knowledge/chunk.py has a slugify function"
+    reviewer: alice@example.com
+timeout_seconds: 60
+max_iterations: 5
+tags:
+  - decision
+  - rejected

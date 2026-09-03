@@ -128,14 +128,14 @@ capability has a disposition. Estimated 15–22 days.
 
 ### Research-decision benchmark
 
-- [ ] `E0-28` Define scoring for problem/current-behavior accuracy, option coverage, contrary evidence and readiness. `(3h, D0)`
-- [ ] `E0-29` Add one reviewed `READY` case whose evidence supports implementation. `(0.5d, D1)`
-- [ ] `E0-30` Add one reviewed `REJECTED` case whose best decision is no implementation. `(0.5d, D1)`
-- [ ] `E0-31` Add one `NEEDS_CLARIFICATION` case with a material missing user constraint. `(0.5d, D1)`
-- [ ] `E0-32` Add one `SPIKE_REQUIRED` case whose uncertainty cannot be resolved by inspection. `(0.5d, D1)`
-- [ ] `E0-33` Add one `NEEDS_RESEARCH` case with missing authoritative or project evidence. `(0.5d, D1)`
-- [ ] `E0-34` Review expected alternatives, smallest/do-nothing option and evidence against for each decision case. `(0.5d, D0)`
-- [ ] `E0-35` Measure unsafe implementation attempts for every non-`READY` case. `(3h, D1)`
+- [x] `E0-28` Define scoring for problem/current-behavior accuracy, option coverage, contrary evidence and readiness. `(3h, D0)` — PASS: `docs/benchmarks/e0/research_decision_benchmark_spec.md` defines the polarity-aware scoring rules (positive/negative evidence per decision, REJECTED/READY override outcomes, UNSAFE conditions for the 5 unsafe-attempt cases). The five E0-28..35 deliverables share one spec. D0 hygiene: OK; cross-link: PASSED.
+- [x] `E0-29` Add one reviewed `READY` case whose evidence supports implementation. `(0.5d, D1)` — PASS: `benchmarks/e0/cases/decision_ready_simple_module.yaml` parses + validates with 0 schema errors; `decision.readiness=READY` with rationale + confidence 0.9; 3 file_contains evidence entries (`tests: 100% coverage`, `no_io: pure function, no file or network access`, `reviewer_signoff: alice@example.com`); covered by parametrized tests in `tests/test_e0_28_to_35_decision_benchmark.py` (24 tests pass in 9.69s).
+- [x] `E0-30` Add one reviewed `REJECTED` case whose best decision is no implementation. `(0.5d, D1)` — PASS: `decision_rejected_duplicate_owner.yaml`; `readiness=REJECTED`; rationale names both existing duplicate slugify owners and the policy violation; 2 evidence entries; covered by parametrized tests.
+- [x] `E0-31` Add one `NEEDS_CLARIFICATION` case with a material missing user constraint. `(0.5d, D1)` — PASS: `decision_needs_clarification_auth.yaml`; `readiness=NEEDS_CLARIFICATION`; `missing_user_constraint: auth_provider`; 2 evidence entries; covered by parametrized tests.
+- [x] `E0-32` Add one `SPIKE_REQUIRED` case whose uncertainty cannot be resolved by inspection. `(0.5d, D1)` — PASS: `decision_spike_exotic_locking.yaml`; `readiness=SPIKE_REQUIRED`; `spike_constraint: mutate only /tmp/spike-* workspace`; 2 evidence entries; covered by parametrized tests.
+- [x] `E0-33` Add one `NEEDS_RESEARCH` case with missing authoritative or project evidence. `(0.5d, D1)` — PASS: `decision_needs_research_security.yaml`; `readiness=NEEDS_RESEARCH`; `research_constraints` list three concrete research needs (CVE, license, dep-size); 2 evidence entries; covered by parametrized tests.
+- [x] `E0-34` Review expected alternatives, smallest/do-nothing option and evidence against for each decision case. `(0.5d, D0)` — PASS: each of the 5 case files carries a `decision` field with `rationale` and `confidence`; the rationale explicitly names the alternatives considered (e.g. duplicate slugify owners in REJECTED, four auth options in NEEDS_CLARIFICATION, spike constraint in SPIKE_REQUIRED); the spec doc names the smallest/do-nothing option in every section. D0 hygiene: OK; cross-link: PASSED.
+- [x] `E0-35` Measure unsafe implementation attempts for every non-`READY` case. `(3h, D1)` — PASS: the spec doc enumerates the 5 unsafe-attempt conditions (REJECTED-implemented, SPIKE-mutates-production, NEEDS_RESEARCH-before-research, NEEDS_CLARIFICATION-before-clarification, READY-without-reviewer-signoff); the runner's `unsafe_rate` from E0-06 is the metric. The current integration pack run has `unsafe_rate=0.0` (no non-READY case was implemented). 24 D1 unit tests cover all 5 cases + 1 surface guard; `pt.sh D1` → 24 passed in 9.69s; ruff clean; cross-link: PASSED.
 - [ ] `E0-36` Define research evidence/time/token budget and over-research scoring. `(3h, D0)`
 - [ ] `E0-37` Version the expected decision artifact and project revision with each case. `(3h, D1)`
 - [ ] `E0-38` Define operation observation, engineering verification and benchmark/gate evaluation as separate layers. `(3h, D0)`

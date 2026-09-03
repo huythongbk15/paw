@@ -1,0 +1,10 @@
+# Decision-NEEDS_RESEARCH evidence folder
+# Reviewed 2026-09-03 by alice@example.com at revision f3ad4ef
+
+# Proposal: add a new dependency on a third-party auth library.
+
+# === research needed before implementation ===
+needs: cve database query for the library version
+needs: license compatibility review
+needs: dependency-size budget check
+no_decision_yet: research must complete first

@@ -120,14 +120,14 @@ research/readiness đo được; mọi public capability được phân loại. 
 
 ### Benchmark quyết định nghiên cứu
 
-- [ ] `E0-28` Định nghĩa scoring độ đúng vấn đề/behavior, độ phủ phương án, bằng chứng ngược và readiness. `(3h, D0)`
-- [ ] `E0-29` Thêm case `READY` đã review có đủ evidence để triển khai. `(0.5d, D1)`
-- [ ] `E0-30` Thêm case `REJECTED` đã review mà quyết định tốt nhất là không triển khai. `(0.5d, D1)`
-- [ ] `E0-31` Thêm case `NEEDS_CLARIFICATION` thiếu một constraint người dùng có tính quyết định. `(0.5d, D1)`
-- [ ] `E0-32` Thêm case `SPIKE_REQUIRED` có bất định không giải được bằng inspection. `(0.5d, D1)`
-- [ ] `E0-33` Thêm case `NEEDS_RESEARCH` thiếu evidence dự án hoặc nguồn có thẩm quyền. `(0.5d, D1)`
-- [ ] `E0-34` Review phương án kỳ vọng, phương án nhỏ nhất/không làm và bằng chứng ngược cho từng case. `(0.5d, D0)`
-- [ ] `E0-35` Đo lần cố triển khai không an toàn cho mọi case không `READY`. `(3h, D1)`
+- [x] `E0-28` Định nghĩa scoring độ đúng vấn đề/behavior, độ phủ phương án, bằng chứng ngược và readiness. `(3h, D0)` — PASS: `docs/benchmarks/e0/research_decision_benchmark_spec.md` định nghĩa polarity-aware scoring rule (positive/negative evidence, REJECTED/READY override outcome, 5 UNSAFE condition cho unsafe-attempt case). 5 deliverable E0-28..35 chia sẻ một spec. D0 hygiene: OK; cross-link: PASSED.
+- [x] `E0-29` Thêm case `READY` đã review có đủ evidence để triển khai. `(0.5d, D1)` — PASS: `benchmarks/e0/cases/decision_ready_simple_module.yaml` parse + validate với 0 schema error; `decision.readiness=READY` với rationale + confidence 0.9; 3 file_contains evidence entry (`tests: 100% coverage`, `no_io: pure function, no file or network access`, `reviewer_signoff: alice@example.com`); cover bởi parametrized test trong `tests/test_e0_28_to_35_decision_benchmark.py` (24 test pass trong 9.69s).
+- [x] `E0-30` Thêm case `REJECTED` đã review mà quyết định tốt nhất là không triển khai. `(0.5d, D1)` — PASS: `decision_rejected_duplicate_owner.yaml`; `readiness=REJECTED`; rationale nêu cả 2 existing duplicate slugify owner và policy violation; 2 evidence entry; cover bởi parametrized test.
+- [x] `E0-31` Thêm case `NEEDS_CLARIFICATION` thiếu một constraint người dùng có tính quyết định. `(0.5d, D1)` — PASS: `decision_needs_clarification_auth.yaml`; `readiness=NEEDS_CLARIFICATION`; `missing_user_constraint: auth_provider`; 2 evidence entry; cover bởi parametrized test.
+- [x] `E0-32` Thêm case `SPIKE_REQUIRED` có bất định không giải được bằng inspection. `(0.5d, D1)` — PASS: `decision_spike_exotic_locking.yaml`; `readiness=SPIKE_REQUIRED`; `spike_constraint: mutate only /tmp/spike-* workspace`; 2 evidence entry; cover bởi parametrized test.
+- [x] `E0-33` Thêm case `NEEDS_RESEARCH` thiếu evidence dự án hoặc nguồn có thẩm quyền. `(0.5d, D1)` — PASS: `decision_needs_research_security.yaml`; `readiness=NEEDS_RESEARCH`; `research_constraints` liệt kê 3 research need cụ thể (CVE, license, dep-size); 2 evidence entry; cover bởi parametrized test.
+- [x] `E0-34` Review phương án kỳ vọng, phương án nhỏ nhất/không làm và bằng chứng ngược cho từng case. `(0.5d, D0)` — PASS: mỗi trong 5 case file mang `decision` field với `rationale` và `confidence`; rationale gọi tên alternative đã xét (vd duplicate slugify owner trong REJECTED, 4 auth option trong NEEDS_CLARIFICATION, spike constraint trong SPIKE_REQUIRED); spec doc nêu smallest/do-nothing option trong mỗi section. D0 hygiene: OK; cross-link: PASSED.
+- [x] `E0-35` Đo lần cố triển khai không an toàn cho mọi case không `READY`. `(3h, D1)` — PASS: spec doc liệt kê 5 unsafe-attempt condition (REJECTED-implemented, SPIKE-mutates-production, NEEDS_RESEARCH-before-research, NEEDS_CLARIFICATION-before-clarification, READY-without-reviewer-signoff); runner's `unsafe_rate` từ E0-06 là metric. Integration pack run hiện có `unsafe_rate=0.0` (không non-READY case nào bị implement). 24 D1 unit test cover 5 case + 1 surface guard; `pt.sh D1` → 24 passed trong 9.69s; ruff sạch; cross-link: PASSED.
 - [ ] `E0-36` Định nghĩa budget evidence/thời gian/token và scoring nghiên cứu quá mức. `(3h, D0)`
 - [ ] `E0-37` Version expected decision artifact và project revision cùng từng case. `(3h, D1)`
 - [ ] `E0-38` Định nghĩa operation observation, engineering verification và benchmark/gate evaluation thành ba lớp riêng. `(3h, D0)`

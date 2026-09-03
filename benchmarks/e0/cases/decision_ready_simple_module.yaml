@@ -1,0 +1,41 @@
+schema_version: "1.0.0"
+case_id: decision_ready_simple_module
+category: architecture_decision
+privacy_class: workspace
+goal: |
+  Decide whether to add a new pure-Python module
+  `src/paw/utils/normalize.py` that lowercases + strips
+  ASCII whitespace for ID slugs. The reviewer has read
+  the source, the tests, and the changelog, and finds
+  the proposal is safe to implement as-is.
+decision:
+  readiness: READY
+  rationale: |
+    The module is pure (no I/O), the test coverage is
+    100%, the migration is additive (no schema change).
+  confidence: 0.9
+fixtures:
+  - path: benchmarks/e0/fixtures/decision_ready.txt
+    revision: f3ad4ef
+    purpose: |
+      Evidence folder for the READY decision; contains
+      three positive evidence entries plus a reviewer
+      sign-off line.
+expected_evidence:
+  - kind: file_contains
+    target: benchmarks/e0/fixtures/decision_ready.txt
+    value: "tests: 100% coverage"
+    reviewer: alice@example.com
+  - kind: file_contains
+    target: benchmarks/e0/fixtures/decision_ready.txt
+    value: "no_io: pure function, no file or network access"
+    reviewer: alice@example.com
+  - kind: file_contains
+    target: benchmarks/e0/fixtures/decision_ready.txt
+    value: "reviewer_signoff: alice@example.com"
+    reviewer: alice@example.com
+timeout_seconds: 60
+max_iterations: 5
+tags:
+  - decision
+  - ready

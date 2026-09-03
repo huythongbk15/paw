@@ -1,0 +1,11 @@
+# Decision-SPIKE_REQUIRED evidence folder
+# Reviewed 2026-09-03 by alice@example.com at revision f3ad4ef
+
+# Proposal: replace the local SQLite lock manager with an
+# in-process asyncio.Lock.
+
+# === uncertainty that needs an isolated benchmark ===
+unknown: throughput under 100 concurrent tasks
+unknown: latency p99 under contention
+known: existing code uses sqlite3 default isolation
+constraint: spike must mutate only /tmp/spike-* workspace
