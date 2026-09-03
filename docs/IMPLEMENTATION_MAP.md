@@ -154,6 +154,85 @@ The Task/Plan identity mismatch was the only row requiring current SX behavior
 repair. The other rows are explicit post-gate gaps and do not retroactively
 expand the S0–S6 completion scenarios.
 
+### Active decision record: E0 benchmark owner and storage location
+
+Decision class: `FAST`. Readiness: `READY` for the named contract only; this
+does not authorize benchmark runner, fixture authoring, runner integration or
+release-gate adoption (those remain their own E0 items).
+
+- **Problem:** E0 must name the benchmark owner and storage location without
+  introducing a second Task/Plan/TaskResult model and without claiming an
+  implementation that does not yet exist in source.
+- **Constraints:** keep the existing `paw.core.task.Task`,
+  `paw.core.models.TaskResult` and ledger as the single record authority; do
+  not add a parallel `BenchmarkTask` or `BenchmarkResult`; keep the contract
+  in canonical docs and do not start a new store before E0-07; treat any
+  benchmark record as read-only evaluation evidence, not a new execution
+  authority.
+- **Evidence:** `src/paw/core/task.py` owns Task; `src/paw/core/models.py`
+  owns `TaskResult` and `VerificationSpec`/`VerificationRecord` placeholders;
+  `src/paw/core/ledger.py` and `src/paw/core/checkpoint.py` already record
+  `EXECUTION_COMPLETED` / `TASK_COMPLETED` / `OPERATION_RECORDED` events that
+  a benchmark runner can read without any new table. The Phase 19 ledger
+  trail test (`test_phase19_runtime_hardening.py::test_7`) shows a
+  reconstructable `STEP_PROPOSED → POLICY_GATE → AUTONOMY_GATE →
+  STEP_EXECUTED → OPERATION_RECORDED → CHECKPOINT_CREATED → TASK_COMPLETED`
+  sequence on a real SQLite close/reopen.
+- **Option A — selected:** the benchmark owner is the **`paw` core runtime
+  itself** (no new package). Benchmark records are **read-only
+  projections** over existing `task_events` (ledger) and `task_checkpoints`
+  rows; case manifests live under **`benchmarks/e0/`** in the repository
+  root, versioned alongside source and never in SQLite.
+- **Option B — rejected:** a new `paw/benchmark/` subpackage owning both
+  cases and a new `benchmark_runs` SQLite table. It duplicates the
+  ledger/checkpoint authority and creates a second result model. The
+  acceptance check `test_all_runtime_modes_share_one_executable_unit_pipeline`
+  would still pass because it targets the runtime, but the benchmark would
+  own a new persistence contract that nothing else writes through.
+- **Option C — rejected:** a new standalone repository (e.g. `paw-bench`)
+  that imports the wheel. External repos add distribution overhead, do not
+  match the same revision after the wheel ships, and cannot share the
+  per-test SQLite isolation the current conftest provides. Future
+  reproducibility tooling may still pull cases from a separate location, but
+  that is downstream of the in-tree cases, not a replacement.
+- **Naming and storage contract:**
+  - Owner: `paw` core runtime (the application that produced the trace is
+    also the producer of the benchmark record; the benchmark runner is a
+    read-only consumer).
+  - Case manifest path: `benchmarks/e0/cases/<case_id>.yaml` (one file per
+    case). Each case declares `case_id`, `revision` (the source tree SHA it
+    was authored against), `category`, `privacy_class`, fixture path(s) and
+    the reviewed expected evidence. This is added in `E0-02`, not `E0-01`.
+  - Runner state path: a per-run output directory, e.g.
+    `benchmarks/e0/runs/<run_id>/`, holding `summary.json`,
+    `<case_id>.trace.json` (replay of the ledger rows that satisfied or
+    violated the case) and a `report.md` produced by the human reviewer.
+    Runs are written by a future `E0-16` runner, not by the runtime.
+  - The runtime never writes to `benchmarks/`. It continues to write only to
+    SQLite (`task_events`, `task_checkpoints`, `operation_records`) and to
+    the user-supplied workspace via the approved executor.
+  - `paw.core` public surface stays at 11 symbols; the benchmark contract
+    is exposed as plain Python dataclasses under a new top-level
+    `paw.bench` module in a later E0 step, and a contract test will assert
+    that the 11 symbols are unchanged after E0 lands.
+- **Contrary evidence and compatibility cost:** Option A deliberately keeps
+  every benchmark artifact outside the runtime DB. A user who only inspects
+  SQLite will not see the benchmark files. The trade-off is intentional:
+  benchmark cases are reviewed source code, not durable task data, and
+  living in the repo lets the same diff that improves the runtime also
+  update the fixture it should be measured against.
+- **Research budget and stop condition:** project source, schema, ledger
+  event types and Phase 19/20 runtime contract; stop after the owner, the
+  path layout and the no-second-result-model check are localized. External
+  research cannot change a PAW-owned naming/storage decision.
+- **Falsifiable acceptance:** the `paw` core runtime has exactly one Task
+  owner (`src/paw/core/task.py`) and exactly one `TaskResult` type
+  (`src/paw/core/models.py`); no new `BenchmarkTask` or `BenchmarkResult`
+  dataclass is added in this E0-01 change; `paw.core` continues to expose
+  exactly 11 contract symbols; the existing ledger/checkpoint tests still
+  pass without modification; and `benchmarks/e0/` does not yet exist (its
+  creation is owned by `E0-02`).
+
 ### Recorded verification baseline — not current exit proof
 
 The project-only environment is `.venv`, reproduced from `pyproject.toml` and

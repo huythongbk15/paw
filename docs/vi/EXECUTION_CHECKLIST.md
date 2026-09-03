@@ -81,7 +81,7 @@ research/readiness đo được; mọi public capability được phân loại. 
 
 ### Contract benchmark
 
-- [ ] `E0-01` Chỉ định owner/vị trí benchmark; không tạo task/result model thứ hai. `(1h, D0)`
+- [x] `E0-01` Chỉ định owner/vị trí benchmark; không tạo task/result model thứ hai. `(1h, D0)` — PASS: ghi thành "Active decision record: E0 benchmark owner and storage location" trong `IMPLEMENTATION_MAP.md`. Owner là `paw` core runtime hiện hữu; benchmark case nằm trong `benchmarks/e0/cases/*.yaml`; per-run artifact nằm trong `benchmarks/e0/runs/<run_id>/`; `paw.core` giữ 11-symbol contract; không thêm `BenchmarkTask`/`BenchmarkResult` dataclass mới ở bước này. Acceptance sẽ được tái khẳng định ở E0-07/E0-16 khi runner và case schema ra đời.
 - [ ] `E0-02` Định nghĩa case manifest có version, fixture revision và privacy class. `(3h, D1)`
 - [ ] `E0-03` Định nghĩa expected evidence độc lập với model output. `(2h, D0)`
 - [ ] `E0-04` Định nghĩa scoring success, partial, failure và unsafe outcome. `(3h, D0)`
