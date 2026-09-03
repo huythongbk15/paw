@@ -179,10 +179,13 @@ release-gate adoption (those remain their own E0 items).
   STEP_EXECUTED → OPERATION_RECORDED → CHECKPOINT_CREATED → TASK_COMPLETED`
   sequence on a real SQLite close/reopen.
 - **Option A — selected:** the benchmark owner is the **`paw` core runtime
-  itself** (no new package). Benchmark records are **read-only
-  projections** over existing `task_events` (ledger) and `task_checkpoints`
-  rows; case manifests live under **`benchmarks/e0/`** in the repository
-  root, versioned alongside source and never in SQLite.
+  itself** (no new package). The runtime is the **sole authority** for the
+  trace data (Task, Plan, Ledger, Checkpoint, OperationRecord) that the
+  benchmark reads; the benchmark runner (added in E0-16) is a **read-only
+  consumer** that projects those trace rows into a case result. The runtime
+  never writes benchmark records; benchmark cases live under
+  **`benchmarks/e0/`** in the repository root, versioned alongside source
+  and never in SQLite.
 - **Option B — rejected:** a new `paw/benchmark/` subpackage owning both
   cases and a new `benchmark_runs` SQLite table. It duplicates the
   ledger/checkpoint authority and creates a second result model. The
@@ -208,13 +211,27 @@ release-gate adoption (those remain their own E0 items).
     `<case_id>.trace.json` (replay of the ledger rows that satisfied or
     violated the case) and a `report.md` produced by the human reviewer.
     Runs are written by a future `E0-16` runner, not by the runtime.
+    **Per-run output is not committed by default**: a future
+    `.gitignore` entry will keep `benchmarks/e0/runs/` out of the working
+    tree. Only a human-reviewed `report.md` may be promoted into the
+    repository at `benchmarks/e0/case_reports/<case_id>.md`; that promotion
+    is an explicit reviewer action, not a side effect of `paw bench run`.
   - The runtime never writes to `benchmarks/`. It continues to write only to
     SQLite (`task_events`, `task_checkpoints`, `operation_records`) and to
     the user-supplied workspace via the approved executor.
   - `paw.core` public surface stays at 11 symbols; the benchmark contract
     is exposed as plain Python dataclasses under a new top-level
-    `paw.bench` module in a later E0 step, and a contract test will assert
-    that the 11 symbols are unchanged after E0 lands.
+    `paw.bench` module in a later E0 step. A new contract test, added in
+    a dedicated E0 item (proposed as `E0-23a` below), will assert that the
+    11-symbol `paw.core` export list is unchanged after E0 lands, so
+    benchmark plumbing cannot quietly regress the canonical surface.
+  - The benchmark runner reads existing `task_events` rows. The available
+    event types are enumerated in `src/paw/core/ledger.py:TaskEventType`
+    and include `STEP_PROPOSED`, `POLICY_GATE_EVALUATED`,
+    `AUTONOMY_GATE_EVALUATED`, `STEP_EXECUTED`, `OPERATION_RECORDED`,
+    `CHECKPOINT_CREATED` and `TASK_COMPLETED`. The runner also reads
+    `task_checkpoints.progress_ratio` to score progress-based cases. No
+    new event type is introduced in E0.
 - **Contrary evidence and compatibility cost:** Option A deliberately keeps
   every benchmark artifact outside the runtime DB. A user who only inspects
   SQLite will not see the benchmark files. The trade-off is intentional:

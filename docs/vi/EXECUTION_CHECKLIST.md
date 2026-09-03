@@ -116,6 +116,7 @@ research/readiness đo được; mọi public capability được phân loại. 
 - [ ] `E0-24` Map từng item vào engineering scenario và owner canonical. `(0.5d, D0)`
 - [ ] `E0-25` Đánh dấu core, compatibility-only, quarantine hoặc removal candidate. `(0.5d, D0)`
 - [ ] `E0-26` Review removal candidate về nghĩa vụ persisted/API compatibility. `(3h, D1)`
+- [ ] `E0-23a` Thêm contract test khẳng định `paw.core` vẫn export đúng 11 runtime-contract symbol sau khi E0 land. `(1h, D1)` — thêm theo review E0-01; bảo vệ canonical surface khỏi regression do benchmark plumbing.
 
 ### Benchmark quyết định nghiên cứu
 

@@ -124,6 +124,7 @@ capability has a disposition. Estimated 15–22 days.
 - [ ] `E0-24` Map each item to an engineering scenario and canonical owner. `(0.5d, D0)`
 - [ ] `E0-25` Mark each item core, compatibility-only, quarantine or removal candidate. `(0.5d, D0)`
 - [ ] `E0-26` Review removal candidates for persisted/API compatibility obligations. `(3h, D1)`
+- [ ] `E0-23a` Add a contract test asserting `paw.core` still exports exactly eleven runtime-contract symbols after E0 lands. `(1h, D1)` — added by the E0-01 review; protects the canonical surface from benchmark-plumbing regressions.
 
 ### Research-decision benchmark
 
