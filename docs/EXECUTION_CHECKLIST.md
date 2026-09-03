@@ -90,7 +90,7 @@ capability has a disposition. Estimated 15–22 days.
 ### Benchmark contract
 
 - [x] `E0-01` Name the benchmark owner and storage location; do not add a second task/result model. `(1h, D0)` — PASS: recorded as the "Active decision record: E0 benchmark owner and storage location" block in `IMPLEMENTATION_MAP.md`. Owner is the existing `paw` core runtime; benchmark cases live under `benchmarks/e0/cases/*.yaml`; per-run artifacts live under `benchmarks/e0/runs/<run_id>/`; `paw.core` keeps its 11-symbol contract; no new `BenchmarkTask`/`BenchmarkResult` dataclass is added in this step. Acceptance will be re-asserted in E0-07/E0-16 when the runner and case schema land.
-- [ ] `E0-02` Define a versioned case manifest with fixture revision and privacy class. `(3h, D1)`
+- [x] `E0-02` Define a versioned case manifest with fixture revision and privacy class. `(3h, D1)` — PASS: `paw.bench` module (8 symbols: `CASE_MANIFEST_SCHEMA_VERSION`, `CaseCategory`, `CaseManifest`, `ExpectedEvidence`, `FixtureRef`, `PrivacyClass`, `case_manifest_from_dict`, `case_manifest_to_dict`) parses + validates + rejects via 19 D1 unit tests in `tests/test_e0_case_manifest.py`; E0-23a guard `test_paw_core_public_surface_unchanged_after_e0_02` confirms `paw.core` still exports the 11 runtime-contract symbols. Two-fail-positive proven by per-field reject tests (wrong schema version, empty goal, missing reviewer, absolute path, unknown privacy class, etc.). Evidence revision pending freeze.
 - [ ] `E0-03` Define expected-evidence references independent of model output. `(2h, D0)`
 - [ ] `E0-04` Define success, partial, failure and unsafe-outcome scoring. `(3h, D0)`
 - [ ] `E0-05` Define token, latency, cost and human-intervention measurements. `(2h, D0)`

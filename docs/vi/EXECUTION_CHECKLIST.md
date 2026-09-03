@@ -82,7 +82,7 @@ research/readiness đo được; mọi public capability được phân loại. 
 ### Contract benchmark
 
 - [x] `E0-01` Chỉ định owner/vị trí benchmark; không tạo task/result model thứ hai. `(1h, D0)` — PASS: ghi thành "Active decision record: E0 benchmark owner and storage location" trong `IMPLEMENTATION_MAP.md`. Owner là `paw` core runtime hiện hữu; benchmark case nằm trong `benchmarks/e0/cases/*.yaml`; per-run artifact nằm trong `benchmarks/e0/runs/<run_id>/`; `paw.core` giữ 11-symbol contract; không thêm `BenchmarkTask`/`BenchmarkResult` dataclass mới ở bước này. Acceptance sẽ được tái khẳng định ở E0-07/E0-16 khi runner và case schema ra đời.
-- [ ] `E0-02` Định nghĩa case manifest có version, fixture revision và privacy class. `(3h, D1)`
+- [x] `E0-02` Định nghĩa case manifest có version, fixture revision và privacy class. `(3h, D1)` — PASS: module `paw.bench` (8 symbol: `CASE_MANIFEST_SCHEMA_VERSION`, `CaseCategory`, `CaseManifest`, `ExpectedEvidence`, `FixtureRef`, `PrivacyClass`, `case_manifest_from_dict`, `case_manifest_to_dict`) parse + validate + reject qua 19 D1 unit test trong `tests/test_e0_case_manifest.py`; guard E0-23a `test_paw_core_public_surface_unchanged_after_e0_02` xác nhận `paw.core` vẫn export 11 runtime-contract symbol. Two-fail-positive chứng minh qua per-field reject test (sai schema version, goal rỗng, thiếu reviewer, absolute path, unknown privacy class, v.v.). Evidence revision chờ freeze.
 - [ ] `E0-03` Định nghĩa expected evidence độc lập với model output. `(2h, D0)`
 - [ ] `E0-04` Định nghĩa scoring success, partial, failure và unsafe outcome. `(3h, D0)`
 - [ ] `E0-05` Định nghĩa phép đo token, latency, chi phí và can thiệp người dùng. `(2h, D0)`

@@ -242,6 +242,81 @@ release-gate adoption (those remain their own E0 items).
   event types and Phase 19/20 runtime contract; stop after the owner, the
   path layout and the no-second-result-model check are localized. External
   research cannot change a PAW-owned naming/storage decision.
+
+### Active decision record: E0-02 case manifest schema
+
+Decision class: `STANDARD`. Readiness: `READY` for the case-manifest
+contract only; this does not authorize the case manifest fixtures
+themselves, the runner, scoring, or release-gate adoption (those remain
+E0-08..15 and E0-16).
+
+- **Problem:** E0-02 requires a versioned case manifest with fixture
+  revision and privacy class, but no such schema exists. Without a
+  typed contract the future runner cannot tell a reviewed case from a
+  draft, and the privacy boundary between local and remote providers
+  (planned in E2) has nothing to enforce against.
+- **Constraints:** keep `paw.core`'s 11-symbol contract; do not add a
+  second Task/TaskResult; make schema version bumps fail closed; require
+  a reviewer on every expected-evidence entry so a case cannot be
+  promoted to `VERIFIED` by accident; keep the parser pure (no I/O,
+  no runner).
+- **Evidence:** `pyproject.toml` already declares
+  `include = ["paw*"]`, so a `paw/bench/__init__.py` is picked up by
+  the wheel without further packaging work. The Phase 19 ledger
+  (`src/paw/core/ledger.py:TaskEventType`) and the Phase 19 contract
+  test `test_7_task_ledger_full_event_trail` already expose the event
+  names a runner will need to score against; the manifest references
+  them by string so no new enum is introduced.
+- **Option A — selected:** a new top-level `paw.bench` module that
+  owns the *contract* only — `PrivacyClass`, `CaseCategory`,
+  `FixtureRef`, `ExpectedEvidence`, `CaseManifest`, plus
+  `case_manifest_from_dict` / `case_manifest_to_dict`. No I/O, no
+  runner, no fixture files yet. The contract is tested by
+  `tests/test_e0_case_manifest.py` (19 tests, all D1-level unit).
+- **Option B — rejected:** add a `BenchmarkTask` dataclass to
+  `paw.core` and reuse the existing `TaskResult`. It would keep the
+  schema near the runtime but would couple benchmark authoring to the
+  persistence owner and force a schema migration for every benchmark
+  field. It also violates the E0-01 decision that the benchmark owner
+  is read-only over existing trace rows.
+- **Option C — rejected:** write the schema in JSON Schema or Pydantic
+  and load it dynamically. A dynamic schema is harder to keep
+  source-anchored and harder to reference from
+  `IMPLEMENTATION_MAP.md` and `EXECUTION_CHECKLIST.md`; the dataclass
+  approach lets the contract tests import the symbols directly.
+- **Schema shape (selected):**
+  - `case_id` (path-free string, becomes the YAML filename).
+  - `schema_version` (must equal `CASE_MANIFEST_SCHEMA_VERSION = "1.0.0"`,
+    closed against the current value).
+  - `category` (one of eight `CaseCategory` values matching
+    `EXECUTION_CHECKLIST.md` E0-08..15).
+  - `privacy_class` (one of `public | internal | workspace | secret`).
+  - `goal` (mirrors `Task.goal`; the runner will pass it through).
+  - `fixtures[]` (each with `path` repo-relative, `revision` non-empty,
+    `purpose`).
+  - `expected_evidence[]` (each with `kind ∈ {file_contains,
+    command_exit, ledger_event, task_status, policy_decision}`,
+    `target`, `value`, and a non-empty `reviewer`).
+  - `timeout_seconds` and `max_iterations` (positive budgets, mirroring
+    `AutonomyBudget`).
+  - `tags[]` (free-form labels, used by the runner to filter or group).
+- **Contrary evidence and compatibility cost:** Option A adds a new
+  top-level `paw.bench` package. Future work (E3 personal skills, the
+  verification model in E2) could grow that surface; the
+  E0-23a contract test (`paw.core` 11-symbol preservation) is the
+  guard rail, and the 19 case-manifest tests assert the per-field
+  invariants.
+- **Research budget and stop condition:** project source, pyproject
+  packaging, Phase 19 ledger event names, and the E0-08..15 minimum
+  case set; stop after the contract is in code and 19 D1 unit tests
+  pass. No external research can change a PAW-owned contract for
+  case manifests.
+- **Falsifiable acceptance:** the `paw.bench` module exports
+  exactly the eight symbols listed above; `case_manifest_from_dict`
+  rejects every wrong field tested in
+  `tests/test_e0_case_manifest.py`; `paw.core` still exports exactly
+  the 11 runtime-contract symbols; the 19 unit tests pass; the
+  test count increases from 548 to 567 with no other regressions.
 - **Falsifiable acceptance:** the `paw` core runtime has exactly one Task
   owner (`src/paw/core/task.py`) and exactly one `TaskResult` type
   (`src/paw/core/models.py`); no new `BenchmarkTask` or `BenchmarkResult`
@@ -258,14 +333,12 @@ recorded on the dirty Core Stabilization working tree before the latest
 documentation/contract-test delta. It supports the implementation audit but
 does not establish `VERIFIED` status for a frozen clean candidate:
 
-- `.venv/bin/python -m pytest -q`: **548 passed in 303.72s** on the
-  current working tree after the SX-04–SX-09 review and stale-doc fix. The
-  previous 547 passed + 1 failed run was repaired by removing two stale
-  references in the S0/S1 owner table (the host-snapshot dependency lock and
-  the retired dual-planner module) from `IMPLEMENTATION_MAP.md` plus one
-  stale `current phase` claim from `docs/vi/ROADMAP.md`. The focused set
-  covers normalization, prepared-effect reconciliation, selector ownership,
-  unit-pipeline, filesystem, lock/ownership and CLI process-boundary proofs.
+- `.venv/bin/python -m pytest -q`: **567 passed in 312.84s** on the
+  current working tree after the SX-04–SX-09 review, the SX-11 freeze
+  (`f3ad4ef`), the SX-14 verdict, the E0-01 benchmark-owner decision
+  record and the E0-02 case-manifest contract (19 new D1 unit tests in
+  `tests/test_e0_case_manifest.py`). The 548 baseline (post-SX-09) was
+  the E0 entry point; +19 is the manifest contract.
 - Focused selector compatibility/ownership set: **69 passed in 46.45s**. The
   earlier focused knowledge/runtime/filesystem/atomicity set was **116 passed**;
   all of those tests are also included in the final 543-test run.
