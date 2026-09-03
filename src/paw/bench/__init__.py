@@ -629,3 +629,21 @@ __all__ += [
     "run_case_file",
     "write_runs_jsonl",
 ]
+
+
+# E0-39: re-export the verification types so callers can
+# ``from paw.bench import VerificationSpec, ...`` without
+# importing the verification submodule explicitly.
+from .verification import (  # noqa: E402
+    VerificationRecord,
+    VerificationResult,
+    VerificationSpec,
+    make_spec_from_evidence,
+)
+
+__all__ += [
+    "VerificationRecord",
+    "VerificationResult",
+    "VerificationSpec",
+    "make_spec_from_evidence",
+]
