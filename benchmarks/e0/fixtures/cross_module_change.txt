@@ -1,0 +1,14 @@
+﻿# Cross-module change fixture — two files that must change together
+# Reviewed 2026-09-03 by alice@example.com at revision f3ad4ef
+
+# === file_a.txt ===
+CONSTANT = 42
+
+def get_constant():
+    return CONSTANT
+
+# === file_b.txt ===
+from file_a import get_constant
+
+def derived():
+    return get_constant() * 2

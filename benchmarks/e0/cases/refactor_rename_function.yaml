@@ -1,0 +1,30 @@
+schema_version: "1.0.0"
+case_id: refactor_rename_function
+category: refactoring
+privacy_class: workspace
+goal: |
+  Rename `process_data` to `transform_record` and update
+  all three callsites. The expected outcome is recorded
+  as evidence that the function and its callsites share
+  a name; the runner will re-verify after the runtime's
+  edit.
+fixtures:
+  - path: benchmarks/e0/fixtures/refactor_rename.txt
+    revision: f3ad4ef
+    purpose: |
+      A function with three callsites; a refactor that
+      renames the function must keep all four references
+      in sync.
+expected_evidence:
+  - kind: file_contains
+    target: benchmarks/e0/fixtures/refactor_rename.txt
+    value: "def process_data(record):"
+    reviewer: alice@example.com
+  - kind: file_contains
+    target: benchmarks/e0/fixtures/refactor_rename.txt
+    value: "result1 = process_data"
+    reviewer: alice@example.com
+timeout_seconds: 120
+max_iterations: 8
+tags:
+  - registry

@@ -1,0 +1,15 @@
+﻿# Interrupted-recovery fixture — task checkpoint evidence
+# Reviewed 2026-09-03 by alice@example.com at revision f3ad4ef
+
+# This fixture mimics the runtime's checkpoint row that
+# should be present after an interrupted run. The runner
+# verifies that the case's task_id has a checkpoint with
+# the expected progress.
+
+# task_id: t_interrupted_001
+# checkpoint_id: cp_001
+# progress_ratio: 0.5
+# current_step: 5
+# total_steps: 10
+# autonomy_usage: {}
+# decision_history: []

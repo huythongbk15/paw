@@ -1,0 +1,13 @@
+﻿# Refactoring fixture — function name must be renamed across callsites
+# Reviewed 2026-09-03 by alice@example.com at revision f3ad4ef
+
+# Old name: process_data
+# New name: transform_record
+
+def process_data(record):
+    return record.upper()
+
+# Callsites:
+result1 = process_data({"a": 1})
+result2 = process_data({"b": 2})
+result3 = process_data({"c": 3})

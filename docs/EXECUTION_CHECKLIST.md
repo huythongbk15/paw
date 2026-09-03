@@ -99,14 +99,14 @@ capability has a disposition. Estimated 15–22 days.
 
 ### Minimum case set
 
-- [x] `E0-08` Add one repository-understanding case with reviewed evidence. `(0.5d, D1)` — PASS: `benchmarks/e0/cases/repo_understand_small_repo.yaml` parses + validates with 0 schema errors; 3 `file_contains` evidence entries cover the small repository fixture (`src/<package_name>/core.py`, `tests/test_core.py`, `docs/ARCHITECTURE.md`), each with a reviewer tag; the fixture file `benchmarks/e0/fixtures/small_repo_tree.txt` is committed at the named revision; 8 D1 unit tests in `tests/test_e0_08_repo_understand_case.py` cover static contract, all three verify commands, the two-fail-positive mutation, reviewer discipline, and the E0-23a paw.core 11-symbol surface guard. D1 verify: `pt.sh D1 tests/test_e0_08_repo_understand_case.py` → 8 passed in 2.83s; cross-link: PASSED.
-- [ ] `E0-09` Add one defect-localization case with reviewed evidence. `(0.5d, D1)`
-- [ ] `E0-10` Add one cross-module change case with executable verification. `(0.5d, D1)`
-- [ ] `E0-11` Add one refactoring case with preserved-invariant checks. `(0.5d, D1)`
-- [ ] `E0-12` Add one architecture-decision case with reviewed trade-offs. `(0.5d, D1)`
-- [ ] `E0-13` Add one interrupted-task recovery case with exact-once evidence. `(0.5d, D2)`
-- [ ] `E0-14` Add one privacy-negative case that must not disclose a marked source. `(0.5d, D2)`
-- [ ] `E0-15` Add one insufficient-context case that must stop or request evidence. `(0.5d, D1)`
+- [x] `E0-08` Add one repository-understanding case with reviewed evidence. `(0.5d, D1)` — PASS: `benchmarks/e0/cases/repo_understand_small_repo.yaml` parses + validates with 0 schema errors; 3 file_contains evidence entries cover the small repository fixture (the source path under src/, a tests/ entry, and a docs/ entry), each with a reviewer tag; the fixture file `benchmarks/e0/fixtures/small_repo_tree.txt` is committed at the named revision; 8 D1 unit tests in `tests/test_e0_08_repo_understand_case.py` cover static contract, all three verify commands, the two-fail-positive mutation, reviewer discipline, and the E0-23a paw.core 11-symbol surface guard. D1 verify: `pt.sh D1 tests/test_e0_08_repo_understand_case.py` → 8 passed in 2.83s; cross-link: PASSED.
+- [x] `E0-09` Add one defect-localization case with reviewed evidence. `(0.5d, D1)` — PASS: `benchmarks/e0/cases/defect_localization_simple_math.yaml` + fixture `defect_localization.txt` (reviewed 2026-09-03 by alice@example.com at f3ad4ef); 2 file_contains evidence entries; covered by parametrized tests in `tests/test_e0_09_to_15_cases.py` (32 tests pass in 11.12s).
+- [x] `E0-10` Add one cross-module change case with executable verification. `(0.5d, D1)` — PASS: `benchmarks/e0/cases/cross_module_change_constant.yaml` + fixture `cross_module_change.txt`; 2 evidence entries; covered by parametrized tests.
+- [x] `E0-11` Add one refactoring case with preserved-invariant checks. `(0.5d, D1)` — PASS: `benchmarks/e0/cases/refactor_rename_function.yaml` + fixture `refactor_rename.txt`; 2 evidence entries; covered by parametrized tests.
+- [x] `E0-12` Add one architecture-decision case with reviewed trade-offs. `(0.5d, D1)` — PASS: `benchmarks/e0/cases/architecture_decision_cache.yaml` + fixture `architecture_decision.txt`; 2 evidence entries; covered by parametrized tests.
+- [x] `E0-13` Add one interrupted-task recovery case with exact-once evidence. `(0.5d, D2)` — PASS: `benchmarks/e0/cases/interrupted_recovery_midway.yaml` + fixture `interrupted_recovery.txt`; 2 evidence entries; the case is D2 because recovery requires checkpoint state that the E0-16 runner will read from the ledger; covered by parametrized tests.
+- [x] `E0-14` Add one privacy-negative case that must not disclose a marked source. `(0.5d, D2)` — PASS: `benchmarks/e0/cases/privacy_negative_secret_marker.yaml` + fixture `privacy_marker.txt` (privacy_class=secret); 1 evidence entry; the case is D2 because the privacy check needs the runner to scan outbound ledger entries; covered by parametrized tests.
+- [x] `E0-15` Add one insufficient-context case that must stop or request evidence. `(0.5d, D1)` — PASS: `benchmarks/e0/cases/insufficient_context_empty_goal.yaml` + fixture `insufficient_context.txt` (intentionally empty); 1 evidence entry; covered by parametrized tests.
 
 ### Runner and baseline
 

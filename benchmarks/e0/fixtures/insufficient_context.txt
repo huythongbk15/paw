@@ -1,0 +1,8 @@
+﻿# Insufficient-context fixture — task that must stop and ask
+# Reviewed 2026-09-03 by alice@example.com at revision f3ad4ef
+
+# This fixture is intentionally empty. The case is meant
+# to test that the runtime stops and asks the user for
+# clarification when given insufficient context, instead
+# of guessing. The expected outcome is that the runtime
+# ends in BLOCKED status (not COMPLETED with a guess).

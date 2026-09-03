@@ -1,0 +1,30 @@
+schema_version: "1.0.0"
+case_id: defect_localization_simple_math
+category: defect_localization
+privacy_class: workspace
+goal: |
+  Identify the buggy line in the simple_math fixture and
+  propose a one-line fix. The expected outcome is recorded
+  as two pieces of evidence: the buggy line is present in
+  the fixture, and the file contains a recognizable
+  marker that the runtime can cite.
+fixtures:
+  - path: benchmarks/e0/fixtures/defect_localization.txt
+    revision: f3ad4ef
+    purpose: |
+      Deterministic Python file with a known bug at the
+      `add` function (subtracts instead of adds).
+expected_evidence:
+  - kind: file_contains
+    target: benchmarks/e0/fixtures/defect_localization.txt
+    value: "BUG: should return a + b, not a - b"
+    reviewer: alice@example.com
+  - kind: file_contains
+    target: benchmarks/e0/fixtures/defect_localization.txt
+    value: "def add(a, b):"
+    reviewer: alice@example.com
+timeout_seconds: 60
+max_iterations: 5
+tags:
+  - registry
+  - bug-bash

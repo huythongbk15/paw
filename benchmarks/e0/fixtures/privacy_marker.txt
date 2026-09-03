@@ -1,0 +1,11 @@
+﻿# Privacy negative fixture — marked source must not be sent off-box
+# Reviewed 2026-09-03 by alice@example.com at revision f3ad4ef
+
+# This file is marked privacy_class=secret in the case
+# manifest. The runner must assert that no cloud provider
+# ever receives the contents of this file.
+#
+# The runner checks the ledger for outbound network calls
+# whose payload contains the secret marker below.
+
+SECRET_MARKER = "paw-private-marker-do-not-leak-7c3a"

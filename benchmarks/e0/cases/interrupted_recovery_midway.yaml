@@ -1,0 +1,32 @@
+schema_version: "1.0.0"
+case_id: interrupted_recovery_midway
+category: interrupted_recovery
+privacy_class: workspace
+goal: |
+  Resume a task that was interrupted at step 5 of 10 and
+  confirm that the resume did not repeat the completed
+  steps. The expected outcome is recorded as evidence
+  that the fixture documents the expected checkpoint
+  state; the runner will verify the actual ledger
+  matches.
+fixtures:
+  - path: benchmarks/e0/fixtures/interrupted_recovery.txt
+    revision: f3ad4ef
+    purpose: |
+      Documents the expected checkpoint state after an
+      interruption; the runner uses this to verify that
+      the runtime's checkpoint matches.
+expected_evidence:
+  - kind: file_contains
+    target: benchmarks/e0/fixtures/interrupted_recovery.txt
+    value: "progress_ratio: 0.5"
+    reviewer: alice@example.com
+  - kind: file_contains
+    target: benchmarks/e0/fixtures/interrupted_recovery.txt
+    value: "current_step: 5"
+    reviewer: alice@example.com
+timeout_seconds: 120
+max_iterations: 10
+tags:
+  - registry
+  - resume

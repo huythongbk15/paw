@@ -1,0 +1,14 @@
+﻿# Defect localization fixture — small Python file with a known bug
+# Reviewed 2026-09-03 by alice@example.com at revision f3ad4ef
+
+def add(a, b):
+    # BUG: should return a + b, not a - b
+    return a - b
+
+def multiply(a, b):
+    return a * b
+
+def divide(a, b):
+    if b == 0:
+        raise ValueError("division by zero")
+    return a / b

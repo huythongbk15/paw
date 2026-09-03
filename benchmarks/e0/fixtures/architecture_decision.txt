@@ -1,0 +1,17 @@
+﻿# Architecture decision fixture — three options for a new module
+# Reviewed 2026-09-03 by alice@example.com at revision f3ad4ef
+
+# Option A: in-memory cache
+# Pro: simple, no network
+# Con: not shared across processes
+
+# Option B: redis-backed cache
+# Pro: shared across processes
+# Con: extra dependency, network latency
+
+# Option C: filesystem-backed cache
+# Pro: durable, easy to inspect
+# Con: slow for large datasets
+
+# Decision: choose Option A (in-memory) for now because the
+# workload is single-process and the dataset is small.

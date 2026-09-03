@@ -1,0 +1,31 @@
+schema_version: "1.0.0"
+case_id: architecture_decision_cache
+category: architecture_decision
+privacy_class: workspace
+goal: |
+  Reason about three cache options and recommend one for a
+  single-process workload with a small dataset. The
+  expected outcome is recorded as evidence that the
+  fixture contains the three options and a stated
+  decision; the runner will check the runtime's
+  recommendation against the decision.
+fixtures:
+  - path: benchmarks/e0/fixtures/architecture_decision.txt
+    revision: f3ad4ef
+    purpose: |
+      Three options for a new module's cache strategy, with
+      a pre-written decision rationale.
+expected_evidence:
+  - kind: file_contains
+    target: benchmarks/e0/fixtures/architecture_decision.txt
+    value: "Option A: in-memory cache"
+    reviewer: alice@example.com
+  - kind: file_contains
+    target: benchmarks/e0/fixtures/architecture_decision.txt
+    value: "Decision: choose Option A"
+    reviewer: alice@example.com
+timeout_seconds: 120
+max_iterations: 10
+tags:
+  - design
+  - registry
