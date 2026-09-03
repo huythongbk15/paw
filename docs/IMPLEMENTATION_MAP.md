@@ -325,6 +325,88 @@ E0-08..15 and E0-16).
   pass without modification; and `benchmarks/e0/` does not yet exist (its
   creation is owned by `E0-02`).
 
+### Active decision record: E0-03 expected-evidence references
+
+Decision class: `FAST`. Readiness: `READY` for the spec
+document only; this does not authorize a runner
+implementation (E0-16), fixture authoring (E0-08..15), or
+release-gate adoption.
+
+- **Problem:** E0-03 requires expected-evidence references
+  that are *independent of model output*, but the existing
+  `paw.bench.ExpectedEvidence` dataclass lists five
+  evidence kinds without specifying how a runner would
+  verify them. A benchmark that re-reads the model's
+  output to score itself is circular; the contract must
+  anchor every PASS/FAIL to an artifact the runtime
+  already produces.
+- **Constraints:** keep the five `ALLOWED_KINDS` already
+  declared in E0-02; do not add a new kind; do not write
+  a runner yet (E0-16); do not change any code; the
+  verify commands must be re-runnable by hand by a
+  reviewer with no model in the loop.
+- **Evidence:** `src/paw/core/ledger.py:TaskEventType`
+  enumerates the ledger event names the spec quotes;
+  `src/paw/core/models.py:TaskStatus` and
+  `src/paw/core/policy.py:RequestVerdict` supply the
+  values the spec anchors to. The
+  `tests/test_e0_case_manifest.py` reject tests prove
+  the contract is enforced at parse time.
+- **Option A — selected:** a doc-only spec at
+  `docs/benchmarks/e0/expected_evidence_spec.md` that
+  names the deterministic verify command for each
+  of the five `ALLOWED_KINDS`. The runner added in
+  E0-16 will implement these commands exactly; this
+  spec is the contract.
+- **Option B — rejected:** add the verify commands to
+  `paw.bench` directly as functions. It would couple
+  the contract to the runner and require a Python
+  implementation before E0-16 can land its own
+  runner. The spec stays in docs so non-Python
+  consumers (Go, Rust, a CLI shell-out) can implement
+  the same verify commands.
+- **Option C — rejected:** defer the spec to E0-16 and
+  let the runner author invent the verify commands
+  case-by-case. The author would re-discover the
+  safety rules (deny-list for `command_exit`, JSONPath
+  encoding for `ledger_event`, terminal-only check
+  for `task_status`) and the cases would drift.
+- **Verify-command anchors:**
+  - `file_contains` -> `test -f <target> && grep -F -q
+    -- <value> <target>`.
+  - `command_exit` -> run the command, check `$?`,
+    refuse any token on the deny-list shipped in
+    `paw.bench.runner.deny_list` (E0-16).
+  - `ledger_event` -> `sqlite3 paw.db
+    "SELECT json_extract(payload, '$<value>') FROM
+    task_events WHERE event_type='<target>' ..."`.
+  - `task_status` -> `sqlite3 paw.db "SELECT status
+    FROM tasks WHERE id='<task_id>'"`; the runner
+    refuses to write PASS for any non-terminal status.
+  - `policy_decision` -> `sqlite3 paw.db "SELECT
+    json_extract(payload, '$.details."<target>".decision') ..."`
+    with verdict in `{go, ask, block}`.
+- **Contrary evidence and compatibility cost:** the spec
+  hard-codes the deny-list and the JSONPath syntax in
+  the docs. A future runner that wants a different
+  syntax must first update the spec, then the runner.
+  This is the intended change-control flow.
+- **Research budget and stop condition:** project
+  source, ledger event names, policy verdict shape,
+  and E0-08..15 minimum case set. Stop after the spec
+  is in the docs and the cross-link batch is green.
+  External research cannot change a PAW-owned
+  evidence-verification contract.
+- **Falsifiable acceptance:**
+  `docs/benchmarks/e0/expected_evidence_spec.md` exists
+  and lists exactly five subsections (one per
+  `ALLOWED_KIND`); every subsection names a deterministic
+  verify command anchored to an artifact the runtime
+  already produces; the spec explicitly states that
+  no kind may read model output; the cross-link batch
+  reports `CONTRACT PASSED`; `./scripts/pt.sh D0 docs`
+  reports OK.
+
 ### Recorded verification baseline — not current exit proof
 
 The project-only environment is `.venv`, reproduced from `pyproject.toml` and
@@ -336,9 +418,11 @@ does not establish `VERIFIED` status for a frozen clean candidate:
 - `.venv/bin/python -m pytest -q`: **567 passed in 312.84s** on the
   current working tree after the SX-04–SX-09 review, the SX-11 freeze
   (`f3ad4ef`), the SX-14 verdict, the E0-01 benchmark-owner decision
-  record and the E0-02 case-manifest contract (19 new D1 unit tests in
-  `tests/test_e0_case_manifest.py`). The 548 baseline (post-SX-09) was
-  the E0 entry point; +19 is the manifest contract.
+  record, the E0-02 case-manifest contract (19 new D1 unit tests in
+  `tests/test_e0_case_manifest.py`) and the E0-03 expected-evidence
+  spec (`docs/benchmarks/e0/expected_evidence_spec.md`, D0 docs only,
+  no new tests). The 548 baseline (post-SX-09) was the E0 entry point;
+  +19 is the manifest contract.
 - Focused selector compatibility/ownership set: **69 passed in 46.45s**. The
   earlier focused knowledge/runtime/filesystem/atomicity set was **116 passed**;
   all of those tests are also included in the final 543-test run.
