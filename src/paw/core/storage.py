@@ -411,17 +411,6 @@ CREATE TABLE IF NOT EXISTS memory_embeddings (
     created_at TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS intelligent_plans (
-    id TEXT PRIMARY KEY,
-    session_id TEXT NOT NULL,
-    goal TEXT NOT NULL,
-    intents TEXT,
-    confidence REAL,
-    reasoning_summary TEXT,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-);
-
 """
 
 
