@@ -325,6 +325,72 @@ E0-08..15 and E0-16).
   pass without modification; and `benchmarks/e0/` does not yet exist (its
   creation is owned by `E0-02`).
 
+### Active decision record: E0-05 quantitative measurements
+
+Decision class: `FAST`. Readiness: `READY` for the spec
+document only; this does not authorize a runner
+implementation (E0-16), a measurement file writer, or
+release-gate adoption.
+
+- **Problem:** E0-05 requires quantitative measurements
+  for token, latency, cost, and human intervention, but
+  the existing specs stop at PASS/FAIL plus a single
+  `unsafe_rate`. A reviewer cannot compare two correct
+  runtimes on "faster / cheaper / less human" without
+  a measurement contract; the runner needs to know
+  which ledger field to read for each measurement.
+- **Constraints:** four measurements (token, latency,
+  cost, human); each measurement is anchored to a
+  single source of truth (SQLite column, ledger event,
+  or CLI field); every bound is a hard cap with a
+  documented default; no measurement is computed by the
+  model itself; the spec does not introduce a runner.
+- **Evidence:** `src/paw/core/models.py:ResourceUsage`
+  carries `model_tokens` and `cost_usd` per call;
+  `src/paw/core/ledger.py:TaskEventType` enumerates the
+  events the spec quotes (`STEP_EXECUTED`,
+  `POLICY_GATE_EVALUATED`, `TASK_COMPLETED`);
+  `src/paw/core/approval.py` owns the approval lifecycle
+  the human-intervention count is built from.
+- **Option A — selected:** a doc-only spec at
+  `docs/benchmarks/e0/measurement_spec.md` that names
+  the four measurements, the source-of-truth artifact
+  for each, the JSONL row schema, the `RunSummary`
+  aggregate, and three env-overridable caps.
+- **Option B — rejected:** measure per runtime
+  implementation; each provider ships its own
+  measurement file. The benchmark would have to
+  reconcile different schemas; reviewers would have to
+  learn one per provider.
+- **Option C — rejected:** estimate measurements from
+  the model output. An estimate is a re-read of the
+  output the benchmark is supposed to ignore; the
+  self-scoring circularity of E0-03 returns.
+- **Caps (selected):** `cost_max_usd_per_case=10.0`,
+  `human_max_interventions_per_case=3`,
+  `latency_max_ms_per_case=600000` (10 min). Each cap
+  is env-overridable; a case that hits a cap is
+  recorded with the cap name in `failure_reason` and
+  the runner stops the case immediately.
+- **Contrary evidence and compatibility cost:** the
+  spec hard-codes the source-of-truth artifacts and
+  the cap defaults. A future ledger schema change must
+  be reflected here first; the doc is the change-
+  control surface.
+- **Research budget and stop condition:** project
+  source, Phase 19/20 runtime contract, and the E0-04
+  scoring spec. Stop after the spec is in the docs
+  and the cross-link batch is green. External research
+  cannot change a PAW-owned measurement contract.
+- **Falsifiable acceptance:**
+  `docs/benchmarks/e0/measurement_spec.md` exists and
+  defines exactly four measurements; every measurement
+  names its source-of-truth artifact by file path and
+  field name; every cap is documented with a default
+  and an env-override name; the worked example is
+  present; the cross-link batch reports `CONTRACT
+  PASSED`.
+
 ### Active decision record: E0-04 outcome scoring
 
 Decision class: `FAST`. Readiness: `READY` for the spec
