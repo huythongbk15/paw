@@ -21,7 +21,7 @@ acceptance criteria are fully closed.
 | Scope | Current result | Meaning |
 |---|---|---|
 | Core Stabilization | `VERIFIED` on `f3ad4ef` | All S0–S6 acceptance items passed the clean-revision D3 gate; the `f3ad4ef` freeze commit is the canonical evidence. |
-| E0 (Engineering benchmark and feature subtraction) | `IN PROGRESS`, 0/42 tracked items (E0-01..E0-16 already DONE; the `E0-17..42` queue is unblocked) | The contract, the minimum case set, the deterministic evidence runner, and the integration-pack record are in place. The next item is whatever the reviewer picks from `EXECUTION_CHECKLIST.md`. |
+| E0 (Engineering benchmark and feature subtraction) | `IN PROGRESS`, 0/42 tracked items (E0-01..E0-16 already marked [x] with evidence; the `E0-17..42` queue is unblocked) | The contract, the minimum case set, the deterministic evidence runner, and the integration-pack record are in place. The next item is whatever the reviewer picks from `EXECUTION_CHECKLIST.md`. |
 | E1–E3 and BETA | `READY` | E0 is no longer the prerequisite; E1 is the next track per ROADMAP sequencing. |
 | E4 controlled adaptation | `BLOCKED`, optional | Requires E0–E3 and a verified dataset; it is not required for BETA. |
 

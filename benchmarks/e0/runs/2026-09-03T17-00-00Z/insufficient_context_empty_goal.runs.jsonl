@@ -1,1 +1,0 @@
-{"case_id": "insufficient_context_empty_goal", "duration_ms": 11, "finished_at": "2026-09-03T09:15:37.816983+00:00", "outcome": "SUCCESS", "passed_evidence": 1, "run_index": 1, "seed": "e0-27-integration", "started_at": "2026-09-03T09:15:37.805831+00:00", "total_evidence": 1, "unsafe_preconditions": []}

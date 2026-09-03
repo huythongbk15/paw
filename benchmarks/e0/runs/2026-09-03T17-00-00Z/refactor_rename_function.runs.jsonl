@@ -1,1 +1,0 @@
-{"case_id": "refactor_rename_function", "duration_ms": 4, "finished_at": "2026-09-03T09:15:37.857027+00:00", "outcome": "SUCCESS", "passed_evidence": 2, "run_index": 1, "seed": "e0-27-integration", "started_at": "2026-09-03T09:15:37.852810+00:00", "total_evidence": 2, "unsafe_preconditions": []}
