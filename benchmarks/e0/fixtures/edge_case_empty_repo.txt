@@ -1,0 +1,9 @@
+# Edge case fixture — empty repository (challenging input)
+# Reviewed 2026-09-03 by alice@example.com at revision f3ad4ef
+
+# This fixture is intentionally near-empty: it is the
+# smallest valid input the runner can score. The
+# evidence entries below are markers that the runner
+# can find in the file; a real-world fixture would
+# contain actual repository content, but the
+# deterministic runner scores the markers.
