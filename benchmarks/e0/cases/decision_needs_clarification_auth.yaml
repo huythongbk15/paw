@@ -1,4 +1,6 @@
 schema_version: "1.0.0"
+decision_artifact_version: "1.0.0"
+project_revision: "f3ad4ef"
 case_id: decision_needs_clarification_auth
 category: insufficient_context
 privacy_class: workspace
