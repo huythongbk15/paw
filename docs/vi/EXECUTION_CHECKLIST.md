@@ -146,6 +146,14 @@ Exit: project view có nguồn cấp Context Compiler hiện có, required-evide
 recall ít nhất 95%, median cloud input token giảm ít nhất 30% sau warm-up và
 không giảm chất lượng/an toàn. Ước lượng 25–35 ngày.
 
+### Backlog từ post-F0 review (không phải E1 deliverable)
+
+Đây là các cleanup F0 review phát hiện nhưng không chặn E0 gate. Chúng ở đây để E1 reviewer thấy chúng sớm.
+
+- [ ] `E1-BL1` Mở rộng rule status-vocabulary trong contract check. Hiện tại `forbidden='DONE|TODO|FIXME|XXX|WIP'` trong `skills/bootstrap-canonical-docs/scripts/contract-checks.sh` chỉ match khi forbidden word xuất hiện trong item-shaped clause (`(\d+[hd],\s*D[0-9])`). Một dòng roadmap như "already DONE" đã lọt qua. E1 item tiếp theo thêm broader check flag bất kỳ token nào trong sáu dùng status trong canonical docs. `(2h, D0)`
+- [ ] `E1-BL2` Thu hẹp wildcard export trong `paw.bench`. Hiện tại `paw/bench/__init__.py` re-export stdlib symbols (`Any`, `ClassVar`, `StrEnum`, `dataclass`, `field`) cùng như submodule (`runner`, `verification`). Architecture nói "module-level helper proliferation and broad wildcard exports are not part of the architectural contract". E1 item tiếp theo thu hẹp `__all__` về 12 benchmark-contract symbol và bỏ stdlib re-export; submodule vẫn import được qua path tường minh. `(1h, D0)`
+- [ ] `E1-BL3` Refresh memory file agent `PROFILE.md`. Memory file vẫn ghi Phase 10/19/20 từ các session đầu, không đề cập E0-23a paw.core surface, E0-27 gate verdict, hay skill mới. E1 item tiếp theo ghi lại post-E0 state để session sau đọc memory chính xác. `(30m, D0)`
+
 ### Contract và nạp source
 
 - [ ] `E1-01` Ghi owner Memory, Knowledge, Context Compiler cho từng field mới. `(2h, D0)`

@@ -862,11 +862,40 @@ any Core Stabilization `PASS` claim.
 
 ## Next repair targets
 
-1. Execute SX-04 through SX-09 over schema, gate ordering, the unit pipeline,
-   durability, filesystem reconciliation and CLI/API documentation.
-2. Under SX-10, resolve any resulting finding and decide how legacy pre-repair
-   Plan rows are detected or migrated without destructive initialization.
-3. Freeze one clean stabilization revision and run SX-12 through SX-14; only a
-   passing exit decision may unblock E0 benchmark/feature-disposition work.
+The F0 (SX + E0) work is closed. Core Stabilization is `VERIFIED` on the
+frozen revision `f3ad4ef` (SX-14 verdict). E0 is `IN PROGRESS` and the
+deterministic evidence runner + minimum case set + integration-pack record
+are in place (`docs/benchmarks/e0/integration_pack_run.md` is the gate
+record). The next track is E1.
+
+### E1 backlog items from the F0 review (added 2026-09-03)
+
+These three items were identified while reviewing the F0 surface but did
+not block the E0 gate. They are recorded here so the E1 reviewer picks
+them up before the first E1 deliverable. They are also tracked as
+`E1-BL1`, `E1-BL2`, `E1-BL3` in `docs/EXECUTION_CHECKLIST.md`.
+
+- **`E1-BL1` — broaden the contract check status-vocabulary rule**
+  (2h, D0). Today
+  `skills/bootstrap-canonical-docs/scripts/contract-checks.sh` only flags
+  `DONE` / `TODO` / `FIXME` / `XXX` / `WIP` when they appear inside an
+  item-shaped clause (`(\d+[hd],\s*D[0-9])`). A roadmap line like
+  `already DONE` slipped through during the F0 review. The fix is a
+  broader regex that flags any of the six forbidden tokens used as a
+  status word anywhere in the canonical docs.
+- **`E1-BL2` — tighten `paw.bench` wildcard exports** (1h, D0). The
+  current `paw/bench/__init__.py` re-exports stdlib symbols (`Any`,
+  `ClassVar`, `StrEnum`, `dataclass`, `field`) and the `runner` /
+  `verification` submodules. Architecture says "module-level helper
+  proliferation and broad wildcard exports are not part of the
+  architectural contract". The fix narrows `__all__` to the twelve
+  benchmark-contract symbols and removes the stdlib re-exports;
+  submodules stay importable via their explicit path.
+- **`E1-BL3` — refresh the agent memory file `PROFILE.md`** (30m, D0).
+  The memory file still records the Phase 10/19/20 narrative from the
+  early sessions and does not mention the E0-23a `paw.core` surface,
+  the E0-27 gate verdict, or the new `bootstrap-canonical-docs` /
+  `doc-driven-stabilization` skills. The fix records the post-F0 state
+  so the next session reads an accurate memory.
 
 The ordered acceptance plan is in `ROADMAP.md`.

@@ -154,6 +154,37 @@ Exit: source-backed project views feed the existing Context Compiler with at
 least 95% required-evidence recall and at least 30% lower median cloud input
 tokens after warm-up, without quality/safety regression. Estimated 25–35 days.
 
+### Backlog from the post-F0 review (not E1 deliverables)
+
+These are cleanups the F0 review identified but did not block the E0
+gate. They live here so the E1 reviewer sees them early.
+
+- [ ] `E1-BL1` Broaden the contract check status-vocabulary rule. The current
+  rule (`forbidden='DONE|TODO|FIXME|XXX|WIP'` in
+  `skills/bootstrap-canonical-docs/scripts/contract-checks.sh`) only
+  matches when the forbidden word appears inside an item-shaped
+  clause (`(\d+[hd],\s*D[0-9])`). A roadmap line such as
+  `already DONE` slipped through. The next E1 item adds a
+  broader check that flags any of the six forbidden tokens
+  used as a status word anywhere in the canonical docs.
+  `(2h, D0)`
+- [ ] `E1-BL2` Tighten `paw.bench` wildcard exports. The current
+  `paw/bench/__init__.py` re-exports stdlib symbols
+  (`Any`, `ClassVar`, `StrEnum`, `dataclass`, `field`) plus
+  submodules (`runner`, `verification`). Architecture
+  says "module-level helper proliferation and broad
+  wildcard exports are not part of the architectural
+  contract". The next E1 item narrows `__all__` to the
+  twelve benchmark-contract symbols and removes the stdlib
+  re-exports; submodules stay importable via their explicit
+  path. `(1h, D0)`
+- [ ] `E1-BL3` Refresh the agent memory file `PROFILE.md`. The
+  memory file still records Phase 10/19/20 narrative from
+  the early sessions and does not mention the E0-23a paw.core
+  surface, the E0-27 gate verdict, or the new skills. The
+  next E1 item records the post-E0 state so the next
+  session reads an accurate memory. `(30m, D0)`
+
 ### Contract and source ingestion
 
 - [ ] `E1-01` Record Memory, Knowledge and Context Compiler ownership for every new field. `(2h, D0)`
