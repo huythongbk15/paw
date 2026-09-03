@@ -196,7 +196,7 @@ def test_cli_chat_one_shot_json(tmp_path):
     env = os.environ.copy()
     env["PAW_PAW_HOME"] = str(tmp_path / ".paw-chat")
     result = subprocess.run(
-        [sys.executable, "-m", "paw", "chat", "-m", "xin chào CLI", "--json"],
+        [sys.executable, "-m", "paw", "chat", "-m", "xin chào CLI", "--provider", "local", "--json"],
         cwd=project_root,
         env=env,
         capture_output=True,
@@ -225,6 +225,8 @@ def test_cli_chat_approval_survives_process_boundary(tmp_path):
             "chat",
             "-m",
             "hãy tạo file demo.txt",
+            "--provider",
+            "local",
             "--json",
         ],
         cwd=project_root,
@@ -248,6 +250,8 @@ def test_cli_chat_approval_survives_process_boundary(tmp_path):
             "chat",
             "--session",
             waiting["session_id"],
+            "--provider",
+            "local",
             "--approve",
             "--json",
         ],

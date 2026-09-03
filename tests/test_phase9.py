@@ -9,10 +9,16 @@ from pathlib import Path
 
 import pytest
 
-from paw.core import (
-    TaskScheduler, TaskGraph, TaskDependency, TaskScheduleStatus,
-    DependencyType, TaskNode, TaskStatus, get_task_scheduler,
+from paw.core.models import TaskStatus
+from paw.core.planner import TaskNode
+from paw.core.task_scheduler import (
+    DependencyType,
+    TaskDependency,
+    TaskGraph,
+    TaskScheduler,
+    TaskScheduleStatus,
     ensure_task_scheduler_tables,
+    get_task_scheduler,
 )
 from paw.core.storage import db, set_db_path
 

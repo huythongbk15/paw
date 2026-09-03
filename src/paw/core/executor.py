@@ -64,6 +64,38 @@ class ExecutorResult:
         }
 
 
+# --- External Effect Intent ---
+
+@dataclass(frozen=True)
+class EffectIntent:
+    """Durable description of an executor effect before it is attempted."""
+
+    executor: str
+    operation_id: str
+    idempotency_key: str
+    request: dict[str, Any] = field(default_factory=dict)
+    precondition: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "executor": self.executor,
+            "operation_id": self.operation_id,
+            "idempotency_key": self.idempotency_key,
+            "request": self.request,
+            "precondition": self.precondition,
+        }
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> EffectIntent:
+        return cls(
+            executor=str(value["executor"]),
+            operation_id=str(value["operation_id"]),
+            idempotency_key=str(value["idempotency_key"]),
+            request=dict(value.get("request") or {}),
+            precondition=dict(value.get("precondition") or {}),
+        )
+
+
 # --- Executable Task Wrapper ---
 
 @dataclass
@@ -73,10 +105,23 @@ class ExecutableTask:
     goal: str = ""
     capabilities: list[Capability] = field(default_factory=list)
     context: str = ""
+    operation_id: str = ""
+    idempotency_key: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
     model: str | None = None
     policy_check: str = "allow"  # allow, ask, deny, sandbox
     max_retries: int = 3
     timeout: int | None = None
+
+    @property
+    def id(self) -> str:
+        """Compatibility identifier expected by existing executor ports."""
+        return self.task_id
+
+    @property
+    def requested_capabilities(self) -> list[Capability]:
+        """Compatibility capability view expected by routing/executors."""
+        return self.capabilities
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -84,6 +129,9 @@ class ExecutableTask:
             "goal": self.goal,
             "capabilities": [c.value for c in self.capabilities],
             "context": self.context,
+            "operation_id": self.operation_id,
+            "idempotency_key": self.idempotency_key,
+            "metadata": self.metadata,
             "model": self.model,
             "policy_check": self.policy_check,
             "max_retries": self.max_retries,
@@ -103,6 +151,32 @@ class Executor(ABC):
     async def execute(self, task: Task, context: str) -> ExecutorResult:
         """Execute the task with given context. Return structured result."""
         ...
+
+    async def prepare_effect(
+        self,
+        task: Task | ExecutableTask,
+        context: str,
+    ) -> EffectIntent | None:
+        """Describe a side effect without performing it.
+
+        Read-only or intrinsically local executors return ``None``. Executors
+        with an external effect override this method so the runtime can persist
+        the exact intent before calling :meth:`execute`.
+        """
+        return None
+
+    async def reconcile_effect(
+        self,
+        task: Task | ExecutableTask,
+        context: str,
+        intent: EffectIntent,
+    ) -> ExecutorResult:
+        """Reconcile a prepared effect after an interrupted local commit."""
+        return ExecutorResult(
+            success=False,
+            error=f"executor {self.name!r} cannot reconcile a prepared external effect",
+            metadata={"reconciliation": "unsupported"},
+        )
 
     async def can_handle(self, task: Task) -> bool:
         """Check if this executor can handle the task's capabilities."""
@@ -277,7 +351,7 @@ class ExecutorScore:
 
     def __lt__(self, other: ExecutorScore) -> bool:
         """For sorting: higher score is better."""
-        return self.total_score > other.total_score
+        return self.total_score < other.total_score
 
 
 class CapabilityRouter:

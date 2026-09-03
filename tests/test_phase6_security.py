@@ -12,14 +12,9 @@ from pathlib import Path
 
 import pytest
 
-from paw.core import (
-    PolicyGuard,
-    Capability,
-    PolicyDecision,
-    get_policy_guard,
-    ensure_policy_table,
-    ExecutorPolicyEnforcer,
-)
+from paw.core.models import Capability, PolicyDecision
+from paw.core.policy import PolicyGuard, ensure_policy_table, get_policy_guard
+from paw.core.executor_policy import ExecutorPolicyEnforcer
 from paw.core.storage import db
 from paw.core.policy import DefaultConditionEvaluator
 from paw.core.executor import MockExecutor
@@ -488,7 +483,7 @@ class TestPhase6Adversarial:
     @pytest.mark.asyncio
     async def test_execute_task_enforces_policy_by_default(self, temp_db):
         """Default execute_task should enforce policy."""
-        from paw.core import Task
+        from paw.core.task import Task
         from paw.core.executor import execute_task
 
         # Create a task with ASK capability (filesystem.write)
@@ -508,7 +503,7 @@ class TestPhase6Adversarial:
     @pytest.mark.asyncio
     async def test_execute_task_can_skip_enforcement(self, temp_db):
         """execute_task with enforce_policy=False should skip policy."""
-        from paw.core import Task
+        from paw.core.task import Task
         from paw.core.executor import execute_task
 
         task = Task(

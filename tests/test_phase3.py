@@ -9,36 +9,27 @@ from pathlib import Path
 
 import pytest
 
-from paw.core import (
-    Capability,
-    ContextBuilder,
-    ContextFragment,
-    DecompositionResult,
-    DecompositionStep,
+from paw.core.models import Capability, TaskStatus
+from paw.core.context import ContextBuilder, ContextFragment
+from paw.core.decomposition import DecompositionResult, DecompositionStep
+from paw.core.executor import MockExecutor
+from paw.core.executor_policy import (
     ExecutorPolicyEnforcer,
-    IntelligentPlanner,
-    MemoryRecord,
-    MemoryRetriever,
-    MemoryStore,
-    MemoryType,
-    MockExecutor,
     PolicyCheckResult,
     PolicyEnforcedExecutor,
-    SemanticMatcher,
-    SemanticScore,
-    SemanticSkillSelector,
-    SessionManager,
-    TaskStatus,
-    create_memory,
     get_enforcer,
-    get_semantic_selector,
-    get_skill_fabric,
 )
+from paw.core.memory import MemoryRecord, MemoryRetriever, MemoryStore, MemoryType, create_memory
+from paw.core.planner import Planner
+from paw.core.semantic import SemanticMatcher, SemanticScore, SemanticSkillSelector, get_semantic_selector
+from paw.core.session import SessionManager
+from paw.core.skills import get_skill_fabric
 from paw.core.storage import db, set_db_path
+from paw.core.task import TaskManager
 
 
-class TestPhase3IntelligentPlanner:
-    """Phase 3 Intelligent Planner tests."""
+class TestPhase3Decomposition:
+    """Structured decomposition is a strategy used by the canonical Planner."""
 
     @pytest.fixture(autouse=True)
     async def setup_db(self, tmp_path):
@@ -54,7 +45,7 @@ class TestPhase3IntelligentPlanner:
     @pytest.mark.asyncio
     async def test_classify_intent(self, tmp_path):
         """Classify goal intent."""
-        from paw.core.intelligent_planner import IntentClassifier
+        from paw.core.decomposition import IntentClassifier
         classifier = IntentClassifier()
 
         intents = classifier.classify("tính 2 + 2")
@@ -72,7 +63,7 @@ class TestPhase3IntelligentPlanner:
     @pytest.mark.asyncio
     async def test_structured_reasoning(self, tmp_path):
         """Structured reasoning decomposition."""
-        from paw.core.intelligent_planner import StructuredReasoner
+        from paw.core.decomposition import StructuredReasoner
         reasoner = StructuredReasoner()
 
         result = reasoner.decompose("tính 2 + 2")
@@ -81,28 +72,31 @@ class TestPhase3IntelligentPlanner:
         assert result.reasoning_summary
 
     @pytest.mark.asyncio
-    async def test_intelligent_planner(self, tmp_path):
-        """Full intelligent plan creation."""
-        planner = IntelligentPlanner()
-        result = await planner.plan("tính 2 + 2", "session-123")
+    async def test_structured_planner(self, tmp_path):
+        """Canonical Planner creates the persisted Plan contract."""
+        planner = Planner()
+        task = await TaskManager.create("session-123", "tính 2 + 2")
+        result = await planner.plan(task.id)
 
-        assert result["goal"] == "tính 2 + 2"
-        assert len(result["nodes"]) > 0
-        assert result["confidence"] > 0
-        assert "intents" in result
+        assert result.goal == "tính 2 + 2"
+        assert len(result.nodes) > 0
+        assert result.nodes[0].context_requirements["reasoning"]
 
     @pytest.mark.asyncio
-    async def test_intelligent_planner_persistence(self, tmp_path):
-        """Intelligent plan saved to DB."""
-        planner = IntelligentPlanner()
-        result = await planner.plan_and_save("search files", "session-456")
-        assert result["goal"] == "search files"
-        assert len(result["nodes"]) > 0
+    async def test_planner_persistence(self, tmp_path):
+        """Canonical plan and nodes are saved together."""
+        planner = Planner()
+        task = await TaskManager.create("session-456", "search files")
+        result = await planner.plan(task.id)
+        retrieved = await planner.get_plan(result.id)
+        assert retrieved is not None
+        assert retrieved.goal == "search files"
+        assert len(retrieved.nodes) > 0
 
     @pytest.mark.asyncio
     async def test_decomposition_step(self, tmp_path):
         """Decomposition step attributes."""
-        from paw.core.intelligent_planner import StructuredReasoner
+        from paw.core.decomposition import StructuredReasoner
         reasoner = StructuredReasoner()
         result = reasoner.decompose("viết code")
 
@@ -115,7 +109,7 @@ class TestPhase3IntelligentPlanner:
     @pytest.mark.asyncio
     async def test_intent_keywords(self, tmp_path):
         """Intent classification keywords work correctly."""
-        from paw.core.intelligent_planner import IntentClassifier
+        from paw.core.decomposition import IntentClassifier
         classifier = IntentClassifier()
 
         # Test all intent categories
@@ -433,7 +427,7 @@ class TestPhase3NoProhibitedDependencies:
 
     def test_no_qwenpaw_in_phase3(self):
         phase3_files = [
-            Path(__file__).parent.parent / "paw" / "core" / "intelligent_planner.py",
+            Path(__file__).parent.parent / "src" / "paw" / "core" / "decomposition.py",
             Path(__file__).parent.parent / "paw" / "core" / "semantic.py",
             Path(__file__).parent.parent / "paw" / "core" / "memory.py",
             Path(__file__).parent.parent / "paw" / "core" / "executor_policy.py",
@@ -445,7 +439,7 @@ class TestPhase3NoProhibitedDependencies:
 
     def test_no_deepseek_in_phase3(self):
         phase3_files = [
-            Path(__file__).parent.parent / "paw" / "core" / "intelligent_planner.py",
+            Path(__file__).parent.parent / "src" / "paw" / "core" / "decomposition.py",
             Path(__file__).parent.parent / "paw" / "core" / "semantic.py",
             Path(__file__).parent.parent / "paw" / "core" / "memory.py",
             Path(__file__).parent.parent / "paw" / "core" / "executor_policy.py",
@@ -458,7 +452,7 @@ class TestPhase3NoProhibitedDependencies:
 
     def test_no_notebooklm_in_phase3(self):
         phase3_files = [
-            Path(__file__).parent.parent / "paw" / "core" / "intelligent_planner.py",
+            Path(__file__).parent.parent / "src" / "paw" / "core" / "decomposition.py",
             Path(__file__).parent.parent / "paw" / "core" / "semantic.py",
             Path(__file__).parent.parent / "paw" / "core" / "memory.py",
             Path(__file__).parent.parent / "paw" / "core" / "executor_policy.py",
@@ -470,7 +464,7 @@ class TestPhase3NoProhibitedDependencies:
 
     def test_no_antigravity_in_phase3(self):
         phase3_files = [
-            Path(__file__).parent.parent / "paw" / "core" / "intelligent_planner.py",
+            Path(__file__).parent.parent / "src" / "paw" / "core" / "decomposition.py",
             Path(__file__).parent.parent / "paw" / "core" / "semantic.py",
             Path(__file__).parent.parent / "paw" / "core" / "memory.py",
             Path(__file__).parent.parent / "paw" / "core" / "executor_policy.py",

@@ -19,15 +19,9 @@ from __future__ import annotations
 
 import pytest
 
-from paw.core import (
-    AutonomyController,
-    AutonomyDecision,
-    AutonomyProfile,
-    Capability,
-    PolicyDecision,
-    PolicyGuard,
-    StopReason,
-)
+from paw.core.autonomy import AutonomyController, AutonomyDecision, AutonomyProfile
+from paw.core.models import Capability, PolicyDecision, StopReason
+from paw.core.policy import PolicyGuard
 from paw.core.ledger import TaskLedger
 from paw.core.policy import PolicyDecisionDetail, RequestVerdict
 

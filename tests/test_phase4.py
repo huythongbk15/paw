@@ -9,10 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from paw.core import (
-    Capability,
-    ModelManifest,
-    ModelRole,
+from paw.core.models import Capability, ModelManifest, ModelRole
+from paw.core.model_router import (
     ModelRouter,
     ModelRegistry,
     ModelScore,

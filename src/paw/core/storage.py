@@ -470,6 +470,33 @@ class Database:
         version = int(row[0]) if row else 0
         if version >= SCHEMA_VERSION:
             return
+        # Migrate skills table FIRST: add columns introduced after the table
+        # first shipped. The table may already exist from an older schema that
+        # lacked these columns; CREATE TABLE IF NOT EXISTS does not alter it,
+        # which leaves the skill_ai FTS trigger (created by SCHEMA) referencing
+        # non-existent columns. SQLite re-validates every trigger on any ALTER
+        # TABLE, so these columns must exist before the model_selections
+        # rename below, otherwise that ALTER raises "error in trigger skill_ai".
+        skills_cursor = await self._conn.execute("PRAGMA table_info(skills)")
+        skills_cols = {row[1] for row in await skills_cursor.fetchall()}
+        skills_additions = {
+            "version": "TEXT NOT NULL DEFAULT '1.0.0'",
+            "description": "TEXT",
+            "category": "TEXT NOT NULL DEFAULT 'general'",
+            "capabilities": "TEXT",
+            "risk": "TEXT NOT NULL DEFAULT 'low'",
+            "network": "BOOLEAN NOT NULL DEFAULT 0",
+            "write": "BOOLEAN NOT NULL DEFAULT 0",
+            "body": "TEXT NOT NULL DEFAULT ''",
+            "executors": "TEXT",
+            "dependencies": "TEXT",
+            "metadata": "TEXT",
+        }
+        for col, col_def in skills_additions.items():
+            if col not in skills_cols:
+                await self._conn.execute(
+                    f"ALTER TABLE skills ADD COLUMN {col} {col_def}"
+                )
         info_cursor = await self._conn.execute("PRAGMA table_info(model_selections)")
         columns = await info_cursor.fetchall()
         primary_key = [column[1] for column in columns if column[5]]

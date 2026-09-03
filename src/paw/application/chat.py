@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 import json
-import re
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from paw.core.approval import ApprovalRequest, ApprovalStore
 from paw.core.autonomy import AutonomyBudget, AutonomyController, AutonomyProfile
 from paw.core.context_compiler import ContextCompiler
+from paw.core.executor import CapabilityRouter, ExecutorRegistry, MockExecutor
 from paw.core.model_executor import ModelExecutor
 from paw.core.model_router import ModelRouter, ProviderRegistry
 from paw.core.models import (
@@ -29,6 +30,26 @@ from paw.core.session import SessionManager
 from paw.core.skills import get_skill_fabric
 from paw.core.storage import db
 from paw.core.task import Task, TaskManager
+from paw.executors.filesystem import LocalFilesystemExecutor
+
+from .chat_inspection import (
+    artifacts_projection,
+    checkpoint_projection,
+    explain_projection,
+    ledger_projection,
+    plan_projection,
+    policy_projection,
+    skills_projection,
+)
+from .chat_intents import (
+    change_preview as build_change_preview,
+)
+from .chat_intents import (
+    infer_capabilities as infer_chat_capabilities,
+)
+from .chat_intents import (
+    parse_filesystem_intent,
+)
 
 
 def _now() -> datetime:
@@ -99,6 +120,7 @@ class ChatReply:
     model: str | None = None
     executor: str | None = None
     context_compiled: bool = False
+    artifacts: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -211,10 +233,17 @@ class ChatService:
     MAX_MODEL_MESSAGES = 32
     MAX_MODEL_CHARS = 16000
 
-    def __init__(self, provider_mode: str = "local"):
+    def __init__(
+        self,
+        provider_mode: str = "local",
+        workspace_root: str | Path | None = None,
+    ):
         if provider_mode not in {"local", "auto", "ollama"}:
             raise ValueError("provider_mode must be one of: local, auto, ollama")
         self.provider_mode = provider_mode
+        self.workspace_root = Path(workspace_root or Path.cwd()).resolve()
+        if not self.workspace_root.is_dir():
+            raise ValueError(f"workspace root is not a directory: {self.workspace_root}")
         self.session: ChatSessionRecord | None = None
         self._providers = ProviderRegistry()
         if self.provider_mode in {"auto", "ollama"}:
@@ -225,6 +254,10 @@ class ChatService:
         self._model_executor: ModelExecutor | None = ModelExecutor(
             provider_registry=self._providers
         )
+        self._executor_registry = ExecutorRegistry()
+        self._executor_registry.register(LocalFilesystemExecutor(self.workspace_root))
+        self._executor_registry.register(MockExecutor())
+        self._capability_router = CapabilityRouter(self._executor_registry)
 
     async def open(self, session_id: str | None = None) -> ChatSessionRecord:
         await db.initialize()
@@ -234,6 +267,15 @@ class ChatService:
                 raise ValueError(f"Unknown chat session: {session_id}")
         else:
             self.session = await ChatStateStore.create_session()
+        stored_workspace = self.session.metadata.get("workspace_root")
+        if stored_workspace and Path(stored_workspace).resolve() != self.workspace_root:
+            raise ValueError(
+                "Chat session belongs to workspace "
+                f"{stored_workspace}; reopen it with --workspace {stored_workspace}"
+            )
+        if not stored_workspace:
+            self.session.metadata["workspace_root"] = str(self.workspace_root)
+            await ChatStateStore.save_session(self.session)
         return self.session
 
     async def close(self) -> None:
@@ -247,44 +289,17 @@ class ChatService:
         return self.session
 
     @staticmethod
-    def infer_capabilities(message: str) -> list[Capability]:
+    def _parse_filesystem_intent(message: str) -> dict[str, Any] | None:
+        return parse_filesystem_intent(message)
+
+    @staticmethod
+    def _change_preview(intent: dict[str, Any]) -> str | None:
+        return build_change_preview(intent)
+
+    @classmethod
+    def infer_capabilities(cls, message: str) -> list[Capability]:
         """Conservative deterministic intent-to-capability projection."""
-        normalized = re.sub(r"\s+", " ", message.strip().lower())
-        capabilities = [Capability.MODEL_INFERENCE]
-        rules: list[tuple[Capability, tuple[str, ...]]] = [
-            (
-                Capability.FILESYSTEM_DELETE,
-                ("delete file", "remove file", "xóa file", "xoá file"),
-            ),
-            (
-                Capability.GIT_WRITE,
-                ("git commit", "git push", "commit code", "push code"),
-            ),
-            (
-                Capability.SHELL_EXECUTE,
-                ("run command", "execute command", "chạy lệnh", "thực thi lệnh"),
-            ),
-            (
-                Capability.FILESYSTEM_WRITE,
-                ("write file", "create file", "edit file", "ghi file", "tạo file", "sửa file"),
-            ),
-            (
-                Capability.NETWORK_HTTP,
-                ("http://", "https://", "browse web", "search web", "tra cứu web"),
-            ),
-            (
-                Capability.FILESYSTEM_READ,
-                ("read file", "đọc file", "inspect file", "xem file"),
-            ),
-            (
-                Capability.GIT_READ,
-                ("git status", "git log", "xem git"),
-            ),
-        ]
-        for capability, markers in rules:
-            if any(marker in normalized for marker in markers):
-                capabilities.append(capability)
-        return list(dict.fromkeys(capabilities))
+        return infer_chat_capabilities(message)
 
     @classmethod
     def _bounded_model_messages(cls, history: list[ChatMessage]) -> list[dict[str, str]]:
@@ -328,6 +343,7 @@ class ChatService:
                     checkpoint_id=session.last_checkpoint_id,
                 )
 
+        filesystem_intent = self._parse_filesystem_intent(message)
         capabilities = self.infer_capabilities(message)
         task = await TaskManager.create(
             session_id=session.session_id,
@@ -345,19 +361,45 @@ class ChatService:
         )
 
         history = await ChatStateStore.history(session.session_id)
+        action_context: dict[str, Any] = {
+            "session_id": session.session_id,
+            "provider_mode": self.provider_mode,
+            "history_messages": len(history),
+            "workspace_root": str(self.workspace_root),
+        }
+        action_metadata: dict[str, Any] = {
+            "done": True,
+            "messages": self._bounded_model_messages(history),
+            "chat_session_id": session.session_id,
+            "preferred_executor": "mock",
+        }
+        if filesystem_intent:
+            target = (
+                self.workspace_root / str(filesystem_intent.get("path") or ".")
+            ).resolve(strict=False)
+            action_context.update(
+                {
+                    "path": str(target),
+                    "filesystem_operation": filesystem_intent["operation"],
+                    "size": len(
+                        str(filesystem_intent.get("content") or "").encode("utf-8")
+                    ),
+                }
+            )
+            action_metadata.update(
+                {
+                    "filesystem": filesystem_intent,
+                    "preferred_executor": "local-filesystem",
+                    "model_required": False,
+                    "change_preview": self._change_preview(filesystem_intent),
+                }
+            )
+
         action = ProposedAction(
             goal=message,
             capabilities=capabilities,
-            context={
-                "session_id": session.session_id,
-                "provider_mode": self.provider_mode,
-                "history_messages": len(history),
-            },
-            metadata={
-                "done": True,
-                "messages": self._bounded_model_messages(history),
-                "chat_session_id": session.session_id,
-            },
+            context=action_context,
+            metadata=action_metadata,
             operation_id=f"chat-{task.id}",
             idempotency_key=f"chat:{task.id}",
         )
@@ -379,6 +421,7 @@ class ChatService:
             model_router=self._model_router,
             model_executor=self._model_executor,
             skill_fabric=await get_skill_fabric(),
+            capability_router=self._capability_router,
             approval_store=ApprovalStore,
             max_iterations=1,
             checkpoint_interval=1,
@@ -423,6 +466,7 @@ class ChatService:
         result = observation.result if observation and isinstance(observation.result, dict) else {}
         model = result.get("model")
         executor = result.get("executor")
+        artifacts = result.get("artifacts") or []
         reason = outcome.reason.value if hasattr(outcome.reason, "value") else outcome.reason
 
         if outcome.waiting_for_approval:
@@ -441,6 +485,10 @@ class ChatService:
                 f"Approval: `{approval_id}`. Chưa gọi model hoặc executor. "
                 "Dùng `/approve` để cho phép chạy đúng operation này."
             )
+            if pending:
+                preview = pending.action.metadata.get("change_preview")
+                if preview:
+                    content = f"{content}\n\n```diff\n{preview}\n```"
             status = "waiting_approval"
         elif reason == StopReason.POLICY_DENIED.value:
             session.pending_approval_id = None
@@ -453,7 +501,16 @@ class ChatService:
             session.pending_approval_id = None
             session.last_checkpoint_id = outcome.checkpoint_id
             await ChatStateStore.save_session(session)
-            content = str(result.get("model_response") or result.get("output") or "Đã hoàn thành.")
+            content = str(result.get("model_response") or "").strip()
+            if not content:
+                # The model produced no response. Surface the model error
+                # honestly instead of presenting the (possibly mock)
+                # capability-executor output as if it were the assistant's answer.
+                model_error = result.get("model_error")
+                if model_error:
+                    content = f"[model không phản hồi: {model_error}]"
+                else:
+                    content = str(result.get("output") or "").strip() or "Đã hoàn thành."
             status = "completed"
             approval_id = None
         else:
@@ -496,6 +553,7 @@ class ChatService:
             model=model,
             executor=executor,
             context_compiled=outcome.context_compiled,
+            artifacts=artifacts,
         )
 
     async def approve(
@@ -620,10 +678,48 @@ class ChatService:
             "approval_status": approval.status.value if approval else None,
             "last_checkpoint_id": session.last_checkpoint_id,
             "provider_mode": self.provider_mode,
+            "workspace_root": str(self.workspace_root),
             "selected_model": task.selected_model if task else None,
             "selected_executor": task.selected_executor if task else None,
             "messages": len(await self.history()),
         }
+
+    async def plan(self) -> dict[str, Any] | None:
+        """Return the current operation proposal without hidden prompt history."""
+        session = self._require_session()
+        return plan_projection(session.current_task_id, session.metadata.get("last_action"))
+
+    async def ledger(self, limit: int = 100) -> list[dict[str, Any]]:
+        """Return the current task's ordered audit events."""
+        return await ledger_projection(self._require_session().current_task_id, limit)
+
+    async def checkpoint(self) -> dict[str, Any] | None:
+        """Return a bounded checkpoint summary for the current task."""
+        return await checkpoint_projection(self._require_session().current_task_id)
+
+    async def policy(self) -> dict[str, Any]:
+        """Explain the latest policy verdict and durable approval state."""
+        session = self._require_session()
+        return await policy_projection(
+            session.current_task_id,
+            session.pending_approval_id,
+        )
+
+    async def skills(self) -> dict[str, Any]:
+        """Explain selected skills and context compilation for the current task."""
+        return await skills_projection(self._require_session().current_task_id)
+
+    async def artifacts(self) -> list[dict[str, Any]]:
+        """Return artifacts recorded in the current task result."""
+        return await artifacts_projection(self._require_session().current_task_id)
+
+    async def explain(self) -> dict[str, Any]:
+        """Summarize why the latest task took its observed path."""
+        session = self._require_session()
+        return await explain_projection(
+            session.current_task_id,
+            session.metadata.get("last_action"),
+        )
 
 
 __all__ = [

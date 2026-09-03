@@ -9,21 +9,19 @@ from pathlib import Path
 
 import pytest
 
-from paw.core import (
-    Capability,
-    Executor,
-    ExecutorResult,
-    ExecutorRegistry,
-    ExecutorCapabilities,
-    ExecutableTask,
-    MockExecutor,
+from paw.core.models import Capability, CapabilityManifest, CapabilityScore
+from paw.core.executor import (
     CapabilityRouter,
-    CapabilityManifest,
-    CapabilityScore,
-    Task,
-    get_capability_router,
+    ExecutableTask,
+    Executor,
+    ExecutorCapabilities,
+    ExecutorRegistry,
+    ExecutorResult,
+    MockExecutor,
     executor_registry,
+    get_capability_router,
 )
+from paw.core.task import Task
 from paw.core.storage import db, set_db_path
 
 

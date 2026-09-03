@@ -1,6 +1,7 @@
 # PAW — Personal Agent Workstation
 
-PAW is an alpha, local-first personal agent runtime for bounded, policy-gated,
+PAW is an alpha, local-first engineering agent runtime for understanding,
+changing and verifying software projects through bounded, policy-gated,
 observable and resumable task execution. PAW owns its task, context, policy,
 autonomy, routing, ledger and checkpoint contracts; external model providers
 and executors are replaceable adapters.
@@ -24,9 +25,10 @@ paw chat
 
 `paw chat` runs each turn through Task → Context/Skills → Policy/Autonomy →
 Model/Capability routing → Executor → Observation → Ledger/Checkpoint. Use
-`/status`, `/history`, `/approve`, `/resume`, `/cancel`, and `/exit`. The
-default model/executor are deterministic local stand-ins for safe offline
-verification; they are not production automation.
+`/status`, `/history`, `/plan`, `/why`, `/ledger`, `/checkpoint`, `/policy`,
+`/skills`, `/artifacts`, `/approve`, `/resume`, `/cancel`, and `/exit`.
+General chat retains a deterministic stand-in; structured filesystem commands
+use a workspace-scoped local executor and writes require exact approval.
 
 Project source and canonical architecture documents:
 [github.com/huythongbk15/paw](https://github.com/huythongbk15/paw)

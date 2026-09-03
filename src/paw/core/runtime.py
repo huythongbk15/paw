@@ -54,24 +54,25 @@ import copy
 import json
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from types import SimpleNamespace
 from typing import Any
 
 from .autonomy import AutonomyController, AutonomyDecision, StopReason
 from .checkpoint import CheckpointManager, OperationRecordStore
-from .executor import CapabilityRouter, get_capability_router
+from .executor import (
+    CapabilityRouter,
+    EffectIntent,
+    ExecutableTask,
+    ExecutorResult,
+    get_capability_router,
+)
 from .ledger import (
     TaskEventType,
     TaskLedger,
     log_autonomy_gate_evaluated,
-    log_checkpoint_created,
     log_checkpoint_restored,
     log_operation_recorded,
     log_policy_gate_evaluated,
-    log_step_completed,
-    log_step_executed,
     log_step_proposed,
-    log_task_completed,
 )
 from .logging import get_logger
 from .models import (
@@ -83,6 +84,7 @@ from .models import (
     TaskStatus,
 )
 from .policy import RequestVerdict
+from .runtime_persistence import RuntimePersistence
 from .task import TaskManager
 from .task_scheduler import TaskScheduleStatus
 
@@ -497,6 +499,19 @@ class RuntimeOutcome:
     context_compiled: bool = False
 
 
+@dataclass
+class _UnitExecutionResult:
+    """Internal result of the one canonical executable-unit pipeline."""
+
+    gate: RuntimeOutcome | None = None
+    observation: ExecutionObservation | None = None
+    progress: float = 0.0
+    done: bool = False
+    operation_completed: bool = False
+    model_selections: list[str] = field(default_factory=list)
+    skills_used: list[str] = field(default_factory=list)
+
+
 # A step function receives the task id and the proposed action and returns an
 # ExecutionObservation. Returning an observation with ``done=True`` signals
 # task completion.
@@ -586,6 +601,22 @@ class PawRuntime:
         self.execution_profile = execution_profile or None
 
         self._max_iterations = max_iterations
+
+    def _prepare_agent_action(self, proposed: ProposedAction) -> ProposedAction:
+        """Make legacy agent proposals explicit about model execution.
+
+        Agent proposals historically implied an execution-stage model call.
+        Keep that compatibility by materializing ``model.inference`` on the
+        proposal. Deterministic actions opt out with ``model_required=False``.
+        """
+        model_required = proposed.metadata.get("model_required", True)
+        if (
+            model_required
+            and self.model_router is not None
+            and Capability.MODEL_INFERENCE not in proposed.capabilities
+        ):
+            proposed.capabilities.insert(0, Capability.MODEL_INFERENCE)
+        return proposed
 
     # ------------------------------------------------------------------
     # Public: black-box loop (user-supplied step_fn) — Phase 19 contract
@@ -720,15 +751,17 @@ class PawRuntime:
                 # The brain works with a serializable context dict, not a
                 # TaskContext object.
                 brain_ctx = ctx.to_dict() if hasattr(ctx, "to_dict") else ctx
-                return await brain_fn(tid, goal, brain_ctx, last_obs)
-            return await agent_proposer.propose(
-                task_id=tid,
-                task_goal=goal,
-                context=ctx,
-                candidates=candidates,
-                last_observation=last_obs,
-                autonomy_usage=usage,
-            )
+                proposed = await brain_fn(tid, goal, brain_ctx, last_obs)
+            else:
+                proposed = await agent_proposer.propose(
+                    task_id=tid,
+                    task_goal=goal,
+                    context=ctx,
+                    candidates=candidates,
+                    last_observation=last_obs,
+                    autonomy_usage=usage,
+                )
+            return self._prepare_agent_action(proposed)
 
         return await self._loop(
             task_id,
@@ -848,10 +881,15 @@ class PawRuntime:
                     {"node": node.id, "executed": False, "blocked": True, "error": error},
                 )
                 checkpoint = await self._create_checkpoint(
-                    task_id, restored_context, idx, 0.0, "graph_failed"
+                    task_id,
+                    restored_context,
+                    idx,
+                    0.0,
+                    "graph_failed",
+                    task_status=TaskStatus.FAILED,
+                    error=error,
+                    terminal_summary=error,
                 )
-                await log_task_completed(task_id, "failed", error)
-                await self._set_task_status(task_id, TaskStatus.FAILED, error)
                 return RuntimeOutcome(
                     stopped=True,
                     reason=StopReason.TASK_FAILED,
@@ -896,73 +934,82 @@ class PawRuntime:
                     task_id, node_goal, context=compiled_ctx, candidates=candidates,
                     last_observation=last_observation, autonomy_usage=self.autonomy.usage.to_dict(),
                 )
+            proposed = self._prepare_agent_action(proposed)
 
             # Graph node operation IDs are stable across process restarts;
             # this is the idempotency key used by graph resume.
             proposed.operation_id = node_operation_id
 
-            if proposed.metadata.get("selected_skill"):
-                skills_used.append(proposed.metadata["selected_skill"])
-                await TaskLedger.record(
-                    task_id, TaskEventType.SKILL_SELECTED,
-                    {"skills": [proposed.metadata["selected_skill"]], "node": node.id},
-                )
-
-            await log_step_proposed(
-                task_id, proposed.operation_id, proposed.goal,
-                [c.value for c in proposed.capabilities],
-                proposed.estimated_cost.model_dump() if proposed.estimated_cost else None,
+            unit = await self._execute_unit(
+                task_id,
+                proposed,
+                iteration_index=idx,
+                step_fn=self._execute_action,
+                operation_type="node",
+                step_id=f"node_{node.id}",
+                ledger_context={"node": node.id},
             )
+            skills_used.extend(unit.skills_used)
+            model_selections.extend(unit.model_selections)
 
-            # --- Single authority gate (policy + autonomy) ---
-            gate = await self._gate_action(task_id, proposed, idx)
-            if gate is not None:
+            if unit.gate is not None:
+                gate = unit.gate
+                gate_status = (
+                    TaskStatus.BLOCKED
+                    if gate.waiting_for_approval
+                    else TaskStatus.FAILED
+                )
+                checkpoint = await self._create_checkpoint(
+                    task_id,
+                    restored_context,
+                    idx + 1,
+                    0.0,
+                    "awaiting_approval" if gate.waiting_for_approval else "graph_gate_failed",
+                    task_status=gate_status,
+                    error=str(gate.reason) if gate.reason else None,
+                )
                 return RuntimeOutcome(
-                    stopped=True, reason=gate.reason, step_called=step_called,
-                    iterations=idx, waiting_for_approval=gate.waiting_for_approval,
-                    model_selections=model_selections, skills_used=skills_used,
+                    stopped=True,
+                    reason=gate.reason,
+                    step_called=step_called,
+                    iterations=idx,
+                    waiting_for_approval=gate.waiting_for_approval,
+                    approval_id=gate.approval_id,
+                    checkpoint_id=checkpoint.checkpoint_id if checkpoint else None,
+                    operations_completed=operations_completed,
+                    model_selections=model_selections,
+                    skills_used=skills_used,
                     context_compiled=context_compiled,
                 )
 
-            # --- CONTINUE -> Execute node ---
+            observation = unit.observation
+            if observation is None:  # pragma: no cover - internal contract guard
+                raise RuntimeError("executable-unit pipeline returned no observation")
             step_called = True
-            observation = await self._execute_action(task_id, proposed)
-            observation.action_id = proposed.operation_id
-            observation.step_id = f"node_{node.id}"
-            await log_step_executed(
-                task_id, proposed.operation_id, observation.success,
-                observation.resources_used.model_dump() if observation.resources_used else None,
-                observation.error,
-            )
-            if observation.resources_used:
-                self.autonomy.usage.model_calls += observation.resources_used.model_calls
-                self.autonomy.usage.tool_calls += observation.resources_used.tool_calls
-                self.autonomy.usage.total_tokens += observation.resources_used.tokens
-                self.autonomy.usage.wall_time_seconds += (
-                    observation.resources_used.wall_time_ms / 1000.0
-                )
-            graph_progress = 0.0
-            if isinstance(observation.result, dict):
-                graph_progress = float(observation.result.get("progress", 0.0))
-            await self.autonomy.record_iteration(graph_progress)
-            if observation.success:
-                await self.checkpoint_mgr.record_operation(
-                    task_id=task_id, op_id=proposed.operation_id, op_type="node",
-                    status="completed", result_ref=f"observation:{observation.step_id}",
-                )
-                await log_operation_recorded(task_id, proposed.operation_id, "node", "completed")
+            last_observation = observation
+
+            if unit.operation_completed:
                 operations_completed += 1
                 completed_op_ids.add(proposed.operation_id)
                 completed_nodes.add(node.id)
-                await self.task_scheduler.update_node_status(node.id, TaskScheduleStatus.COMPLETED)
+                await self.task_scheduler.update_node_status(
+                    node.id, TaskScheduleStatus.COMPLETED
+                )
             else:
-                await self.task_scheduler.update_node_status(node.id, TaskScheduleStatus.FAILED)
+                await self.task_scheduler.update_node_status(
+                    node.id, TaskScheduleStatus.FAILED
+                )
                 failed_nodes.add(node.id)
                 checkpoint = await self._create_checkpoint(
-                    task_id, restored_context, idx + 1, 0.0, "graph_failed"
+                    task_id,
+                    restored_context,
+                    idx + 1,
+                    unit.progress,
+                    "graph_failed",
+                    task_status=TaskStatus.FAILED,
+                    error=observation.error,
+                    terminal_summary=observation.error or f"node {node.id} failed",
                 )
-                await log_task_completed(task_id, "failed", observation.error or f"node {node.id} failed")
-                await self._set_task_status(task_id, TaskStatus.FAILED, observation.error)
                 return RuntimeOutcome(
                     stopped=True,
                     reason=StopReason.TASK_FAILED,
@@ -976,17 +1023,17 @@ class PawRuntime:
                     context_compiled=context_compiled,
                 )
 
-            last_observation = observation
-            if isinstance(observation.result, dict) and observation.result.get("model"):
-                model_selections.append(str(observation.result["model"]))
-
         # All nodes executed -> terminal completion (autonomy owns the decision)
         decision, stop = await self.autonomy.mark_complete()
         checkpoint = await self._create_checkpoint(
-            task_id, restored_context, len(ordered), 1.0, "graph_completed"
+            task_id,
+            restored_context,
+            len(ordered),
+            1.0,
+            "graph_completed",
+            task_status=TaskStatus.COMPLETED,
+            terminal_summary=f"graph:{len(ordered)} nodes",
         )
-        await log_task_completed(task_id, "completed", f"graph:{len(ordered)} nodes")
-        await self._set_task_status(task_id, TaskStatus.COMPLETED)
 
         return RuntimeOutcome(
             stopped=True, reason=stop, step_called=step_called, iterations=len(ordered),
@@ -995,6 +1042,96 @@ class PawRuntime:
             operations_completed=operations_completed, model_selections=model_selections,
             skills_used=skills_used, context_compiled=context_compiled,
         )
+
+    async def _execute_unit(
+        self,
+        task_id: str,
+        proposed: ProposedAction,
+        *,
+        iteration_index: int,
+        step_fn: StepFn,
+        operation_type: str,
+        step_id: str,
+        ledger_context: dict[str, Any] | None = None,
+    ) -> _UnitExecutionResult:
+        """Gate, execute, observe and durably record one proposed operation.
+
+        Single-task, agent and graph modes all pass through this method. Loop
+        selection, context compilation and graph dependency transitions remain
+        outside; the safety and side-effect pipeline has exactly one owner.
+        """
+        ledger_context = dict(ledger_context or {})
+        result = _UnitExecutionResult()
+
+        selected_skill = proposed.metadata.get("selected_skill")
+        if selected_skill:
+            result.skills_used.append(str(selected_skill))
+            await TaskLedger.record(
+                task_id,
+                TaskEventType.SKILL_SELECTED,
+                {"skills": [selected_skill], **ledger_context},
+            )
+
+        selected_model = proposed.metadata.get("model_selection")
+        if selected_model:
+            result.model_selections.append(str(selected_model))
+
+        await log_step_proposed(
+            task_id,
+            proposed.operation_id,
+            proposed.goal,
+            [capability.value for capability in proposed.capabilities],
+            proposed.estimated_cost.model_dump() if proposed.estimated_cost else None,
+        )
+
+        result.gate = await self._gate_action(task_id, proposed, iteration_index)
+        if result.gate is not None:
+            return result
+
+        observation = await step_fn(task_id, proposed)
+        observation.action_id = proposed.operation_id
+        observation.step_id = step_id
+        result.observation = observation
+
+        if isinstance(observation.result, dict):
+            result.progress = float(observation.result.get("progress", 0.0))
+            result.done = bool(observation.result.get("done", False))
+            observed_model = observation.result.get("model")
+            if observed_model:
+                result.model_selections.append(str(observed_model))
+
+        operation_status = "completed" if observation.success else "failed"
+        operation_metadata: dict[str, Any] = {}
+        if isinstance(observation.result, dict):
+            effect_intent = observation.result.get("effect_intent")
+            if isinstance(effect_intent, dict):
+                operation_metadata["effect_intent"] = effect_intent
+        await RuntimePersistence.commit_operation(
+            task_id=task_id,
+            operation_id=proposed.operation_id,
+            op_type=operation_type,
+            status=operation_status,
+            result_ref=f"observation:{observation.step_id}",
+            observation=observation,
+            done=result.done,
+            progress=result.progress,
+            ledger_context=ledger_context,
+            operation_metadata=operation_metadata,
+        )
+        result.operation_completed = observation.success
+        if observation.success and self.approval_store is not None:
+            await self.approval_store.consume(task_id, proposed)
+
+        if observation.resources_used:
+            self.autonomy.usage.model_calls += observation.resources_used.model_calls
+            self.autonomy.usage.tool_calls += observation.resources_used.tool_calls
+            self.autonomy.usage.total_tokens += observation.resources_used.tokens
+            self.autonomy.usage.wall_time_seconds += (
+                observation.resources_used.wall_time_ms / 1000.0
+            )
+
+        await self.autonomy.record_iteration(result.progress)
+        return result
 
     # ------------------------------------------------------------------
     # Internal: the single authority gate (policy + autonomy)
@@ -1103,10 +1240,6 @@ class PawRuntime:
             AutonomyDecision.ESCALATE,
             AutonomyDecision.DELEGATE,
         ):
-            if decision == AutonomyDecision.PAUSE:
-                await self._create_checkpoint(
-                    task_id, {}, i, 0.0, f"paused_{decision.value}"
-                )
             return RuntimeOutcome(
                 stopped=True,
                 reason=stop_reason or decision.value,
@@ -1237,117 +1370,64 @@ class PawRuntime:
                 continue
 
             iterations += 1
-            # Track agent-loop signals
-            if proposed.metadata.get("selected_skill"):
-                skills_used.append(proposed.metadata["selected_skill"])
-                await TaskLedger.record(
-                    task_id,
-                    TaskEventType.SKILL_SELECTED,
-                    {"skills": [proposed.metadata["selected_skill"]]},
-                )
-            if proposed.metadata.get("model_selection"):
-                model_selections.append(proposed.metadata["model_selection"])
-
-            # Log proposed step
-            await log_step_proposed(
+            unit = await self._execute_unit(
                 task_id,
-                proposed.operation_id,
-                proposed.goal,
-                [c.value for c in proposed.capabilities],
-                proposed.estimated_cost.model_dump() if proposed.estimated_cost else None,
+                proposed,
+                iteration_index=iterations - 1,
+                step_fn=step_fn,
+                operation_type="step",
+                step_id=f"step_{iterations}",
             )
+            skills_used.extend(unit.skills_used)
+            model_selections.extend(unit.model_selections)
 
-            # --- Policy + Autonomy gate (single authority, before side effect) ---
-            gate = await self._gate_action(task_id, proposed, iterations - 1)
-            if gate is not None:
-                if gate.waiting_for_approval:
-                    checkpoint = await self._create_checkpoint(
-                        task_id,
-                        context,
-                        iterations,
-                        progress,
-                        "awaiting_approval",
-                    )
-                    gate.checkpoint_id = checkpoint.checkpoint_id if checkpoint else None
-                await self._set_task_status(
-                    task_id,
-                    TaskStatus.BLOCKED if gate.waiting_for_approval else TaskStatus.FAILED,
-                    str(gate.reason) if gate.reason else None,
+            if unit.gate is not None:
+                gate = unit.gate
+                gate_status = (
+                    TaskStatus.BLOCKED
+                    if gate.waiting_for_approval
+                    else TaskStatus.FAILED
                 )
+                checkpoint = await self._create_checkpoint(
+                    task_id,
+                    context,
+                    iterations,
+                    progress,
+                    "awaiting_approval" if gate.waiting_for_approval else "gate_failed",
+                    task_status=gate_status,
+                    error=str(gate.reason) if gate.reason else None,
+                )
+                gate.checkpoint_id = checkpoint.checkpoint_id if checkpoint else None
+                gate.step_called = step_called
+                gate.iterations = iterations
+                gate.operations_completed = operations_completed
+                gate.model_selections = model_selections
+                gate.skills_used = skills_used
+                gate.context_compiled = context_compiled
                 return gate
 
-            # --- 4. CONTINUE -> Execute step ---
+            observation = unit.observation
+            if observation is None:  # pragma: no cover - internal contract guard
+                raise RuntimeError("executable-unit pipeline returned no observation")
             step_called = True
-            observation = await step_fn(task_id, proposed)
+            progress = unit.progress
+            last_observation = observation
 
-            # Ensure observation has the action_id for tracking
-            observation.action_id = proposed.operation_id
-            observation.step_id = f"step_{iterations}"
-
-            # Log step execution
-            await log_step_executed(
-                task_id,
-                proposed.operation_id,
-                observation.success,
-                observation.resources_used.model_dump() if observation.resources_used else None,
-                observation.error,
-            )
-
-            # --- 5. Record OperationRecord for replay safety ---
-            if observation.success:
-                await self.checkpoint_mgr.record_operation(
-                    task_id=task_id,
-                    op_id=proposed.operation_id,
-                    op_type="step",
-                    status="completed",
-                    result_ref=f"observation:{observation.step_id}",
-                )
-                await log_operation_recorded(
-                    task_id, proposed.operation_id, "step", "completed"
-                )
+            if unit.operation_completed:
                 operations_completed += 1
                 completed_op_ids.add(proposed.operation_id)
-                if self.approval_store is not None:
-                    await self.approval_store.consume(task_id, proposed)
-            else:
-                await self.checkpoint_mgr.record_operation(
-                    task_id=task_id,
-                    op_id=proposed.operation_id,
-                    op_type="step",
-                    status="failed",
-                    result_ref=f"observation:{observation.step_id}",
-                )
-                await log_operation_recorded(
-                    task_id, proposed.operation_id, "step", "failed"
-                )
-
-            # --- 6. Update autonomy usage from observation ---
-            if observation.resources_used:
-                self.autonomy.usage.model_calls += observation.resources_used.model_calls
-                self.autonomy.usage.tool_calls += observation.resources_used.tool_calls
-                self.autonomy.usage.total_tokens += observation.resources_used.tokens
-                self.autonomy.usage.wall_time_seconds += observation.resources_used.wall_time_ms / 1000.0
-
-            # --- 7. Record iteration progress ---
-            progress = 0.0
-            if isinstance(observation.result, dict):
-                progress = observation.result.get("progress", 0.0)
-            await self.autonomy.record_iteration(progress)
-
-            # Log step completion
-            done = bool(isinstance(observation.result, dict) and observation.result.get("done", False))
-            await log_step_completed(task_id, proposed.operation_id, done, progress)
-
-            last_observation = observation
-            if isinstance(observation.result, dict) and observation.result.get("model"):
-                model_selections.append(str(observation.result["model"]))
 
             if not observation.success:
                 checkpoint = await self._create_checkpoint(
-                    task_id, context, iterations, progress, "failed"
+                    task_id,
+                    context,
+                    iterations,
+                    progress,
+                    "failed",
+                    task_status=TaskStatus.FAILED,
+                    error=observation.error,
+                    terminal_summary=observation.error or "execution failed",
                 )
-                await log_task_completed(task_id, "failed", observation.error or "execution failed")
-                await self._set_task_status(task_id, TaskStatus.FAILED, observation.error)
                 return RuntimeOutcome(
                     stopped=True,
                     reason=StopReason.TASK_FAILED,
@@ -1362,17 +1442,20 @@ class PawRuntime:
                 )
 
             # --- 8. Check for task completion ---
-            if done:
+            if unit.done:
                 # Task observed complete -> autonomy owns the terminal decision
                 decision, stop = await self.autonomy.mark_complete()
 
                 # Final checkpoint on completion
                 checkpoint = await self._create_checkpoint(
-                    task_id, context, iterations, progress, "completed"
+                    task_id,
+                    context,
+                    iterations,
+                    progress,
+                    "completed",
+                    task_status=TaskStatus.COMPLETED,
+                    terminal_summary=_summary(observation),
                 )
-
-                await log_task_completed(task_id, "completed", _summary(observation))
-                await self._set_task_status(task_id, TaskStatus.COMPLETED)
 
                 return RuntimeOutcome(
                     stopped=True,
@@ -1404,12 +1487,12 @@ class PawRuntime:
                     "stall_state": {},
                 },
                 loop_state={"iteration": iterations, "decision_history": self.autonomy._decision_history},
+                persist=False,
             )
 
             if checkpoint:
-                await log_checkpoint_created(
-                    task_id, checkpoint.checkpoint_id, checkpoint.progress_ratio,
-                    checkpoint.current_step, checkpoint.total_steps
+                await RuntimePersistence.commit_checkpoint(
+                    checkpoint=checkpoint,
                 )
 
             # Update context from observation if it provides new info
@@ -1473,7 +1556,8 @@ class PawRuntime:
         # This is the execution-side model routing (distinct from the proposer's
         # planning-side model call) and is logged for both brain and proposer
         # paths so the ledger always records which model executed a step.
-        if self.model_router is not None:
+        needs_model = Capability.MODEL_INFERENCE in proposed.capabilities
+        if needs_model and self.model_router is not None:
             token_count = _token_count_from_context(proposed.context)
             try:
                 selection = await self.model_router.route(
@@ -1525,13 +1609,24 @@ class PawRuntime:
             complexity=self.complexity,
             privacy_required=self.privacy_required,
         )
-        best_detail = detailed_scores[0] if detailed_scores else None
+        eligible_details = [
+            detail for detail in detailed_scores if not detail.missing_capabilities
+        ]
+        preferred_executor = proposed.metadata.get("preferred_executor")
+        best_detail = next(
+            (
+                detail
+                for detail in eligible_details
+                if detail.executor_name == preferred_executor
+            ),
+            eligible_details[0] if eligible_details else None,
+        )
         executor = (
             self.capability_router.registry.get(best_detail.executor_name)
             if best_detail is not None else None
         )
         executor_score = best_detail.to_capability_score() if best_detail else None
-        if executor is None or (best_detail is not None and best_detail.missing_capabilities):
+        if executor is None:
             error = "no executor supports the proposed capabilities"
             await TaskLedger.record(
                 task_id,
@@ -1574,12 +1669,49 @@ class PawRuntime:
             context_value = context_value.to_dict()
         if not isinstance(context_value, str):
             context_value = json.dumps(context_value or {}, default=str)
-        executor_task = SimpleNamespace(
-            id=task_id,
+        executor_task = ExecutableTask(
+            task_id=task_id,
             goal=proposed.goal,
-            requested_capabilities=proposed.capabilities,
+            capabilities=proposed.capabilities,
+            context=context_value,
+            operation_id=proposed.operation_id,
+            idempotency_key=proposed.idempotency_key,
+            metadata=copy.deepcopy(proposed.metadata),
+            model=selected_model_name,
         )
-        executor_result = await executor.execute(executor_task, context_value)
+        effect_intent: EffectIntent | None = None
+        prepared_record = await OperationRecordStore.get(
+            task_id,
+            proposed.operation_id,
+        )
+        if prepared_record is not None and prepared_record.status == "prepared":
+            raw_intent = prepared_record.metadata.get("effect_intent")
+            try:
+                if not isinstance(raw_intent, dict):
+                    raise ValueError("prepared operation has no effect intent")
+                effect_intent = EffectIntent.from_dict(raw_intent)
+            except (KeyError, TypeError, ValueError) as exc:
+                executor_result = ExecutorResult(
+                    success=False,
+                    error=f"invalid prepared effect intent: {exc}",
+                    metadata={"reconciliation": "invalid"},
+                )
+            else:
+                executor_result = await executor.reconcile_effect(
+                    executor_task,
+                    context_value,
+                    effect_intent,
+                )
+        else:
+            effect_intent = await executor.prepare_effect(executor_task, context_value)
+            if effect_intent is not None:
+                await RuntimePersistence.prepare_operation(
+                    task_id=task_id,
+                    operation_id=proposed.operation_id,
+                    op_type="external_effect",
+                    effect_intent=effect_intent.to_dict(),
+                )
+            executor_result = await executor.execute(executor_task, context_value)
         executed = bool(executor_result.success)
 
         done = bool(proposed.metadata.get("done", False)) or bool(model_result.get("done", False))
@@ -1592,22 +1724,20 @@ class PawRuntime:
                 "response", proposed.metadata.get("model_response", "")
             ),
             "model": selected_model_name,
+            "model_error": (
+                model_result.get("error") if isinstance(model_result, dict) else None
+            ),
             "output": executor_result.output,
             "executor": executor.name,
+            "artifacts": executor_result.artifacts,
+            "executor_metadata": executor_result.metadata,
+            "effect_intent": effect_intent.to_dict() if effect_intent else None,
         }
 
-        await TaskLedger.record(
-            task_id,
-            TaskEventType.EXECUTION_COMPLETED,
-            {
-                "skill": skill_name,
-                "executed": executed,
-                "done": result["done"],
-                "error": executor_result.error,
-            },
-        )
-
-        resources = proposed.estimated_cost or ResourceUsage(model_calls=1, tool_calls=1)
+        resources = proposed.estimated_cost.model_copy(deep=True)
+        resources.tool_calls = max(resources.tool_calls, 1)
+        if needs_model and selected_model_name:
+            resources.model_calls = max(resources.model_calls, 1)
         return ExecutionObservation(
             step_id="",
             action_id=proposed.operation_id,
@@ -1624,11 +1754,19 @@ class PawRuntime:
         iteration: int,
         progress: float,
         tag: str,
+        *,
+        task_status: TaskStatus | None = None,
+        error: str | None = None,
+        terminal_summary: str | None = None,
     ):
-        """Create a forced checkpoint with the given tag."""
-        checkpoint = await self.checkpoint_mgr.force_checkpoint(
+        """Create and atomically commit a forced checkpoint transition."""
+        checkpoint = await self.checkpoint_mgr.prepare_checkpoint(
             task_id=task_id,
-            task_status="running" if tag == "running" else tag,
+            task_status=(
+                task_status.value
+                if isinstance(task_status, TaskStatus)
+                else ("running" if tag == "running" else tag)
+            ),
             current_step=iteration,
             total_steps=self._max_iterations or self.autonomy.budget.max_iterations,
             progress_ratio=progress,
@@ -1642,12 +1780,12 @@ class PawRuntime:
             loop_decision_history=self.autonomy._decision_history,
             tags=[tag],
         )
-        if checkpoint:
-            await log_checkpoint_created(
-                task_id, checkpoint.checkpoint_id, checkpoint.progress_ratio,
-                checkpoint.current_step, checkpoint.total_steps
-            )
-        return checkpoint
+        return await RuntimePersistence.commit_checkpoint(
+            checkpoint=checkpoint,
+            task_status=task_status,
+            error=error,
+            terminal_summary=terminal_summary,
+        )
 
 
 def _summary(obs: ExecutionObservation) -> str:

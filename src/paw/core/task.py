@@ -164,37 +164,79 @@ class TaskManager:
         return [Task.from_row(dict(r)) for r in rows]
 
     @staticmethod
-    async def update(task: Task) -> None:
+    async def update(task: Task, *, connection: Any | None = None) -> None:
         task.touch()
-        async with db.transaction() as conn:
-            await conn.execute(
-                """
-                UPDATE tasks SET
-                    parent_id = ?, session_id = ?, project_id = ?, goal = ?, status = ?,
-                    requested_capabilities = ?, selected_skills = ?, selected_executor = ?,
-                    selected_model = ?, result = ?, error = ?, updated_at = ?, completed_at = ?
-                WHERE id = ?
-                """,
-                (
-                    task.parent_id,
-                    task.session_id,
-                    task.project_id,
-                    task.goal,
-                    task.status.value,
-                    json.dumps([c.value for c in task.requested_capabilities]),
-                    json.dumps(task.selected_skills),
-                    task.selected_executor,
-                    task.selected_model,
-                    json.dumps(task.result) if task.result else None,
-                    task.error,
-                    task.updated_at.isoformat(),
-                    task.completed_at.isoformat() if task.completed_at else None,
-                    task.id,
-                ),
-            )
+        if connection is None:
+            async with db.transaction() as conn:
+                await TaskManager._update_row(task, conn)
+            return
+        await TaskManager._update_row(task, connection)
 
     @staticmethod
-    async def update_status(task_id: ID, status: TaskStatus, error: str | None = None) -> Task | None:
+    async def _update_row(task: Task, connection: Any) -> None:
+        await connection.execute(
+            """
+            UPDATE tasks SET
+                parent_id = ?, session_id = ?, project_id = ?, goal = ?, status = ?,
+                requested_capabilities = ?, selected_skills = ?, selected_executor = ?,
+                selected_model = ?, result = ?, error = ?, updated_at = ?, completed_at = ?
+            WHERE id = ?
+            """,
+            (
+                task.parent_id,
+                task.session_id,
+                task.project_id,
+                task.goal,
+                task.status.value,
+                json.dumps([c.value for c in task.requested_capabilities]),
+                json.dumps(task.selected_skills),
+                task.selected_executor,
+                task.selected_model,
+                json.dumps(task.result) if task.result else None,
+                task.error,
+                task.updated_at.isoformat(),
+                task.completed_at.isoformat() if task.completed_at else None,
+                task.id,
+            ),
+        )
+
+    @staticmethod
+    async def update_status(
+        task_id: ID,
+        status: TaskStatus,
+        error: str | None = None,
+        *,
+        connection: Any | None = None,
+    ) -> Task | None:
+        if connection is not None:
+            now = datetime.now(UTC)
+            columns_cursor = await connection.execute("PRAGMA table_info(tasks)")
+            columns = {row[1] for row in await columns_cursor.fetchall()}
+            assignments = ["status = ?"]
+            values: list[Any] = [status.value]
+            if "error" in columns:
+                assignments.append("error = ?")
+                values.append(error)
+            if "updated_at" in columns:
+                assignments.append("updated_at = ?")
+                values.append(now.isoformat())
+            if "completed_at" in columns and status in (
+                TaskStatus.COMPLETED,
+                TaskStatus.FAILED,
+                TaskStatus.CANCELLED,
+            ):
+                assignments.append("completed_at = ?")
+                values.append(now.isoformat())
+            values.append(task_id)
+            await connection.execute(
+                f"UPDATE tasks SET {', '.join(assignments)} WHERE id = ?",
+                tuple(values),
+            )
+            # Transactional runtime callers only require the row mutation. A
+            # direct update also preserves compatibility with old/synthetic
+            # rows that predate current Pydantic ID validation.
+            return None
+
         task = await TaskManager.get(task_id)
         if not task:
             return None
@@ -202,7 +244,7 @@ class TaskManager:
         task.error = error
         if status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED):
             task.completed_at = datetime.now(UTC)
-        await TaskManager.update(task)
+        await TaskManager.update(task, connection=connection)
         return task
 
     @staticmethod

@@ -575,6 +575,12 @@ class ModelRouter:
         preferred_provider: str | None = None,
     ) -> ModelSelection:
         """Route a task to the best model using multi-dimensional scoring."""
+        # Phase 15: initialize providers (so availability is known) BEFORE
+        # discovering their models. Without this, discover_models sees
+        # provider.available == False (not yet initialized) and silently skips
+        # every real provider, leaving only the local stand-in echo model.
+        if self._provider_registry is not None:
+            await self.ensure_providers_ready()
         # Only register defaults if using default registry
         if not self._custom_registry:
             self.registry.register_defaults()
@@ -646,6 +652,15 @@ class ModelRouter:
             if preferred:
                 scored = preferred
 
+        # The `local` provider is an offline stand-in (echo / placeholder),
+        # not a real model. When at least one real (non-local) provider offers
+        # a candidate for this role, prefer it while keeping the local
+        # stand-in as the last-resort fallback in the chain.
+        real_scored = [(m, s) for (m, s) in scored if m.provider != "local"]
+        if real_scored:
+            local_scored = [(m, s) for (m, s) in scored if m.provider == "local"]
+            scored = real_scored + local_scored
+
         if not scored:
             logger.warning("no_model_for_role", role=role)
             return ModelSelection(
@@ -688,6 +703,8 @@ class ModelRouter:
         prefer_cheap: bool = True,
     ) -> tuple[ModelSelection, list[ModelScore]]:
         """Route with full explainability (all scores returned)."""
+        if self._provider_registry is not None:
+            await self.ensure_providers_ready()
         self.registry.register_defaults()
         if self._provider_registry is not None and not self._providers_discovered:
             await self._provider_registry.discover_models(self.registry)
@@ -701,6 +718,14 @@ class ModelRouter:
         scored = await self._filter_for_availability(
             scored, role, context_size, complexity, privacy_required, prefer_cheap
         )
+
+        # The `local` provider is an offline stand-in (echo / placeholder),
+        # not a real model. Prefer real (non-local) candidates while keeping
+        # the local stand-in as the last-resort fallback in the chain.
+        real_scored = [(m, s) for (m, s) in scored if m.provider != "local"]
+        if real_scored:
+            local_scored = [(m, s) for (m, s) in scored if m.provider == "local"]
+            scored = real_scored + local_scored
 
         self._scores[task_id] = [s for _, s in scored]
 

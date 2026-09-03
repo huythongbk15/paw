@@ -56,26 +56,43 @@ class TaskLedger:
         task_id: ID,
         event_type: TaskEventType,
         payload: dict[str, Any] | None = None,
+        *,
+        connection: Any | None = None,
     ) -> TaskEvent:
+        """Append an event, optionally participating in a caller transaction.
+
+        Runtime commit boundaries pass the active SQLite connection so ledger
+        rows are committed (or rolled back) with the state they describe.
+        The default path retains the standalone append contract for callers
+        that do not need a larger atomic unit.
+        """
         event = TaskEvent(
             task_id=task_id,
             event_type=event_type,
             payload=payload or {},
         )
-        async with db.transaction() as conn:
-            cursor = await conn.execute(
-                """
-                INSERT INTO task_events (task_id, event_type, payload, created_at)
-                VALUES (?, ?, ?, ?)
-                """,
-                (
-                    event.task_id,
-                    event.event_type.value,
-                    json.dumps(event.payload),
-                    event.created_at.isoformat(),
-                ),
-            )
-            event.id = cursor.lastrowid
+        if connection is None:
+            async with db.transaction() as conn:
+                return await TaskLedger.record(
+                    task_id,
+                    event_type,
+                    payload,
+                    connection=conn,
+                )
+
+        cursor = await connection.execute(
+            """
+            INSERT INTO task_events (task_id, event_type, payload, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                event.task_id,
+                event.event_type.value,
+                json.dumps(event.payload),
+                event.created_at.isoformat(),
+            ),
+        )
+        event.id = cursor.lastrowid
         return event
 
     @staticmethod

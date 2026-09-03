@@ -12,7 +12,7 @@ from typing import Any
 
 from .logging import get_logger
 from .models import Capability, SkillRisk
-from .policy import get_policy_guard
+from .semantic import AdvancedSkillSelector
 from .skills import Skill, SkillFabric
 from .storage import db
 
@@ -41,11 +41,20 @@ class SkillSelection:
 
 
 class SkillSelector:
-    """Selects appropriate skills for a task."""
+    """Compatibility result facade over ``AdvancedSkillSelector``.
+
+    Skill ranking has one owner in :mod:`paw.core.semantic`. Policy is not a
+    selection concern: the runtime evaluates the capabilities of the exact
+    proposed operation after selection.
+    """
 
     def __init__(self, fabric: SkillFabric | None = None):
         self.fabric = fabric or SkillFabric(__import__("pathlib").Path(__file__).parent.parent / "skills")
-        self.policy_guard = get_policy_guard()
+        self._canonical = AdvancedSkillSelector(
+            self.fabric,
+            embedding_provider=None,
+            auto_attach_embeddings=False,
+        )
 
     async def select(
         self,
@@ -53,104 +62,61 @@ class SkillSelector:
         requested_capabilities: list[Capability] | None = None,
         preferred_risk: SkillRisk | None = None,
     ) -> SkillSelection:
-        """Select the best skills for a task."""
+        """Adapt canonical ranked results to the legacy ``SkillSelection``."""
         selection = SkillSelection(task_id="", reason="", confidence=0.0)
-
-        # 1. Find candidate skills
-        candidates = self.fabric.find_candidates(goal, max_results=20)
+        ranked = await self._canonical.select(
+            goal,
+            max_results=20,
+            min_score=0.0,
+            requested_capabilities=(
+                [capability.value for capability in requested_capabilities]
+                if requested_capabilities
+                else None
+            ),
+        )
+        candidates = [Skill(result.manifest) for result in ranked]
         await self._log_candidates_found(goal, candidates)
 
-        if not candidates:
-            selection.reason = "No candidate skills found for this goal"
-            return selection
-
-        # 2. Filter by capability requirements
-        cap_set = set(requested_capabilities) if requested_capabilities else set()
-        filtered: list[Skill] = []
-        for candidate in candidates:
-            # Check if skill's capabilities overlap with requested
-            if not cap_set or any(c in cap_set for c in candidate.capabilities):
-                filtered.append(candidate)
-
-        if not filtered:
-            selection.reason = "No skills match the requested capabilities"
-            return selection
-
-        # 3. Apply policy guard
-        selected: list[Skill] = []
+        risk_order = {SkillRisk.LOW: 0, SkillRisk.MEDIUM: 1, SkillRisk.HIGH: 2}
+        selected_results = []
         rejected: list[Skill] = []
         policy_decisions: dict[str, str] = {}
-
-        for skill in filtered:
-            # Check skill risk level
-            if preferred_risk and skill.manifest.risk.value > preferred_risk.value:
+        for result, skill in zip(ranked, candidates, strict=True):
+            if (
+                preferred_risk is not None
+                and risk_order[skill.manifest.risk] > risk_order[preferred_risk]
+            ):
                 rejected.append(skill)
                 policy_decisions[skill.manifest.name] = "risk_too_high"
                 continue
+            selected_results.append((result, skill))
+            policy_decisions[skill.manifest.name] = "runtime_gate"
 
-            # Check policy for skill's capabilities
-            decision = "allow"
-            if skill.manifest.capabilities:
-                for cap in skill.manifest.capabilities:
-                    guard_decision = await self.policy_guard.check(cap)
-                    if guard_decision.value == "deny":
-                        decision = "deny"
-                        break
-                    elif guard_decision.value == "ask":
-                        decision = "ask"
-
-            policy_decisions[skill.manifest.name] = decision
-
-            if decision == "deny":
-                rejected.append(skill)
-            else:
-                selected.append(skill)
-
-        # 4. Sort by confidence (risk + trigger match)
-        selected.sort(key=lambda s: self._confidence_score(s, goal))
-
-        # 5. Limit selections
-        if len(selected) > 5:
-            rejected.extend(selected[5:])
-            selected = selected[:5]
-
-        selection.selected_skills = selected
+        rejected.extend(skill for _, skill in selected_results[5:])
+        selected_results = selected_results[:5]
+        selection.selected_skills = [skill for _, skill in selected_results]
         selection.rejected_skills = rejected
         selection.policy_decisions = policy_decisions
-        selection.reason = f"Selected {len(selected)} skills from {len(candidates)} candidates"
-        selection.confidence = self._overall_confidence(selected, goal)
+        selection.reason = (
+            f"Selected {len(selected_results)} skills from {len(candidates)} candidates"
+        )
+        selection.confidence = (
+            sum(result.final_score for result, _ in selected_results)
+            / len(selected_results)
+            if selected_results
+            else 0.0
+        )
 
         # Log selection
-        for skill in selected:
+        for skill in selection.selected_skills:
             await self._log_skill_selected(skill.manifest.name, selection.reason)
 
-        logger.info("skill_selection_complete", selected=len(selected), rejected=len(rejected))
+        logger.info(
+            "skill_selection_complete",
+            selected=len(selection.selected_skills),
+            rejected=len(rejected),
+        )
         return selection
-
-    def _confidence_score(self, skill: Skill, goal: str) -> float:
-        """Calculate confidence score for a skill."""
-        score = 0.5
-
-        # Trigger match bonus
-        if skill.matches_query(goal):
-            score += 0.3
-
-        # Risk bonus
-        risk_scores = {"low": 0.1, "medium": 0.0, "high": -0.2}
-        score += risk_scores.get(skill.manifest.risk.value, 0.0)
-
-        # Capability match bonus
-        if skill.manifest.capabilities:
-            score += 0.1
-
-        return min(score, 1.0)
-
-    def _overall_confidence(self, selected: list[Skill], goal: str) -> float:
-        """Calculate overall confidence for the selection."""
-        if not selected:
-            return 0.0
-        total = sum(self._confidence_score(s, goal) for s in selected)
-        return total / len(selected)
 
     async def _log_candidates_found(self, goal: str, candidates: list[Skill]) -> None:
         """Log candidate finding (via task ledger if task_id available)."""

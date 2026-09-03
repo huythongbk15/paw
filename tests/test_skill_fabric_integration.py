@@ -12,7 +12,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from paw.core import SkillManifest, SkillFabric, Capability, SkillRisk
+from paw.core.models import Capability, SkillRisk
+from paw.core.skills import SkillManifest, SkillFabric
 from paw.core.storage import db, set_db_path
 from paw.core.config import settings
 

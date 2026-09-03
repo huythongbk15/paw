@@ -125,13 +125,28 @@ class CheckpointStore:
         await db.initialize()
 
     @classmethod
-    async def save(cls, checkpoint: TaskCheckpoint) -> str:
-        """Save checkpoint to database."""
-        await cls.ensure_table()
+    async def save(
+        cls,
+        checkpoint: TaskCheckpoint,
+        *,
+        connection: Any | None = None,
+    ) -> str:
+        """Save checkpoint, optionally inside an existing transaction."""
+        if connection is None:
+            await cls.ensure_table()
+            async with db.transaction() as conn:
+                await cls.save(checkpoint, connection=conn)
+            logger.info(
+                "checkpoint_saved",
+                task_id=checkpoint.task_id,
+                checkpoint_id=checkpoint.checkpoint_id,
+                progress=checkpoint.progress_ratio,
+            )
+            return checkpoint.checkpoint_id
 
         data = checkpoint.to_dict()
 
-        await db.execute(
+        await connection.execute(
             f"""
             INSERT OR REPLACE INTO {cls.TABLE_NAME} (
                 checkpoint_id, task_id, task_status, current_step, total_steps,
@@ -162,13 +177,6 @@ class CheckpointStore:
                 json.dumps(data["tags"]),
                 json.dumps(data["metadata"]),
             ),
-        )
-
-        logger.info(
-            "checkpoint_saved",
-            task_id=checkpoint.task_id,
-            checkpoint_id=checkpoint.checkpoint_id,
-            progress=checkpoint.progress_ratio,
         )
 
         return checkpoint.checkpoint_id
@@ -356,6 +364,8 @@ class OperationRecord:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> OperationRecord:
+        raw_metadata = d.get("metadata", {})
+        metadata = json.loads(raw_metadata) if isinstance(raw_metadata, str) else raw_metadata
         rec = cls(
             task_id=d["task_id"],
             op_id=d["op_id"],
@@ -363,7 +373,7 @@ class OperationRecord:
             status=d.get("status", "completed"),
             checkpoint_id=d.get("checkpoint_id"),
             result_ref=d.get("result_ref"),
-            metadata=d.get("metadata", {}),
+            metadata=metadata or {},
         )
         if "created_at" in d:
             rec.created_at = datetime.fromisoformat(d["created_at"])
@@ -380,9 +390,20 @@ class OperationRecordStore:
         await db.initialize()
 
     @classmethod
-    async def record(cls, rec: OperationRecord) -> None:
-        await cls.ensure_table()
-        await db.execute(
+    async def record(
+        cls,
+        rec: OperationRecord,
+        *,
+        connection: Any | None = None,
+    ) -> None:
+        """Persist an operation record in the caller's transaction when set."""
+        if connection is None:
+            await cls.ensure_table()
+            async with db.transaction() as conn:
+                await cls.record(rec, connection=conn)
+            return
+
+        await connection.execute(
             f"""
             INSERT OR REPLACE INTO {cls.TABLE_NAME}
             (task_id, op_id, op_type, status, checkpoint_id, result_ref, created_at, metadata)
@@ -403,6 +424,16 @@ class OperationRecordStore:
             (task_id, op_id),
         )
         return bool(row) and row["status"] == "completed"
+
+    @classmethod
+    async def get(cls, task_id: str, op_id: str) -> OperationRecord | None:
+        """Return the latest durable state for one stable operation key."""
+        await cls.ensure_table()
+        row = await db.fetchone(
+            f"SELECT * FROM {cls.TABLE_NAME} WHERE task_id = ? AND op_id = ?",
+            (task_id, op_id),
+        )
+        return OperationRecord.from_dict(dict(row)) if row else None
 
     @classmethod
     async def get_completed_op_ids(cls, task_id: str) -> set[str]:
@@ -452,6 +483,8 @@ class CheckpointManager:
         autonomy_profile: str,
         detectors_state: dict[str, Any],
         loop_state: dict[str, Any],
+        *,
+        persist: bool = True,
     ) -> TaskCheckpoint | None:
         """
         Create checkpoint if interval reached.
@@ -487,8 +520,33 @@ class CheckpointManager:
             parent_checkpoint_id=parent_id,
         )
 
-        await CheckpointStore.save(checkpoint)
+        if persist:
+            await CheckpointStore.save(checkpoint)
         return checkpoint
+
+    async def prepare_checkpoint(
+        self,
+        task_id: str,
+        **kwargs: Any,
+    ) -> TaskCheckpoint:
+        """Build a checkpoint without persisting it.
+
+        The runtime uses this to include checkpoint creation, ledger events and
+        terminal task status in one transaction.
+        """
+        prev = await CheckpointStore.get_latest(task_id)
+        parent_id = prev.checkpoint_id if prev else None
+
+        if "autonomy_usage" in kwargs:
+            au = kwargs["autonomy_usage"]
+            if hasattr(au, "to_dict"):
+                kwargs["autonomy_usage"] = au.to_dict()
+
+        return TaskCheckpoint(
+            task_id=task_id,
+            parent_checkpoint_id=parent_id,
+            **kwargs,
+        )
 
     async def force_checkpoint(
         self,
@@ -496,21 +554,7 @@ class CheckpointManager:
         **kwargs,
     ) -> TaskCheckpoint:
         """Force create a checkpoint (e.g., on pause, error, user request)."""
-        # Same as maybe_checkpoint but always creates
-        prev = await CheckpointStore.get_latest(task_id)
-        parent_id = prev.checkpoint_id if prev else None
-
-        # Convert AutonomyUsage to dict if needed
-        if "autonomy_usage" in kwargs:
-            au = kwargs["autonomy_usage"]
-            if hasattr(au, "to_dict"):
-                kwargs["autonomy_usage"] = au.to_dict()
-
-        checkpoint = TaskCheckpoint(
-            task_id=task_id,
-            parent_checkpoint_id=parent_id,
-            **kwargs,
-        )
+        checkpoint = await self.prepare_checkpoint(task_id, **kwargs)
 
         await CheckpointStore.save(checkpoint)
         return checkpoint
@@ -524,6 +568,7 @@ class CheckpointManager:
         checkpoint_id: str | None = None,
         result_ref: str | None = None,
         metadata: dict[str, Any] | None = None,
+        connection: Any | None = None,
     ) -> OperationRecord:
         """Persist a completed primitive operation (idempotent replay record)."""
         rec = OperationRecord(
@@ -535,7 +580,7 @@ class CheckpointManager:
             result_ref=result_ref,
             metadata=metadata or {},
         )
-        await OperationRecordStore.record(rec)
+        await OperationRecordStore.record(rec, connection=connection)
         return rec
 
     async def is_operation_completed(self, task_id: str, op_id: str) -> bool:

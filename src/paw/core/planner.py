@@ -12,9 +12,11 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from .decomposition import StructuredReasoner
 from .logging import get_logger
 from .models import TaskStatus
 from .storage import db
+from .task import TaskManager
 
 logger = get_logger(__name__)
 
@@ -140,77 +142,70 @@ class Plan:
 
 
 class Planner:
-    """Decomposes goals into task graphs."""
+    """Sole owner of canonical ``Plan`` creation and persistence.
 
-    async def plan(self, goal: str, session_id: str, project_id: str | None = None) -> Plan:
-        """Create a plan from a goal."""
-        plan = Plan(goal=goal, session_id=session_id)
+    A decomposition strategy produces ordered reasoning steps. ``Planner``
+    normalizes them to ``TaskNode`` records and persists the plan atomically.
+    Runtime action proposal and graph scheduling are separate responsibilities.
+    """
+
+    def __init__(self, reasoner: StructuredReasoner | None = None):
+        self.reasoner = reasoner or StructuredReasoner()
+
+    async def plan(self, task_id: str) -> Plan:
+        """Create a plan for an existing durable Task.
+
+        Task identity, goal and session belong to ``TaskManager``. Requiring the
+        canonical ID prevents Planner from inventing a parallel work identity
+        or persisting caller-provided metadata that disagrees with the Task.
+        """
+        task = await TaskManager.get(task_id)
+        if task is None:
+            raise ValueError(f"Unknown task: {task_id}")
+
+        plan = Plan(task_id=task.id, goal=task.goal, session_id=task.session_id)
         plan.id = uuid.uuid4().hex[:16]
 
-        # Simple decomposition: if goal contains "and" or "then", split into subtasks
-        # Phase 3+ will use LLM for intelligent decomposition
-        nodes = self._decompose(goal)
+        nodes = self._decompose(task.goal)
+        for node in nodes:
+            node.task_id = task.id
         plan.nodes = nodes
 
-        # Persist plan
-        await self._save_plan(plan)
-        await self._save_nodes(plan)
+        await self._save(plan)
 
-        logger.info("plan_created", goal=goal, nodes=len(nodes))
+        logger.info("plan_created", task_id=task.id, goal=task.goal, nodes=len(nodes))
         return plan
 
     def _decompose(self, goal: str) -> list[TaskNode]:
-        """Simple rule-based decomposition."""
+        """Normalize pure structured decomposition into canonical task nodes."""
+        decomposition = self.reasoner.decompose(goal)
         nodes: list[TaskNode] = []
-
-        # Check for compound goals
-        if " and " in goal.lower() or " then " in goal.lower():
-            parts = goal.replace(" then ", " and ").split(" and ")
-            for i, part in enumerate(parts):
-                part = part.strip()
-                if part:
-                    node_id = uuid.uuid4().hex[:16]
-                    nodes.append(TaskNode(
-                        id=node_id,
-                        task_id="",  # Will be linked to parent task
-                        goal=part,
-                        dependencies=[nodes[i - 1].id] if i > 0 else [],
-                    ))
-        else:
-            node_id = uuid.uuid4().hex[:16]
-            nodes.append(TaskNode(
-                id=node_id,
-                task_id="",
-                goal=goal,
-                dependencies=[],
-            ))
-
-        # Assign default skill based on goal keywords
-        goal_lower = goal.lower()
-        for node in nodes:
-            if not node.id:
-                node.id = uuid.uuid4().hex[:16]
-            if any(w in goal_lower for w in ["tính", "calculate", "compute"]):
-                node.skills = ["math"]
-                node.capability_requirements = ["shell.execute"]
-            elif any(w in goal_lower for w in ["tìm", "search", "tìm kiếm"]):
-                node.skills = ["web_search"]
-                node.capability_requirements = ["network.http"]
-            elif any(w in goal_lower for w in ["viết", "write", "code"]):
-                node.skills = ["code_writer"]
-                node.capability_requirements = ["filesystem.write"]
-            elif any(w in goal_lower for w in ["tóm tắt", "summary", "summarize"]):
-                node.skills = ["summarizer"]
-                node.capability_requirements = ["filesystem.read"]
-            elif any(w in goal_lower for w in ["phân tích", "analyze"]):
-                node.skills = ["analyzer"]
-                node.capability_requirements = ["filesystem.read"]
-
+        for step in decomposition.steps:
+            previous = nodes[-1].id if nodes else None
+            nodes.append(
+                TaskNode(
+                    id=step.id or uuid.uuid4().hex[:16],
+                    goal=step.goal,
+                    dependencies=[previous] if previous else [],
+                    context_requirements={
+                        "reasoning": step.reasoning,
+                        "sub_goals": step.sub_goals,
+                        "estimated_effort": step.estimated_effort,
+                    },
+                    capability_requirements=list(step.required_capabilities),
+                )
+            )
         return nodes
 
-    async def _save_plan(self, plan: Plan) -> None:
-        """Save plan to database."""
+    async def _save(self, plan: Plan) -> None:
+        """Persist the plan and all nodes in one transaction."""
         async with db.transaction() as conn:
+            task_cursor = await conn.execute(
+                "SELECT id FROM tasks WHERE id = ?",
+                (plan.task_id,),
+            )
+            if await task_cursor.fetchone() is None:
+                raise ValueError(f"Unknown task: {plan.task_id}")
             await conn.execute(
                 """
                 INSERT INTO plans (id, task_id, session_id, goal, created_at, updated_at)
@@ -225,11 +220,6 @@ class Planner:
                     plan.updated_at.isoformat(),
                 ),
             )
-
-    async def _save_nodes(self, plan: Plan) -> None:
-        """Save task nodes to database."""
-        import json
-        async with db.transaction() as conn:
             for node in plan.nodes:
                 await conn.execute(
                     """
@@ -275,3 +265,6 @@ class Planner:
 async def ensure_plans_table() -> None:
     """Ensure the plans table exists."""
     await db.initialize()
+
+
+__all__ = ["Plan", "Planner", "TaskNode", "ensure_plans_table"]

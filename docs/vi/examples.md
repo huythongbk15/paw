@@ -2,10 +2,10 @@
 
 ## Demo CLI chat
 
-Provider mặc định xác định và chạy offline:
+Chạy offline và khóa thao tác file trong workspace hiện tại:
 
 ```bash
-paw chat
+paw chat --provider local --workspace .
 ```
 
 Trong REPL:
@@ -13,22 +13,28 @@ Trong REPL:
 ```text
 you> xin chào
 paw> [local-standin] xin chào
-you> hãy tạo file demo.txt
-paw> Cần phê duyệt ... Chưa gọi model hoặc executor.
+you> tạo file demo.txt nội dung: xin chào PAW
+paw> Cần phê duyệt ... Chưa gọi model hoặc executor. [diff đề xuất]
 you> /approve
-paw> [local-standin] hãy tạo file demo.txt
+paw> Đã created `demo.txt` (14 bytes).
+you> /why
+you> /artifacts
+you> /ledger
 you> /status
 you> /history
 you> /exit
 ```
 
-Yêu cầu ghi file trên được bundled mock executor mô phỏng: demo chứng minh
-authorization, routing, observation và resume nhưng không sửa file thật. Để tiếp
-tục từ process khác, copy session ID rồi chạy:
+Yêu cầu có cấu trúc trên được `LocalFilesystemExecutor` thực hiện thật. File chưa
+tồn tại trước approval; traversal ra ngoài `--workspace` bị chặn và operation đã
+consume không chạy lại khi resume. Yêu cầu legacy không có nội dung như “hãy tạo
+file demo.txt” vẫn chỉ chạy mock và không sửa workspace.
+
+Để approve từ process khác, dùng cùng workspace:
 
 ```bash
-paw chat --session <session-id> --status
-paw chat --session <session-id> --approve
+paw chat --workspace . --session <session-id> --status
+paw chat --workspace . --session <session-id> --approve
 ```
 
 Chế độ JSON một lần phù hợp smoke test:
@@ -36,6 +42,9 @@ Chế độ JSON một lần phù hợp smoke test:
 ```bash
 paw chat --message "xin chào PAW" --json
 ```
+
+Các lệnh inspect cũng có cờ JSON: `--plan`, `--why`, `--ledger`,
+`--checkpoint`, `--policy`, `--skills` và `--artifacts`.
 
 ## Runtime qua library
 

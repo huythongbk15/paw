@@ -8,33 +8,58 @@ The default provider is deterministic and offline:
 paw chat
 ```
 
+Bind the session to the current workspace:
+
+```bash
+paw chat --provider local --workspace .
+```
+
 Inside the REPL:
 
 ```text
 you> xin chào
 paw> [local-standin] xin chào
-you> hãy tạo file demo.txt
-paw> Cần phê duyệt ... Chưa gọi model hoặc executor.
+you> tạo file demo.txt nội dung: xin chào PAW
+paw> Cần phê duyệt ... Chưa gọi model hoặc executor. [proposed diff]
 you> /approve
-paw> [local-standin] hãy tạo file demo.txt
+paw> Đã created `demo.txt` (14 bytes).
+you> /why
+you> /artifacts
+you> /ledger
 you> /status
 you> /history
 you> /exit
 ```
 
-The write request above is simulated by the bundled mock executor: the demo
-proves authorization, routing, observation and resume without changing a real
-file. To resume from another process, copy the session ID and run:
+The structured write above is performed by `LocalFilesystemExecutor`. It is
+confined to `--workspace`; the file is absent before approval, path traversal
+is rejected, and a consumed operation is not repeated on resume. Unstructured
+legacy requests such as “hãy tạo file demo.txt” remain a mock demonstration and
+do not mutate the workspace.
+
+To approve from another process, copy the session ID and use the same workspace:
 
 ```bash
-paw chat --session <session-id> --status
-paw chat --session <session-id> --approve
+paw chat --workspace . --session <session-id> --status
+paw chat --workspace . --session <session-id> --approve
 ```
 
 One-shot JSON mode is suitable for smoke tests:
 
 ```bash
 paw chat --message "xin chào PAW" --json
+```
+
+Every inspection command also has a scriptable flag:
+
+```bash
+paw chat --workspace . --session <session-id> --plan --json
+paw chat --workspace . --session <session-id> --why --json
+paw chat --workspace . --session <session-id> --ledger --json
+paw chat --workspace . --session <session-id> --checkpoint --json
+paw chat --workspace . --session <session-id> --policy --json
+paw chat --workspace . --session <session-id> --skills --json
+paw chat --workspace . --session <session-id> --artifacts --json
 ```
 
 ## Library runtime

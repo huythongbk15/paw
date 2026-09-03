@@ -10,27 +10,16 @@ from pathlib import Path
 
 import pytest
 
-from paw.core import (
-    Capability,
-    ContextBuilder,
-    ContextFragment,
-    TaskContext,
-    MockExecutor,
-    Plan,
-    Planner,
-    PolicyDecision,
-    PolicyGuard,
-    PolicyRule,
-    SessionManager,
-    SkillRisk,
-    SkillSelector,
-    TaskNode,
-    TaskStatus,
-    get_policy_guard,
-    get_skill_fabric,
-    executor_registry,
-)
+from paw.core.models import Capability, PolicyDecision, TaskStatus
+from paw.core.context import ContextBuilder, ContextFragment, TaskContext
+from paw.core.executor import MockExecutor, executor_registry
+from paw.core.planner import Plan, Planner, TaskNode
+from paw.core.policy import PolicyGuard, PolicyRule, get_policy_guard
+from paw.core.session import SessionManager
+from paw.core.skills import SkillRisk, get_skill_fabric
+from paw.core.selector import SkillSelector
 from paw.core.storage import db, set_db_path
+from paw.core.task import TaskManager
 
 
 class TestPhase2Planner:
@@ -51,7 +40,8 @@ class TestPhase2Planner:
     async def test_plan_creation(self, tmp_path):
         """Create a plan from a goal."""
         planner = Planner()
-        plan = await planner.plan("calculate 2 + 2", "session-123")
+        task = await TaskManager.create("session-123", "calculate 2 + 2")
+        plan = await planner.plan(task.id)
         assert plan.goal == "calculate 2 + 2"
         assert len(plan.nodes) > 0
 
@@ -59,14 +49,16 @@ class TestPhase2Planner:
     async def test_plan_with_compound_goal(self, tmp_path):
         """Plan decomposition for compound goals."""
         planner = Planner()
-        plan = await planner.plan("search files and summarize", "session-456")
+        task = await TaskManager.create("session-456", "search files and summarize")
+        plan = await planner.plan(task.id)
         assert len(plan.nodes) >= 2
 
     @pytest.mark.asyncio
     async def test_task_node_decomposition(self, tmp_path):
         """Task nodes have proper attributes."""
         planner = Planner()
-        plan = await planner.plan("calculate something", "session-789")
+        task = await TaskManager.create("session-789", "calculate something")
+        plan = await planner.plan(task.id)
         for node in plan.nodes:
             assert node.goal
             assert isinstance(node.dependencies, list)
@@ -76,7 +68,8 @@ class TestPhase2Planner:
     async def test_topological_sort(self, tmp_path):
         """Plan nodes can be topologically sorted."""
         planner = Planner()
-        plan = await planner.plan("search and analyze", "session-000")
+        task = await TaskManager.create("session-000", "search and analyze")
+        plan = await planner.plan(task.id)
         sorted_nodes = plan.topological_sort()
         # Each node should come after its dependencies
         for i, node in enumerate(sorted_nodes):
@@ -90,7 +83,8 @@ class TestPhase2Planner:
     async def test_planner_persistence(self, tmp_path):
         """Plan can be persisted and retrieved."""
         planner = Planner()
-        plan = await planner.plan("test persistence", "session-persist")
+        task = await TaskManager.create("session-persist", "test persistence")
+        plan = await planner.plan(task.id)
         retrieved = await planner.get_plan(plan.id)
         assert retrieved is not None
         assert retrieved.goal == "test persistence"

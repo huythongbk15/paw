@@ -233,11 +233,16 @@ class SemanticMatcher:
 
 
 class SemanticSkillSelector:
-    """Semantic-based skill selector."""
+    """Compatibility dictionary facade over ``AdvancedSkillSelector``."""
 
     def __init__(self, fabric: SkillFabric | None = None):
         self.matcher = SemanticMatcher(fabric)
         self.fabric = fabric or self.matcher.fabric
+        self._canonical = AdvancedSkillSelector(
+            self.fabric,
+            embedding_provider=None,
+            auto_attach_embeddings=False,
+        )
 
     async def select(
         self,
@@ -246,16 +251,21 @@ class SemanticSkillSelector:
         min_score: float = 0.1,
         requested_capabilities: list[str] | None = None,
     ) -> list[dict]:
-        """Select skills using semantic matching."""
-        results = await self.matcher.match_for_skill_selection(
-            query, requested_capabilities
+        """Adapt canonical results to the legacy list-of-dicts shape."""
+        results = await self._canonical.select(
+            query,
+            max_results=max_results,
+            min_score=min_score,
+            requested_capabilities=requested_capabilities,
         )
-
-        # Filter by min score
-        filtered = [r for r in results if r["combined_score"] >= min_score]
-
-        # Limit results
-        return filtered[:max_results]
+        adapted = []
+        for result in results:
+            payload = result.to_dict()
+            payload["combined_score"] = result.final_score
+            payload["word_overlap_score"] = result.lexical_score
+            payload["trigger_match_score"] = 0.0
+            adapted.append(payload)
+        return adapted
 
 
 # Global instance
@@ -426,4 +436,3 @@ def get_advanced_skill_selector(
     if _semantic_selector_v2 is None or fabric is not None or embedding_provider is not None:
         _semantic_selector_v2 = AdvancedSkillSelector(fabric, embedding_provider=embedding_provider)
     return _semantic_selector_v2
-

@@ -13,18 +13,12 @@ from tempfile import TemporaryDirectory
 
 import pytest
 
-from paw.core import (
-    Capability,
-    MockExecutor,
-    SessionManager,
-    Task,
-    TaskEventType,
-    TaskLedger,
-    TaskManager,
-    TaskStatus,
-    executor_registry,
-    get_skill_fabric,
-)
+from paw.core.models import Capability, TaskStatus
+from paw.core.executor import MockExecutor, executor_registry
+from paw.core.session import SessionManager
+from paw.core.task import Task, TaskManager
+from paw.core.ledger import TaskEventType, TaskLedger
+from paw.core.skills import get_skill_fabric
 from paw.core.config import settings
 from paw.core.storage import db, set_db_path
 
@@ -179,7 +173,7 @@ class TestPhase1Foundation:
         await TaskLedger.record(task.id, TaskEventType.TASK_CREATED, {"goal": task.goal})
 
         # 4. Execute with mock (using execute_task)
-        from paw.core import execute_task
+        from paw.core.executor import execute_task
         # Record execution start
         await TaskLedger.record(task.id, TaskEventType.EXECUTION_STARTED, {"executor": "mock"})
         result = await execute_task(task, "Context: simple calculation")

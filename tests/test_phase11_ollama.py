@@ -97,6 +97,29 @@ class _MockOllamaHandler(BaseHTTPRequestHandler):
                 self.wfile.write(body)
             else:
                 self._send({"model": req.get("model"), "response": "hello world", "done": True})
+        elif self.path == "/api/chat":
+            # Chat-style requests carry ``messages``; the answer lives in
+            # ``message.content`` (mirrors Ollama's real API).
+            if req.get("stream"):
+                body = (
+                    json.dumps({"message": {"role": "assistant", "content": "hello "}, "done": False})
+                    + "\n"
+                    + json.dumps({"message": {"role": "assistant", "content": "world"}, "done": True})
+                    + "\n"
+                ).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            else:
+                self._send(
+                    {
+                        "model": req.get("model"),
+                        "message": {"role": "assistant", "content": "hello world"},
+                        "done": True,
+                    }
+                )
         else:
             self._send({"error": "not found"}, status=404)
 
@@ -248,3 +271,15 @@ async def test_model_executor_unknown_provider_falls_back():
     selection.score = 0.0
     result = await executor.complete(selection, [{"role": "user", "content": "hi"}])
     assert "local-standin" in result["response"]
+
+
+@pytest.mark.asyncio
+async def test_ollama_complete_routes_messages_to_chat_endpoint(mock_ollama):
+    """Chat-style requests (``messages``) must hit ``/api/chat`` and read
+    ``message.content``; prompt-style requests hit ``/api/generate``."""
+    provider = OllamaProvider(base_url=mock_ollama)
+    await provider.initialize()
+    chat_result = await provider.complete(
+        {"model": "llama3:8b", "messages": [{"role": "user", "content": "hi"}]}
+    )
+    assert chat_result["response"] == "hello world"

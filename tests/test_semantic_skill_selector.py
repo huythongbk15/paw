@@ -77,7 +77,9 @@ async def test_lexical_only_degradation():
     s_cook = _skill("cooking", "Prepare a meal recipe", trigger="cook")
     fabric = FakeFabric([s_git, s_cook])
 
-    selector = AdvancedSkillSelector(fabric, embedding_provider=None)
+    selector = AdvancedSkillSelector(
+        fabric, embedding_provider=None, auto_attach_embeddings=False
+    )
     results = await selector.select("commit my changes to git", max_results=5)
     assert results
     assert all(not r.has_embedding for r in results)

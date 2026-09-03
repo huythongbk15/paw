@@ -81,7 +81,7 @@ class OllamaProvider:
     name = "ollama"
     version = "1.0.0"
 
-    def __init__(self, base_url: str = DEFAULT_OLLAMA_URL, timeout: float = 30.0):
+    def __init__(self, base_url: str = DEFAULT_OLLAMA_URL, timeout: float = 180.0):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self._available: bool | None = None
@@ -162,27 +162,46 @@ class OllamaProvider:
 
     # --- execution ---
 
-    async def complete(self, request: dict[str, Any]) -> dict[str, Any]:
-        """Run a completion via ``/api/generate``.
+    @staticmethod
+    def _use_chat_api(request: dict[str, Any]) -> bool:
+        """Ollama's ``/api/chat`` accepts ``messages``; ``/api/generate``
+        expects a flat ``prompt``. Route chat-style requests to the chat
+        endpoint so the conversation history is actually used."""
+        return bool(request.get("messages"))
 
-        ``request`` must contain ``model`` and either ``prompt`` or ``messages``.
-        Returns the parsed JSON response from Ollama.
+    async def complete(self, request: dict[str, Any]) -> dict[str, Any]:
+        """Run a completion via Ollama.
+
+        Chat-style requests (``messages``) go to ``/api/chat`` and the answer
+        is read from ``message.content``. Prompt-style requests go to
+        ``/api/generate`` and the answer is read from ``response``. Both are
+        normalized to ``{"response": <text>, ...}`` so callers get a uniform
+        shape regardless of which endpoint was used.
         """
+        use_chat = self._use_chat_api(request)
+        endpoint = "/api/chat" if use_chat else "/api/generate"
         payload = self._build_generate_payload(request, stream=False)
         try:
-            data = await self._request("POST", "/api/generate", payload)
+            data = await self._request("POST", endpoint, payload)
         except (TimeoutError, OSError, urllib.error.URLError) as exc:
             logger.error("ollama_complete_failed", model=request.get("model"), error=str(exc))
             return {"error": str(exc), "response": ""}
+        if use_chat:
+            msg = data.get("message") if isinstance(data, dict) else None
+            text = msg.get("content", "") if isinstance(msg, dict) else ""
+            return {"response": text, "model": data.get("model"), "done": data.get("done")}
         return data
 
     async def stream(self, request: dict[str, Any]) -> AsyncGenerator[dict[str, Any], None]:
-        """Stream a completion via ``/api/generate`` with ``stream=true``.
+        """Stream a completion via Ollama (``/api/chat`` or ``/api/generate``).
 
-        Yields each JSON object as it arrives from Ollama.
+        Yields each JSON object as it arrives from Ollama. Chat-style requests
+        are normalized so the incremental text lives in ``response``.
         """
+        use_chat = self._use_chat_api(request)
+        endpoint = "/api/chat" if use_chat else "/api/generate"
         payload = self._build_generate_payload(request, stream=True)
-        url = f"{self.base_url}/api/generate"
+        url = f"{self.base_url}{endpoint}"
         body = json.dumps(payload).encode("utf-8")
         try:
             loop = asyncio.get_running_loop()
@@ -205,9 +224,15 @@ class OllamaProvider:
             if not line:
                 continue
             try:
-                yield json.loads(line)
+                chunk = json.loads(line)
             except ValueError:
                 continue
+            if use_chat:
+                msg = chunk.get("message") if isinstance(chunk, dict) else None
+                text = msg.get("content", "") if isinstance(msg, dict) else ""
+                yield {"response": text, "done": chunk.get("done", False)}
+            else:
+                yield chunk
 
     # --- embeddings ---
 

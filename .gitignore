@@ -30,6 +30,10 @@ __pycache__/
 *.pyo
 build/
 dist/
+
+# Python virtual environments — never commit
+.venv/
+venv/
 *.egg-info/
 
 # Databases (runtime + test) — never commit

@@ -1,16 +1,30 @@
 # PAW — Personal Agent Workstation
 
-PAW is a local-first personal agent runtime: it turns a user goal into a
-bounded, policy-authorized, observable and resumable sequence of actions while
-keeping providers and executors replaceable.
+PAW is a local-first engineering agent runtime for understanding, designing,
+changing and verifying complex software projects. It turns a technical goal
+into a bounded, policy-authorized, observable and resumable sequence of actions
+while keeping providers and executors replaceable.
 
 ## Current status
 
-PAW is in **Core Stabilization** and now has one coherent CLI demo path. The
+PAW is in **Core Stabilization** and now has one coherent CLI workflow. The
 repository contains implemented tasks, skills, context, memory, knowledge,
 policy, autonomy, routing, approvals, checkpoints and a runtime loop. The demo
-is suitable for exercising those boundaries; its built-in model and executor
-are deterministic stand-ins, not production automation.
+is suitable for exercising those boundaries. General chat still has a
+deterministic stand-in, while explicit read/list/write commands can use the
+workspace-scoped local filesystem executor after Policy and exact approval.
+
+Current gate result is **`PARTIAL`**: S0–S6 repair behavior is present, but the
+14-item SX qualification has not yet produced one reviewed clean revision with
+current D3 evidence. SX-01 through SX-03 have focused evidence, including the
+canonical Task/Plan identity repair. E0–E3, BETA and optional E4 remain
+`BLOCKED`; the next authorized item is `SX-04`. This is not a `DONE` or
+release-ready claim.
+
+The recorded post-stabilization direction is an engineering agent in which
+local state, project context, memory and evaluated narrow inference reduce
+cloud context, while difficult architecture and debugging work may use gated
+cloud reasoning. That direction is documented but is not yet implemented.
 
 The 2026-08-31 audit found safety, durability and ownership gaps, including
 duplicated core contracts, pre-policy model calls, disconnected capability
@@ -34,6 +48,7 @@ src/paw/
   core/        Task/runtime services, policy, autonomy, routing and persistence
   knowledge/   Source, chunk, evidence, citation and search primitives
   providers/   Provider ports and the optional Ollama adapter
+  executors/   Built-in local adapters composed by applications
   cli/         Typer commands for setup, inspection and execution profiles
 ```
 
@@ -54,16 +69,25 @@ Start an interactive durable session:
 paw chat
 ```
 
-Useful chat commands are `/status`, `/history`, `/approve`, `/resume`,
+Useful chat commands include `/status`, `/history`, `/plan`, `/why`, `/ledger`,
+`/checkpoint`, `/policy`, `/skills`, `/artifacts`, `/approve`, `/resume`,
 `/cancel`, and `/exit`. For a scriptable smoke test:
 
 ```bash
 paw chat --message "xin chào PAW" --json
 ```
 
-The default `local` provider is offline and deterministic. Use
-`--provider ollama` to try the existing local Ollama adapter; PAW falls back to
-the local stand-in if Ollama is unavailable.
+Try a real workspace-bounded write (the file does not exist until approval):
+
+```bash
+paw chat --provider local --workspace . \
+  --message "tạo file demo.txt nội dung: xin chào PAW" --json
+paw chat --provider local --workspace . --session <session-id> --approve --json
+```
+
+The default `auto` provider tries the existing local Ollama adapter and falls
+back to the deterministic stand-in. Use `--provider local` for a fully offline
+smoke path.
 
 ## Install
 
@@ -77,14 +101,13 @@ paw --help
 For development, install the project-declared extras:
 
 ```bash
-python -m pip install -e ".[dev]"
+uv sync --locked --extra dev
 python -m pytest -q
 python -m ruff check .
 ```
 
-`requirements.lock.txt` is currently a captured host-environment snapshot, not
-a PAW-only lock. Do not use it to construct a project environment. Replacing it
-with a reproducible project lock is the first roadmap task.
+`uv.lock` is generated only from `pyproject.toml` and is the canonical PAW
+dependency lock. `uv lock --check` verifies that the manifest and lock agree.
 
 ## Architectural core
 

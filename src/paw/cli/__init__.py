@@ -5,7 +5,9 @@ PAW CLI — Command line interface for Personal Agent Workstation.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
+import sys
 from typing import Any
 
 import structlog
@@ -16,6 +18,23 @@ from rich.table import Table
 from .. import __version__
 from ..core.config import settings
 from ..core.storage import db
+
+
+def _sanitize_text(text: str) -> str:
+    """Replace lone UTF-16 surrogates that can arise from mis-decoded terminal
+    or command-line input, so printing/storing never raises
+    UnicodeEncodeError. A correctly decoded character is left untouched.
+    """
+    if not text:
+        return text
+    return "".join("\ufffd" if 0xD800 <= ord(ch) <= 0xDFFF else ch for ch in text)
+
+
+# Ensure output streams tolerate any stray surrogate so a mis-encoded terminal
+# argument never crashes the CLI (it degrades to the replacement character).
+for _stream in (sys.stdout, sys.stderr):
+    with contextlib.suppress(AttributeError, ValueError, OSError):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
 
 app = typer.Typer(
     name="paw",
@@ -32,7 +51,7 @@ def _print_chat_reply(reply: Any, json_output: bool) -> None:
     if json_output:
         typer.echo(json.dumps(reply.to_dict(), ensure_ascii=False))
         return
-    console.print(f"[bold cyan]paw>[/bold cyan] {reply.content}")
+    console.print(f"[bold cyan]paw>[/bold cyan] {_sanitize_text(reply.content)}")
     details = [f"status={reply.status}", f"session={reply.session_id}"]
     if reply.task_id:
         details.append(f"task={reply.task_id}")
@@ -78,7 +97,16 @@ def _print_chat_history(messages: list[Any], json_output: bool = False) -> None:
         return
     for item in messages:
         color = "green" if item.role.value == "user" else "cyan"
-        console.print(f"[{color}]{item.role.value}>[/{color}] {item.content}")
+        console.print(f"[{color}]{item.role.value}>[/{color}] {_sanitize_text(item.content)}")
+
+
+def _print_inspection(title: str, value: Any, json_output: bool = False) -> None:
+    """Render an inspect/explain payload for humans or scripts."""
+    if json_output:
+        typer.echo(json.dumps(value, ensure_ascii=False, default=str))
+        return
+    console.print(f"[bold cyan]{title}[/bold cyan]")
+    console.print_json(data=value)
 
 
 def version_callback(value: bool) -> None:
@@ -288,16 +316,24 @@ async def _chat_async(
     message: str | None,
     session_id: str | None,
     provider: str,
+    workspace: str,
     json_output: bool,
     approve: bool,
     resume: bool,
     cancel: bool,
     show_status: bool,
     show_history: bool,
+    show_plan: bool,
+    show_why: bool,
+    show_ledger: bool,
+    show_checkpoint: bool,
+    show_policy: bool,
+    show_skills: bool,
+    show_artifacts: bool,
 ) -> None:
     from ..application.chat import ChatService
 
-    service = ChatService(provider_mode=provider)
+    service = ChatService(provider_mode=provider, workspace_root=workspace)
     try:
         session = await service.open(session_id)
         if approve:
@@ -315,18 +351,42 @@ async def _chat_async(
         if show_history:
             _print_chat_history(await service.history(), json_output)
             return
+        if show_plan:
+            _print_inspection("Plan", await service.plan(), json_output)
+            return
+        if show_why:
+            _print_inspection("Why", await service.explain(), json_output)
+            return
+        if show_ledger:
+            _print_inspection("Ledger", await service.ledger(), json_output)
+            return
+        if show_checkpoint:
+            _print_inspection("Checkpoint", await service.checkpoint(), json_output)
+            return
+        if show_policy:
+            _print_inspection("Policy", await service.policy(), json_output)
+            return
+        if show_skills:
+            _print_inspection("Skills", await service.skills(), json_output)
+            return
+        if show_artifacts:
+            _print_inspection("Artifacts", await service.artifacts(), json_output)
+            return
         if message is not None:
-            _print_chat_reply(await service.send(message), json_output)
+            _print_chat_reply(await service.send(_sanitize_text(message)), json_output)
             return
 
         console.print("[bold]PAW Chat[/bold]")
         console.print(
             f"[dim]session={session.session_id} | provider={provider} | "
+            f"workspace={service.workspace_root} | "
             "gõ /help để xem lệnh[/dim]"
         )
         while True:
             try:
-                user_input = console.input("[bold green]you>[/bold green] ").strip()
+                user_input = _sanitize_text(
+                    console.input("[bold green]you>[/bold green] ").strip()
+                )
             except (EOFError, KeyboardInterrupt):
                 console.print()
                 break
@@ -337,7 +397,9 @@ async def _chat_async(
                 break
             if command == "/help":
                 console.print(
-                    "/status  /history  /approve [id]  /resume  /cancel  /exit"
+                    "/status  /history  /plan  /why  /ledger  /checkpoint  "
+                    "/policy  /skills  /artifacts  /approve [id]  /resume  "
+                    "/cancel  /exit"
                 )
                 continue
             if command == "/status":
@@ -345,6 +407,27 @@ async def _chat_async(
                 continue
             if command == "/history":
                 _print_chat_history(await service.history())
+                continue
+            if command == "/plan":
+                _print_inspection("Plan", await service.plan())
+                continue
+            if command == "/why":
+                _print_inspection("Why", await service.explain())
+                continue
+            if command == "/ledger":
+                _print_inspection("Ledger", await service.ledger())
+                continue
+            if command == "/checkpoint":
+                _print_inspection("Checkpoint", await service.checkpoint())
+                continue
+            if command == "/policy":
+                _print_inspection("Policy", await service.policy())
+                continue
+            if command == "/skills":
+                _print_inspection("Skills", await service.skills())
+                continue
+            if command == "/artifacts":
+                _print_inspection("Artifacts", await service.artifacts())
                 continue
             if command == "/approve":
                 _print_chat_reply(await service.approve(argument or None), False)
@@ -379,9 +462,14 @@ def chat(
         help="Resume a durable chat session.",
     ),
     provider: str = typer.Option(
-        "local",
+        "auto",
         "--provider",
-        help="Model provider mode: local, auto, or ollama.",
+        help="Model provider mode: auto (try Ollama, fall back to local), local (offline echo stand-in), or ollama.",
+    ),
+    workspace: str = typer.Option(
+        ".",
+        "--workspace",
+        help="Workspace boundary for local filesystem operations.",
     ),
     json_output: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
     approve: bool = typer.Option(False, "--approve", help="Approve and resume the pending operation."),
@@ -389,6 +477,15 @@ def chat(
     cancel: bool = typer.Option(False, "--cancel", help="Cancel this chat session."),
     show_status: bool = typer.Option(False, "--status", help="Show durable chat/runtime status."),
     show_history: bool = typer.Option(False, "--history", help="Show the durable transcript."),
+    show_plan: bool = typer.Option(False, "--plan", help="Show the latest proposed operation."),
+    show_why: bool = typer.Option(False, "--why", help="Explain the latest runtime decisions."),
+    show_ledger: bool = typer.Option(False, "--ledger", help="Show the current task ledger."),
+    show_checkpoint: bool = typer.Option(
+        False, "--checkpoint", help="Show the latest checkpoint summary."
+    ),
+    show_policy: bool = typer.Option(False, "--policy", help="Show policy and approval state."),
+    show_skills: bool = typer.Option(False, "--skills", help="Show skill/context selection."),
+    show_artifacts: bool = typer.Option(False, "--artifacts", help="Show task artifacts."),
 ) -> None:
     """Chat through the full PAW runtime with policy, approval and resume."""
     modes = [
@@ -398,9 +495,16 @@ def chat(
         cancel,
         show_status,
         show_history,
+        show_plan,
+        show_why,
+        show_ledger,
+        show_checkpoint,
+        show_policy,
+        show_skills,
+        show_artifacts,
     ]
     if sum(modes) > 1:
-        console.print("[red]Choose only one action: message/approve/resume/cancel/status/history.[/red]")
+        console.print("[red]Choose only one chat action or inspection flag.[/red]")
         raise typer.Exit(code=2)
     try:
         asyncio.run(
@@ -408,12 +512,20 @@ def chat(
                 message=message,
                 session_id=session_id,
                 provider=provider,
+                workspace=workspace,
                 json_output=json_output,
                 approve=approve,
                 resume=resume,
                 cancel=cancel,
                 show_status=show_status,
                 show_history=show_history,
+                show_plan=show_plan,
+                show_why=show_why,
+                show_ledger=show_ledger,
+                show_checkpoint=show_checkpoint,
+                show_policy=show_policy,
+                show_skills=show_skills,
+                show_artifacts=show_artifacts,
             )
         )
     except ValueError as exc:

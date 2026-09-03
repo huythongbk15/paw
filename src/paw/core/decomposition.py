@@ -1,20 +1,17 @@
-"""
-PAW Core — Intelligent Planner (Phase 3)
+"""Pure deterministic goal-decomposition strategy used by ``Planner``.
 
-LLM-style goal decomposition using structured reasoning patterns.
-No external API calls — local-first structured reasoning.
+This module owns classification and structured decomposition only. It does not
+create or persist plans, propose executable operations, or schedule graph nodes.
 """
 
 from __future__ import annotations
 
-import json
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, ClassVar
 
 from .logging import get_logger
-from .storage import db
 
 logger = get_logger(__name__)
 
@@ -474,113 +471,9 @@ class StructuredReasoner:
         return f"Decomposed '{goal}' into {len(steps)} steps based on {intent_str} intent"
 
 
-class IntelligentPlanner:
-    """Intelligent planner with structured reasoning for goal decomposition."""
-
-    def __init__(self):
-        self.reasoner = StructuredReasoner()
-        self.classifier = IntentClassifier()
-
-    async def plan(self, goal: str, session_id: str, project_id: str | None = None) -> dict:
-        """Create an intelligent plan from a goal using structured reasoning."""
-        # 1. Classify intent
-        intents = self.classifier.classify(goal)
-
-        # 2. Decompose using structured reasoning
-        decomposition = self.reasoner.decompose(goal)
-
-        # 3. Convert to task nodes
-        nodes = self._decomposition_to_nodes(decomposition, session_id)
-
-        # 4. Build result
-        result = {
-            "goal": goal,
-            "session_id": session_id,
-            "project_id": project_id,
-            "intents": intents,
-            "decomposition": decomposition.to_dict(),
-            "nodes": [n.to_dict() for n in nodes],
-            "confidence": decomposition.confidence,
-            "reasoning_summary": decomposition.reasoning_summary,
-        }
-
-        logger.info("intelligent_plan_created", goal=goal[:50], steps=len(nodes))
-        return result
-
-    def _decomposition_to_nodes(self, decomposition: DecompositionResult, session_id: str) -> list:
-        """Convert decomposition steps to task nodes."""
-        nodes = []
-        for step in decomposition.steps:
-            nodes.append(DecompositionStep(
-                id=step.id,
-                goal=step.goal,
-                reasoning=step.reasoning,
-                sub_goals=step.sub_goals,
-                required_capabilities=step.required_capabilities,
-                estimated_effort=step.estimated_effort,
-                order=step.order,
-            ))
-        return nodes
-
-    async def plan_and_save(self, goal: str, session_id: str, project_id: str | None = None) -> dict:
-        """Create plan and save to database."""
-        result = await self.plan(goal, session_id, project_id)
-
-        # Save to DB
-        await self._save_plan(result, session_id)
-
-        return result
-
-    async def _save_plan(self, result: dict, session_id: str) -> None:
-        """Save intelligent plan to database."""
-        plan_id = uuid.uuid4().hex[:16]
-
-        async with db.transaction() as conn:
-            await conn.execute(
-                """
-                INSERT INTO plans (id, task_id, session_id, goal, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (plan_id, "", session_id, result["goal"],
-                 datetime.now(UTC).isoformat(),
-                 datetime.now(UTC).isoformat()),
-            )
-
-            # Save nodes
-            for node in result["nodes"]:
-                await conn.execute(
-                    """
-                    INSERT INTO task_nodes (
-                        id, task_id, goal, dependencies, skills,
-                        context_requirements, capability_requirements,
-                        policy_requirements, executor, model, result,
-                        status, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        node["id"],
-                        "",
-                        node["goal"],
-                        json.dumps([]),
-                        json.dumps([]),
-                        json.dumps({}),
-                        json.dumps(node.get("required_capabilities", [])),
-                        json.dumps([]),
-                        None,
-                        None,
-                        None,
-                        "pending",
-                        datetime.now(UTC).isoformat(),
-                        datetime.now(UTC).isoformat(),
-                    ),
-                )
-
-    async def get_reasoning(self, goal: str) -> DecompositionResult:
-        """Get reasoning for a goal without creating a full plan."""
-        return self.reasoner.decompose(goal)
-
-
-# Initialize plans table if needed
-async def ensure_intelligent_planner_table() -> None:
-    """Ensure tables exist."""
-    await db.initialize()
+__all__ = [
+    "DecompositionResult",
+    "DecompositionStep",
+    "IntentClassifier",
+    "StructuredReasoner",
+]

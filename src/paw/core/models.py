@@ -290,6 +290,8 @@ class Evidence(BaseModel):
     claim: str
     confidence: float = 0.5
     citation: str = ""
+    evidence_id: str = ""
+    chunk_id: str = ""
 
 
 class Citation(BaseModel):
@@ -297,6 +299,8 @@ class Citation(BaseModel):
     source_id: str
     context: str = ""
     position: int = 0
+    citation_id: str = ""
+    evidence_id: str = ""
 
 
 class Usage(BaseModel):
@@ -324,6 +328,7 @@ class TaskResult(BaseModel):
     artifacts: list[Artifact] = Field(default_factory=list)
     decisions: list[Decision] = Field(default_factory=list)
     evidence: list[Evidence] = Field(default_factory=list)
+    citations: list[Citation] = Field(default_factory=list)
     files_changed: list[str] = Field(default_factory=list)
     executor: str | None = None
     model: str | None = None
