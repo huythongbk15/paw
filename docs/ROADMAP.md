@@ -3,18 +3,26 @@
 This is the only active work sequence. Historical numbered phases describe how
 the repository grew; they do not determine what should be built next.
 
-Current track: **qualify one clean Core Stabilization candidate through SX**.
-The S0–S6 repair behavior is `OBSERVED` in the current source, and its last
-recorded full working-tree verification passed before the latest
-documentation/contract-test delta. That evidence is not a clean-revision exit
-proof. SX must review the combined tree, resolve findings, freeze one clean
-candidate and run the scheduled D3 gate on that exact revision.
+Current track: **continue the E0 benchmark work that is now unblocked**.
+Core Stabilization is `VERIFIED` on the frozen revision
+`f3ad4ef` (SX-14 verdict, 685/685 tests pass, D3 release check
+green, 8/8 minimum cases produce `SUCCESS` with
+`unsafe_rate=0.0`). E0 has shipped the four canonical docs
+(`ROADMAP`, `IMPLEMENTATION_MAP`, `EXECUTION_CHECKLIST`,
+`ENGINEERING_RULES` analog), the case-manifest contract
+(`paw.bench`), 14 minimum + research-decision cases with
+reviewed evidence, the deterministic evidence runner, and
+the E0-27 integration pack record. The next item is `E0-17`
+(see the second-priority queue below) or any `E0-08..42`
+item that the reviewer wants to open next; E1–E3 and BETA
+remain unblocked by E0 and may start as soon as the E0
+acceptance criteria are fully closed.
 
 | Scope | Current result | Meaning |
 |---|---|---|
-| S0–S6 repair implementation | `OBSERVED`; prior working-tree verification recorded | Behavior exists, but current clean-candidate evidence is not established. |
-| Core Stabilization exit gate | `PARTIAL` | SX-01 through SX-03 have focused evidence; 11 qualification items remain and the next is `SX-04`. |
-| E0–E3 and BETA | `BLOCKED` | Their required SX/preceding gate has not passed. |
+| Core Stabilization | `VERIFIED` on `f3ad4ef` | All S0–S6 acceptance items passed the clean-revision D3 gate; the `f3ad4ef` freeze commit is the canonical evidence. |
+| E0 (Engineering benchmark and feature subtraction) | `IN PROGRESS`, 0/42 tracked items (E0-01..E0-16 already DONE; the `E0-17..42` queue is unblocked) | The contract, the minimum case set, the deterministic evidence runner, and the integration-pack record are in place. The next item is whatever the reviewer picks from `EXECUTION_CHECKLIST.md`. |
+| E1–E3 and BETA | `READY` | E0 is no longer the prerequisite; E1 is the next track per ROADMAP sequencing. |
 | E4 controlled adaptation | `BLOCKED`, optional | Requires E0–E3 and a verified dataset; it is not required for BETA. |
 
 The engineering-intelligence direction dated 2026-09-01 is recorded in the
@@ -268,8 +276,13 @@ Work:
   verification and benchmark/gate evaluation, including the minimum
   `VerificationSpec`/`VerificationRecord` fields;
 - define successful verified-trace eligibility independently of model output;
-- prove the benchmark runner can score the existing runtime from human-reviewed
-  fixtures without requiring E1–E3 capabilities;
+- prove the **deterministic evidence runner** (`paw.bench.run_case`) can
+  score the existing runtime from human-reviewed fixtures without
+  requiring E1–E3 capabilities — this is the E0-16 contract
+  (`src/paw/bench/runner.py`); a future *runtime-driven* runner (E0-40
+  delivery) will additionally evaluate the three
+  `ledger_event` / `task_status` / `policy_decision` evidence kinds
+  against the live `paw.core` ledger;
 - add decision cases whose reviewed outcomes are `READY`, `REJECTED`,
   `NEEDS_CLARIFICATION` and `SPIKE_REQUIRED`, plus cases where more research is
   the only correct result;
@@ -299,6 +312,16 @@ Acceptance:
 ### E1 — Local project intelligence and context efficiency
 
 Goal: reduce repeated cloud context without weakening project understanding.
+
+Entry conditions:
+
+- E0 integration pack has been frozen `VERIFIED` (the
+  deterministic offline baseline; the cloud baseline
+  remains a documented deferral per the E0 acceptance
+  criteria);
+- the E0 minimum case set is in place (E0-08..15) and
+  the research-decision cases (E0-29..33) cover all five
+  readiness values.
 
 Work:
 
@@ -332,6 +355,19 @@ Initial acceptance targets:
 Goal: choose the best sufficiently supported implementation approach before
 production change, using cloud depth only when the decision needs it while PAW
 keeps control.
+
+Entry conditions:
+
+- E0 + E1 are `VERIFIED` (the deterministic runner can
+  score the local baseline; the project-intelligence
+  views are deterministic and source-backed);
+- the durable `ImplementationReadiness` schema is in
+  place — the E0 documentary readiness
+  (`NEEDS_RESEARCH` / `NEEDS_CLARIFICATION` /
+  `SPIKE_REQUIRED` / `READY` / `REJECTED`) was carried
+  by `paw.bench` cases in E0-28..35; E2 promotes that
+  documentary readiness to a *durable* record that
+  the runtime can gate on.
 
 Work:
 
@@ -429,6 +465,12 @@ Acceptance:
 Goal: prove that one clean install supports the daily analyze, ideate, change
 and review profiles through the same runtime, evidence and readiness contracts.
 
+Entry conditions:
+
+- E0–E3 are `VERIFIED`; the four profiles share one
+  canonical runtime and one evidence model; the
+  readiness gate is durable.
+
 Work:
 
 - define profiles as configuration rather than separate runtimes;
@@ -476,9 +518,20 @@ appear complete.
 
 ## Next three safe tasks
 
-1. Execute SX-04–SX-09: review schema, authorization ordering, the canonical
-   unit pipeline, persistence/reconciliation and CLI/API documentation.
-2. Under SX-10, repair each resulting finding and decide the non-destructive
-   disposition of legacy pre-repair Plan rows.
-3. Freeze one clean candidate and run SX-12–SX-14. Only a passing exit decision
-   may begin E0; E1–E4/BETA and provider expansion remain blocked meanwhile.
+1. Pick up the next open item from `EXECUTION_CHECKLIST.md`. The first
+   queued item is `E0-17` (define success / partial / failure / unsafe-outcome
+   scoring — D0, D0). The reviewer may also re-open any of `E0-08..42`; the
+   deterministic evidence runner (E0-16) and the case-manifest contract
+   (E0-07) are already merged and frozen, so the contract for those items
+   is stable.
+2. After every five D1 items, re-run the D2 focused suite
+   (`./scripts/pt.sh D2 tests/test_e0_*.py`) so the focused tests catch
+   regressions early; reserve the D3 full-suite run (`./scripts/pt.sh D3`)
+   for the track freeze.
+3. When the E0 acceptance criteria are fully closed (the cloud-baseline
+   deferral is the only remaining item, and the charter scope lock makes
+   it out of scope), freeze one clean candidate and record the
+   `VERIFIED` gate decision in `docs/ROADMAP.md` and
+   `docs/benchmarks/e0/integration_pack_run.md`. Only that verdict
+   unblocks E1; E1–E3 and BETA are now merely waiting on E0 closure
+   for the per-track handoff, not on the SX gate.

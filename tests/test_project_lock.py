@@ -115,8 +115,11 @@ def test_status_and_post_gate_sequence_are_unambiguous() -> None:
 
     assert "Status has two separate dimensions" in docs_readme
     assert "`DONE` and bare `implemented` are not status labels" in docs_readme
-    assert "| Core Stabilization exit gate | `PARTIAL` |" in roadmap
-    assert "| E0–E3 and BETA | `BLOCKED` |" in roadmap
+    # Core Stabilization is now VERIFIED (SX-14 on f3ad4ef).
+    assert "| Core Stabilization | `VERIFIED` on `f3ad4ef` |" in roadmap
+    # E0 is the active track, not blocked.
+    assert "E0 (Engineering benchmark" in roadmap
+    assert "| E1–E3 and BETA | `READY` |" in roadmap
     assert "E0 → E1 → E2 → E3 → BETA" in roadmap
     assert "### BETA — Daily engineering-partner validation" in roadmap
     assert "E4 training is not required to pass this gate" in roadmap

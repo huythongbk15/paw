@@ -4,11 +4,113 @@ This document defines the target contract for PAW Core. It is intentionally
 stable and independent of the current file layout. See
 `IMPLEMENTATION_MAP.md` for what the repository actually implements today.
 
+## Status legend
+
+Each substantive paragraph in this document carries a
+status tag in its first sentence so a reviewer can tell
+what is in code today from what is a ratified target
+and what is a future E1–E4 commitment. The three tags
+are:
+
+- **`[CURRENT]`** — the paragraph describes behaviour
+  that the current source already implements. The
+  matching evidence lives in `IMPLEMENTATION_MAP.md` and
+  the test suite. Example: "`paw.core` exports exactly
+  eleven runtime-contract symbols" (E0-23a guard test,
+  frozen revision `f3ad4ef`).
+- **`[RATIFIED TARGET]`** — the paragraph describes a
+  contract that the product and engineering-intelligence
+  direction (Charter 2026-09-01) have committed to, but
+  the implementation is not yet in source. The next E1–E4
+  track that owns the contract lands it; the tag is
+  removed only when the implementation merges. Example:
+  "durable `ImplementationReadiness` is a runtime-gated
+  record (E2)" — the *documentary* readiness values exist
+  in E0-28..35; the *durable* record is E2.
+- **`[FUTURE]`** — the paragraph describes an
+  E1–E4 commitment that the charter has scoped but
+  whose contract is not yet ratified. The tag is
+  upgraded to `[RATIFIED TARGET]` when the owning
+  roadmap track's acceptance criteria are approved.
+  Example: "E4 dataset ingestion from verified traces".
+
+A section may mix tags across paragraphs; the tag is on
+the *paragraph*, not the section. A reviewer who needs
+to re-verify a `[CURRENT]` claim runs the matching test
+in `tests/`; a reviewer who needs to challenge a
+`[RATIFIED TARGET]` claim reads the Charter and the
+roadmap track's acceptance criteria.
+
+## Canonical document precedence
+
+When two canonical documents disagree, the precedence
+is fixed so the reviewer does not have to re-litigate it
+per change. The order, from highest to lowest:
+
+1. **`docs/PRODUCT_CHARTER.md`** — *why* and *scope*.
+   The Charter is the constitution: it names the
+   non-negotiables (local-first, single-user through
+   BETA, no `BenchmarkTask` second result model, no
+   raw-activity training, evidence before implementation
+   for every engineering goal). If a change would
+   violate a Charter rule, the change is wrong; the
+   Charter is wrong if the rule itself has changed.
+2. **`docs/ARCHITECTURE.md`** — *target invariants*.
+   This document. It defines the contracts the
+   implementation must converge on. It carries
+   `[CURRENT]` / `[RATIFIED TARGET]` / `[FUTURE]` tags
+   so a reviewer can tell ratified contracts from
+   future commitments.
+3. **`docs/ROADMAP.md`** — *sequencing and status*.
+   The roadmap names which track is active, which is
+   unblocked, and what the next three safe tasks are.
+   It does not redefine contracts; it orders the work
+   that lands the contracts.
+4. **`docs/IMPLEMENTATION_MAP.md`** — *current code
+   reality*. The implementation map is the only document
+   that records what the source actually does. A
+   `[CURRENT]` claim in this document must have a
+   matching row in the implementation map; a discrepancy
+   means the implementation map is stale.
+5. **`docs/EXECUTION_CHECKLIST.md`** — *atomic execution
+   and evidence*. The checklist records one evidence
+   string per closed item. An item without an evidence
+   string is not done; the evidence string is the
+   reviewer-readable record of what was run.
+
+The rule of conflict resolution is: **the higher
+document wins**, and the lower document must be updated
+to match in the same change. A `ROADMAP.md` change that
+violates `ARCHITECTURE.md` is wrong; an
+`IMPLEMENTATION_MAP.md` change that violates
+`ARCHITECTURE.md` is wrong; an `EXECUTION_CHECKLIST.md`
+mark that contradicts `IMPLEMENTATION_MAP.md` is wrong.
+The Charter is above all four; nothing below it can
+override it.
+
+The cross-document checks are runnable:
+
+- The bootstrap-canonical-docs contract batch
+  (`skills/bootstrap-canonical-docs/scripts/contract-checks.sh`)
+  enforces the status vocabulary and the roadmap → checklist
+  mapping.
+- The doc-driven-stabilization skill's per-item D0
+  hygiene (`./scripts/pt.sh D0 docs`) rejects stale
+  "current phase" markers.
+- The E0-23a paw.core surface guard (17+ tests) asserts
+  the 11-symbol contract that the architecture ratifies.
+
+A reviewer who disagrees with the precedence above should
+first update this section with a recorded decision;
+"the precedence is whatever I want it to be today" is
+not a review argument the next reviewer can reproduce.
+
 ## System boundary
 
-PAW Core accepts a user goal and owns the state transitions that turn it into a
-terminal task result. It may call replaceable providers and executors through
-ports, but those adapters do not decide policy, task state or resume behavior.
+**`[CURRENT]`** PAW Core accepts a user goal and owns the state transitions that
+turn it into a terminal task result. It may call replaceable providers and
+executors through ports, but those adapters do not decide policy, task state or
+resume behavior.
 
 ```text
 CLI / library caller
@@ -104,11 +206,11 @@ never evidence by itself.
 
 ## Engineering reasoning boundary
 
-PAW is optimized for code, systems and software architecture. Project
-understanding is a derived, versioned view over workspace sources, dependency
-relationships, tests, task history, decisions and verified artifacts. It is
-not a second task store or an unbounded prompt, and it does not create a new
-owner beside Memory, Knowledge and Context Compiler.
+**`[CURRENT]`** PAW is optimized for code, systems and software architecture.
+Project understanding is a derived, versioned view over workspace sources,
+dependency relationships, tests, task history, decisions and verified
+artifacts. It is not a second task store or an unbounded prompt, and it does
+not create a new owner beside Memory, Knowledge and Context Compiler.
 
 The target reasoning flow is:
 
@@ -159,9 +261,31 @@ that action.
 
 ### Pre-implementation research contract
 
-This is a post-Core-Stabilization target, not a claim about the current runtime.
-It adds a decision gate to the canonical loop; it does not add a second planner,
-runtime, store or knowledge system.
+**`[RATIFIED TARGET]`** (with **`[CURRENT]`** for the documentary half and
+**`[FUTURE]`** for the durable half — see below). This is a
+post-Core-Stabilization target, not a claim about the current runtime.
+It adds a decision gate to the canonical loop; it does not add a second
+planner, runtime, store or knowledge system.
+
+**`[CURRENT]`** The five readiness values
+(`NEEDS_RESEARCH` / `NEEDS_CLARIFICATION` / `SPIKE_REQUIRED` /
+`READY` / `REJECTED`) are present today as a *documentary*
+contract: every research-decision case in
+`benchmarks/e0/cases/decision_*.yaml` declares its readiness and
+the E0 deterministic evidence runner scores the case without
+consulting model output. The cases in `paw.bench` carry the
+readiness in the case manifest; the runner produces a
+`SUCCESS` row only when the deterministic evidence verifies.
+
+**`[FUTURE]`** A *durable* `ImplementationReadiness` record —
+a typed row the runtime can gate on, with
+`DRAFT` / `FINAL` / `STALE` / `SUPERSEDED` lifecycle states
+and a freshness check tied to the project revision — is
+the E2 deliverable. The E0 documentary readiness is the
+pre-E2 contract; the E2 durable record is the post-E2
+contract. Both are real; the difference is whether the
+runtime can `SELECT WHERE readiness = 'READY'` and refuse
+to run non-`READY` proposals.
 
 Every engineering goal is assigned one bounded research depth before production
 implementation:
@@ -211,6 +335,10 @@ unbounded certainty. Research operations, including model and network calls,
 still use the canonical runtime and pass Policy before their effects.
 
 ### Recorded architecture decision: extend the canonical spine
+
+**`[RATIFIED TARGET]`** for the contracts; **`[CURRENT]`** for the canonical-spine
+shape (single Task, single Planner, single runtime, single
+SkillFabric — verified by the E0-23a paw.core surface guard).
 
 Decision date: 2026-09-01. Three options were considered:
 
@@ -262,6 +390,11 @@ missing safety constraint or failed verification into `READY`.
 
 ### Verification model and verified traces
 
+**`[CURRENT]`** for the three-layer distinction (every layer is named in
+`paw.bench.verification` and the E0-38 spec); **`[RATIFIED TARGET]`** for
+the full verified-trace pipeline the runtime-driven
+runner will consume (E0-40 + E2).
+
 PAW uses “verification” at three non-interchangeable layers:
 
 1. **Operation observation:** `ExecutionObservation` records whether one
@@ -301,6 +434,11 @@ so benchmark construction does not depend on E1–E3 capabilities.
 
 ### Escalation protocol
 
+**`[CURRENT]`** for the protocol shape; **`[RATIFIED TARGET]`** for the
+non-terminal `ESCALATE` (the current controller still treats it as a
+stopped outcome; E2 promotes it to a non-terminal control
+transition).
+
 Escalation changes the reasoning route; it does not merge model routing with
 executor routing. The target protocol is:
 
@@ -328,6 +466,11 @@ inside route selection. Capability Router continues to select executors only.
 
 ### Governed skill lifecycle
 
+**`[CURRENT]`** for the registry and the CANDIDATE / ACTIVE / DEPRECATED /
+SUPERSEDED half. **`[RATIFIED TARGET]`** for the REVIEWED + REJECTED
+half and the full lifecycle (added by E3 once the entry
+conditions are met).
+
 `SkillFabric` remains the sole skill registry and lifecycle owner. The existing
 skill manifest is extended rather than wrapped by a second registry. Each exact
 skill version has immutable content/provenance and one lifecycle state:
@@ -349,12 +492,13 @@ version through a new audited transition; it never rewrites version history.
 
 ### Tenancy boundary
 
-Through BETA, PAW assumes one local user authority over its configured
-workspaces. `project_id`, `session_id` and `task_id` are scope identifiers, not
-security tenants; `Identity` stores preferences, not authentication. The runtime
-does not claim isolation between mutually untrusted users sharing one database
-or process. Multi-user/hosted operation requires a separate threat model,
-authorization contract, tenant-keyed persistence migration and acceptance gate.
+**`[CURRENT]`** Through BETA, PAW assumes one local user authority over its
+configured workspaces. `project_id`, `session_id` and `task_id` are scope
+identifiers, not security tenants; `Identity` stores preferences, not
+authentication. The runtime does not claim isolation between mutually
+untrusted users sharing one database or process. Multi-user/hosted operation
+requires a separate threat model, authorization contract, tenant-keyed
+persistence migration and acceptance gate.
 
 ## Dependency direction
 
@@ -378,11 +522,11 @@ direction matter more than directory shape.
 
 ## Canonical runtime contract
 
-There is one logical loop for single tasks and graph nodes. A graph changes how
-the next ready unit is selected; it does not create another safety or execution
-pipeline.
+**`[CURRENT]`** There is one logical loop for single tasks and graph nodes. A
+graph changes how the next ready unit is selected; it does not create another
+safety or execution pipeline.
 
-The current implementation materializes that contract as
+**`[CURRENT]`** The current implementation materializes that contract as
 `PawRuntime._execute_unit`. Public modes may own proposal/context iteration or
 graph dependency transitions, but Policy, Autonomy, execution, observation,
 operation recording and approval consumption have this one owner. A structural
@@ -431,18 +575,21 @@ before entering runtime state.
 
 ## Decision ownership
 
-| Decision | Sole owner | Notes |
-|---|---|---|
-| Is the action permitted? | Policy Engine | `ASK` is a wait state, never implicit permission. |
-| Should the loop continue? | Autonomy Controller | Uses budget, progress, repetition, stall and terminal state. |
+**`[CURRENT]`** with **`[RATIFIED TARGET]`** rows noted inline.
+
+| Decision | Sole owner | Notes | Status |
+|---|---|---|---|
+| Is the action permitted? | Policy Engine | `ASK` is a wait state, never implicit permission. | **`[CURRENT]`** (Policy Guard v2; `test_policy_deny_blocks_before_execution` etc.) |
+| Should the loop continue? | Autonomy Controller | Uses budget, progress, repetition, stall and terminal state. | **`[CURRENT]`** (Autonomy + detectors + execution profile) |
+| Is implementation ready? | Application runtime using `ImplementationReadiness` | Consumes the source-backed decision artifact; does not replace Policy, Autonomy or task state. | **`[CURRENT]`** for the documentary half (E0-28..35 cases); **`[FUTURE]`** for the durable half (E2) |
 | Which executor can perform it? | Capability Router | Matches action capabilities, risk, privacy, cost and availability. |
 | Which model should reason? | Model Router | Matches cognitive role and provider constraints; does not select executors. |
 | What context is sent? | Context Compiler | Enforces budget, selection reason and provenance. |
 | Which skills are relevant? | `AdvancedSkillSelector` | Owns lexical/semantic ranking; legacy selectors only adapt result shapes and never authorize execution. |
 | Which skill version may be active? | `SkillFabric` | Owns reviewed lifecycle transitions; selection considers only `ACTIVE` versions. |
 | Is implementation ready? | Application runtime using `ImplementationReadiness` | Consumes the source-backed decision artifact; does not replace Policy, Autonomy or task state. |
-| Did an acceptance check pass? | Application runtime applying `VerificationSpec` | Converts exact observations into `VerificationRecord`; executor success alone is insufficient. |
-| Does reasoning require a stronger route? | Application runtime applying recorded role thresholds | Produces the escalation transition; Autonomy limits another attempt and Model Router selects it. |
+| Did an acceptance check pass? | Application runtime applying `VerificationSpec` | Converts exact observations into `VerificationRecord`; executor success alone is insufficient. | **`[CURRENT]`** for the contract (`paw.bench.verification`); **`[RATIFIED TARGET]`** for the runner that consumes it. |
+| Does reasoning require a stronger route? | Application runtime applying recorded role thresholds | Produces the escalation transition; Autonomy limits another attempt and Model Router selects it. | **`[CURRENT]`** for the protocol; **`[RATIFIED TARGET]`** for the non-terminal `ESCALATE` (the current controller still treats it as a stopped outcome; E2 promotes it to a non-terminal control transition). |
 | How is a goal decomposed? | Planner | Creates and persists canonical `Plan`/`TaskNode` records; decomposition helpers are pure strategies. |
 | What operation is attempted next? | Runtime proposer | Creates `ProposedAction` only; it does not persist plans or advance DAG state. |
 | What runs next in a DAG? | Task Scheduler | Honors dependency and failure propagation rules. |
@@ -486,6 +633,12 @@ For graphs:
 - resume restores node states and operation keys, not only graph order.
 
 ## Safety invariants
+
+**`[CURRENT]`** for invariants 1–14 below — each is enforced by a dedicated test
+in `tests/test_phase6_security.py`, `tests/test_phase19_runtime_hardening.py`,
+or the E0-26 review. The invariants themselves are
+constitutional; a reviewer who wants to relax one must
+first change the Charter, not the test.
 
 These are constitutional. Violating one makes the affected gate `FAIL` even if
 the test suite is otherwise green.
@@ -555,6 +708,11 @@ gate; each becomes an acceptance invariant when its named track starts:
 
 ## Persistence contract
 
+**`[CURRENT]`** for the schema ownership, the two tested transaction
+boundaries in `RuntimePersistence`, and the close/reopen
+durability story (E0-26 dead-table cleanup confirmed the
+contract is enforced by `test_no_unreferenced_persistence_table`).
+
 Schema ownership is centralized. Feature modules may define repositories or
 store interfaces, but must not create or drop tables on demand.
 
@@ -596,6 +754,11 @@ implement and test its own intent and reconciliation semantics; PAW never treats
 an absent completion record as proof that an arbitrary effect did not occur.
 
 ## Context, memory and knowledge
+
+**`[CURRENT]`** for the five-store separation and the `paw.knowledge.normalize_knowledge_result`
+boundary. **`[RATIFIED TARGET]`** for the four-layer user-adaptation
+ladder below (the ladder is the E3 contract; the layers
+themselves are present today).
 
 - **Context** is the bounded payload for the current decision.
 - **Memory** stores user/project facts and prior experience worth recalling.
@@ -657,6 +820,11 @@ Adding an adapter must not require a new PAW task, policy, context or checkpoint
 type. If it does, the port is incomplete or the adapter is leaking inward.
 
 ## Public application surface
+
+**`[CURRENT]`** for the small-surface promise (verified by the E0-23a paw.core
+11-symbol guard and the E0-26 disposition table — 42/42 inventory
+items are `core`); **`[RATIFIED TARGET]`** for the bounded projections
+that post-E0 tracks add.
 
 The intended public surface is small:
 
