@@ -325,6 +325,83 @@ E0-08..15 and E0-16).
   pass without modification; and `benchmarks/e0/` does not yet exist (its
   creation is owned by `E0-02`).
 
+### Active decision record: E0-06 repeated runs and non-determinism
+
+Decision class: `STANDARD`. Readiness: `READY` for the spec
+document only; this does not authorize a runner
+implementation (E0-16), a multi-run dispatcher, or
+release-gate adoption.
+
+- **Problem:** E0-06 requires a way to summarize repeated
+  runs and non-determinism, but the existing specs
+  produce a single outcome per case. A reviewer cannot
+  tell whether a `PARTIAL` is stable or flaky; the
+  runner has no rule for "is this case reliable?".
+- **Constraints:** the runner never averages PASS/FAIL
+  into a single number; the summary is three
+  independent statistics (`pass_rate` excluding UNSAFE,
+  `unsafe_rate`, `flakiness_score`); a `flakiness_score
+  > 0.2` flags the case as `FLAKY`; the per-run schema
+  records a `seed` for deterministic reproduction;
+  min 3 / default 5 / max 20 runs per case.
+- **Evidence:** `paw.bench` is the contract owner; the
+  Phase 19 ledger event types supply the per-run
+  fields; the E0-04 scoring spec supplies the
+  `outcome` values; the E0-05 measurement spec supplies
+  the per-run numbers (`latency`, `cost`, `human`).
+- **Option A — selected:** a doc-only spec at
+  `docs/benchmarks/e0/repeated_runs_spec.md` that names
+  the per-run JSONL row, the three summary statistics,
+  the flakiness flag, the latency decomposition, and
+  the env-overridable cap.
+- **Option B — rejected:** collapse repeated runs into
+  one number (e.g. "case passes 7 of 10 times" -> score
+  0.7). The number has no clear meaning; the reviewer
+  cannot tell pass from flakiness; the contract
+  becomes opinionated.
+- **Option C — rejected:** require the runner to make
+  every run deterministic. The runtime is honest about
+  non-determinism (model temperature, network jitter);
+  the contract should report it, not hide it.
+- **Pass-rate definition (selected):**
+  `pass_rate = SUCCESS / (runs - UNSAFE)`. UNSAFE is
+  excluded because UNSAFE is a release-blocker signal
+  (E0-04), not a quality signal. A case that is always
+  UNSAFE has `pass_rate = None`, which the reviewer
+  reads as "safety defect, not quality defect".
+- **Flakiness definition (selected):**
+  `flakiness_score = (runs - modal_runs) / runs`. A
+  case is flagged `FLAKY` when the score is strictly
+  greater than 0.2; a flaky case is not promoted to
+  `VERIFIED` until a case report is written.
+- **Latency decomposition (selected):** every run
+  records `latency.runtime`, `latency.network`,
+  `latency.human_wait`; their sum equals the E0-05
+  `latency.total`. A reviewer can tell at a glance
+  whether the variance is in the runtime, the network,
+  or human wait time. The model is never named as the
+  source of variance; the `seed` field carries the
+  deterministic input.
+- **Contrary evidence and compatibility cost:** the
+  spec hard-codes the three statistics and the
+  flakiness flag threshold. A reviewer who wants a
+  different statistic re-derives it from
+  `runs.jsonl`; the spec does not need to change.
+- **Research budget and stop condition:** project
+  source, the E0-04 scoring spec, the E0-05
+  measurement spec, and standard statistical practice
+  for binary outcomes. Stop after the spec is in the
+  docs and the cross-link batch is green. External
+  research cannot change a PAW-owned summary
+  contract.
+- **Falsifiable acceptance:**
+  `docs/benchmarks/e0/repeated_runs_spec.md` exists
+  and defines exactly three summary statistics;
+  the per-run JSONL schema is concrete; the
+  flakiness flag threshold is concrete; the latency
+  decomposition sums to the E0-05 `latency.total`;
+  the cross-link batch reports `CONTRACT PASSED`.
+
 ### Active decision record: E0-05 quantitative measurements
 
 Decision class: `FAST`. Readiness: `READY` for the spec
