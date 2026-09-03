@@ -102,7 +102,7 @@ research/readiness đo được; mọi public capability được phân loại. 
 
 ### Runner và baseline
 
-- [ ] `E0-16` Làm một deterministic runner qua public application surface. `(0.5d, D2)`
+- [x] `E0-16` Làm một deterministic runner qua public application surface. `(0.5d, D2)` — PASS: `paw.bench.run_case(manifest, project_root, runs, seed, deterministic_timestamps)` + `load_case(path)` + `run_case_file(path)` + `write_runs_jsonl(result, path)` + `DEFAULT_DENY_LIST` tạo thành deterministic runner; hỗ trợ `file_contains` + `command_exit` (list-literal argv qua `ast.literal_eval`, không shell); `ledger_event` / `task_status` / `policy_decision` dành cho runtime-driven runner tương lai; per-run JSONL row khớp schema E0-06; 24 D1 unit test trong `tests/test_e0_16_runner.py` cover load+run+write, outcome rule (SUCCESS / PARTIAL / FAILURE), determinism với `deterministic_timestamps=True`, deny-list refusal, unparseable command, summary aggregation, parametrized smoke test cho 8 E0 minimum case, subprocess CLI smoke, và E0-23a paw.core 11-symbol surface guard. D2 verify: `pt.sh D2 tests/test_e0_16_runner.py` → 101 passed trong 46.02s; ruff sạch; cross-link: PASSED.
 - [ ] `E0-17` Ghi runtime, ledger, context, artifact và verification output mỗi run. `(0.5d, D2)`
 - [ ] `E0-18` Thêm report máy đọc được, không tạo result contract thứ hai. `(0.5d, D1)`
 - [ ] `E0-19` Chạy và review deterministic offline baseline. `(0.5d, D2)`
