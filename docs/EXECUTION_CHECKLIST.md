@@ -110,7 +110,7 @@ capability has a disposition. Estimated 15–22 days.
 
 ### Runner and baseline
 
-- [ ] `E0-16` Implement one deterministic case runner through the public application surface. `(0.5d, D2)`
+- [x] `E0-16` Implement one deterministic case runner through the public application surface. `(0.5d, D2)` — PASS: `paw.bench.run_case(manifest, project_root, runs, seed, deterministic_timestamps)` + `load_case(path)` + `run_case_file(path)` + `write_runs_jsonl(result, path)` + `DEFAULT_DENY_LIST` form the deterministic runner; supports `file_contains` + `command_exit` (list-literal argv via `ast.literal_eval`, no shell); `ledger_event` / `task_status` / `policy_decision` are reserved for the future runtime-driven runner; per-run JSONL row matches the E0-06 schema; 24 D1 unit tests in `tests/test_e0_16_runner.py` cover load+run+write, outcome rules (SUCCESS / PARTIAL / FAILURE), determinism with `deterministic_timestamps=True`, deny-list refusal, unparseable commands, summary aggregation, parametrized smoke test for all 8 E0 minimum cases, subprocess CLI smoke, and the E0-23a paw.core 11-symbol surface guard. D2 verify: `pt.sh D2 tests/test_e0_16_runner.py` → 101 passed in 46.02s; ruff clean; cross-link: PASSED.
 - [ ] `E0-17` Capture runtime, ledger, context, artifact and verification outputs per run. `(0.5d, D2)`
 - [ ] `E0-18` Add a machine-readable aggregate report without a second result contract. `(0.5d, D1)`
 - [ ] `E0-19` Run and review the deterministic offline baseline. `(0.5d, D2)`

@@ -605,3 +605,27 @@ __all__ = [
     "is_valid_case_manifest",
     "validate_case_manifest",
 ]
+
+
+# E0-16: re-export the runner so callers can use
+# ``from paw.bench import run_case, load_case, ...`` without
+# importing the runner submodule explicitly.
+from .runner import (  # noqa: E402
+    CaseRunResult,
+    RunnerError,
+    RunRow,
+    load_case,
+    run_case,
+    run_case_file,
+    write_runs_jsonl,
+)
+
+__all__ += [
+    "CaseRunResult",
+    "RunRow",
+    "RunnerError",
+    "load_case",
+    "run_case",
+    "run_case_file",
+    "write_runs_jsonl",
+]
