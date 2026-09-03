@@ -325,6 +325,78 @@ E0-08..15 and E0-16).
   pass without modification; and `benchmarks/e0/` does not yet exist (its
   creation is owned by `E0-02`).
 
+### Active decision record: E0-07 schema validation
+
+Decision class: `STANDARD`. Readiness: `READY` for the
+schema-validation contract; the E0-16 runner will import
+`validate_case_manifest` / `is_valid_case_manifest` /
+`SchemaError` and nothing else from `paw.bench`.
+
+- **Problem:** E0-07 requires schema validation for
+  malformed or incomplete case manifests, but the
+  existing `CaseManifest.__post_init__` raises on the
+  first error. A reviewer who fixes a typo then runs the
+  suite gets a single new error at a time; the fix loop
+  is slow. The runner also needs stable error codes so
+  it can match by string without parsing prose.
+- **Constraints:** the validator must not raise; it
+  must return a list of errors with stable codes; it
+  must accumulate every problem in one pass; the
+  contract must not introduce a second manifest
+  representation; `paw.core` keeps its 11-symbol
+  surface.
+- **Evidence:** `paw.bench.CaseManifest.__post_init__`
+  already encodes the rules; the E0-02 reject tests
+  prove the rules are correct; the E0-08..15 minimum
+  case set will need every error class the validator
+  reports.
+- **Option A — selected:** a new `SchemaError` value
+  object (path, code, message) + a `validate_case_manifest`
+  function that walks the raw dict and returns
+  `list[SchemaError]`, plus an `is_valid_case_manifest`
+  boolean shortcut. The dataclass's
+  `__post_init__` stays; the validator is the runner-
+  facing surface.
+- **Option B — rejected:** make `__post_init__`
+  accumulate errors. It would still raise because
+  dataclass field assignment must complete; reviewers
+  would still see one error at a time.
+- **Option C — rejected:** parse the YAML twice — once
+  with strict types, once with permissive types. The
+  two passes would drift; the runner would have to
+  reconcile.
+- **Stable error codes (selected):** `type_error`,
+  `missing_field`, `empty_string`, `version_mismatch`,
+  `invalid_characters`, `unknown_enum`, `absolute_path`,
+  `empty_list`, `out_of_range`. Each is a string; a
+  runner that wants to skip a particular class of
+  error can match the code without parsing the
+  message.
+- **Path format (selected):** dotted JSON-pointer-ish
+  path (e.g. `fixtures.0.path`,
+  `expected_evidence.2.reviewer`). A reviewer who reads
+  the error list can locate every problem in the YAML
+  by line.
+- **Contrary evidence and compatibility cost:** the
+  dataclass's `__post_init__` and the new validator
+  duplicate some checks. The duplication is
+  intentional: the dataclass is the typed contract,
+  the validator is the runner-facing surface; their
+  failure modes (raise vs. accumulate) are different.
+- **Research budget and stop condition:** project
+  source, the E0-02 reject tests, the E0-08..15
+  minimum case set. Stop after the validator lands
+  and 41 D1 unit tests pass. External research cannot
+  change a PAW-owned schema-validation contract.
+- **Falsifiable acceptance:**
+  `paw.bench.validate_case_manifest` returns a list
+  (not raises); the list is empty for a valid manifest;
+  every problem in an invalid manifest appears in the
+  list with a stable code; `paw.core` still exports
+  exactly the 11 runtime-contract symbols; the 41 D1
+  unit tests pass; `pt.sh D2` (focused + critical-path)
+  passes; ruff clean.
+
 ### Active decision record: E0-06 repeated runs and non-determinism
 
 Decision class: `STANDARD`. Readiness: `READY` for the spec
@@ -633,14 +705,13 @@ recorded on the dirty Core Stabilization working tree before the latest
 documentation/contract-test delta. It supports the implementation audit but
 does not establish `VERIFIED` status for a frozen clean candidate:
 
-- `.venv/bin/python -m pytest -q`: **567 passed in 312.84s** on the
+- `.venv/bin/python -m pytest -q`: **608 passed in ~320s** on the
   current working tree after the SX-04–SX-09 review, the SX-11 freeze
-  (`f3ad4ef`), the SX-14 verdict, the E0-01 benchmark-owner decision
-  record, the E0-02 case-manifest contract (19 new D1 unit tests in
-  `tests/test_e0_case_manifest.py`) and the E0-03 expected-evidence
-  spec (`docs/benchmarks/e0/expected_evidence_spec.md`, D0 docs only,
-  no new tests). The 548 baseline (post-SX-09) was the E0 entry point;
-  +19 is the manifest contract.
+  (`f3ad4ef`), the SX-14 verdict, the E0-01..E0-06 docs-only
+  specs and the E0-07 schema validation contract (41 new D1 unit
+  tests in `tests/test_e0_schema_validation.py`). The 548 baseline
+  (post-SX-09) was the E0 entry point; +19 is E0-02 manifest
+  contract, +41 is E0-07 schema validation.
 - Focused selector compatibility/ownership set: **69 passed in 46.45s**. The
   earlier focused knowledge/runtime/filesystem/atomicity set was **116 passed**;
   all of those tests are also included in the final 543-test run.

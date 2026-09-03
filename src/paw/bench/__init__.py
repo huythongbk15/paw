@@ -315,6 +315,283 @@ def case_manifest_to_dict(m: CaseManifest) -> dict[str, Any]:
     }
 
 
+class SchemaError:
+    """A single schema-validation error.
+
+    Attributes:
+        path: Dot-separated JSON-pointer-ish path to the
+            offending field (e.g. ``"fixtures.0.path"``).
+        code: Short stable identifier the runner can
+            match on (e.g. ``"missing_field"``,
+            ``"unknown_enum"``, ``"empty_string"``).
+        message: Human-readable explanation.
+    """
+
+    def __init__(self, path: str, code: str, message: str) -> None:
+        self.path = path
+        self.code = code
+        self.message = message
+
+    def __repr__(self) -> str:
+        return f"SchemaError({self.path!r}, {self.code!r}, {self.message!r})"
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, SchemaError):
+            return NotImplemented
+        return (
+            self.path == other.path
+            and self.code == other.code
+            and self.message == other.message
+        )
+
+    def __hash__(self) -> int:
+        return hash((self.path, self.code, self.message))
+
+
+def validate_case_manifest(data: Any) -> list[SchemaError]:
+    """Validate a raw dict (e.g. from ``yaml.safe_load``).
+
+    Returns a list of ``SchemaError`` (empty if valid).
+    Does not raise. This is the E0-07 contract: a
+    malformed or incomplete case manifest is reported
+    with a stable error code, never silently fixed.
+
+    The function is the single boundary between the YAML
+    representation and the typed contract. The runner
+    imports it; it never imports the dataclass directly
+    (the dataclass's ``__post_init__`` raises on the
+    first error, which is the wrong shape for "report
+    every problem at once").
+    """
+    errors: list[SchemaError] = []
+
+    def add(path: str, code: str, message: str) -> None:
+        errors.append(SchemaError(path, code, message))
+
+    if not isinstance(data, dict):
+        add(
+            "",
+            "type_error",
+            f"case manifest must be a mapping; got {type(data).__name__}",
+        )
+        return errors
+
+    # Required string fields.
+    for fname in ("case_id", "schema_version", "goal"):
+        if fname not in data:
+            add(fname, "missing_field", f"required field {fname!r} is missing")
+            continue
+        value = data[fname]
+        if not isinstance(value, str):
+            add(
+                fname,
+                "type_error",
+                f"{fname!r} must be a string; got {type(value).__name__}",
+            )
+            continue
+        if not value:
+            add(fname, "empty_string", f"{fname!r} must not be empty")
+
+    # schema_version must match the current contract.
+    sv = data.get("schema_version", "")
+    if sv == CASE_MANIFEST_SCHEMA_VERSION:
+        pass
+    elif not sv:
+        # Already reported as missing_field/empty_string above.
+        pass
+    else:
+        add(
+            "schema_version",
+            "version_mismatch",
+            f"schema_version must equal {CASE_MANIFEST_SCHEMA_VERSION!r}; got {sv!r}",
+        )
+
+    # case_id must not contain path separators.
+    case_id = data.get("case_id", "")
+    if isinstance(case_id, str) and case_id and ("/" in case_id or "\\" in case_id):
+        add(
+            "case_id",
+            "invalid_characters",
+            f"case_id must not contain path separators; got {case_id!r}",
+        )
+
+    # category must be a known CaseCategory.
+    cat = data.get("category", "")
+    if cat not in {c.value for c in CaseCategory}:
+        add(
+            "category",
+            "unknown_enum",
+            f"category must be one of {[c.value for c in CaseCategory]}; got {cat!r}",
+        )
+
+    # privacy_class must be a known PrivacyClass.
+    pc = data.get("privacy_class", "")
+    if pc not in {p.value for p in PrivacyClass}:
+        add(
+            "privacy_class",
+            "unknown_enum",
+            f"privacy_class must be one of {[p.value for p in PrivacyClass]}; got {pc!r}",
+        )
+
+    # fixtures: non-empty list of {path, revision, purpose?}.
+    fixtures = data.get("fixtures", None)
+    if fixtures is None:
+        add("fixtures", "missing_field", "required field 'fixtures' is missing")
+    elif not isinstance(fixtures, list):
+        add(
+            "fixtures",
+            "type_error",
+            f"fixtures must be a list; got {type(fixtures).__name__}",
+        )
+    elif not fixtures:
+        add("fixtures", "empty_list", "fixtures must not be empty")
+    else:
+        for i, f in enumerate(fixtures):
+            fpath = f"fixtures.{i}"
+            if not isinstance(f, dict):
+                add(
+                    fpath,
+                    "type_error",
+                    f"fixture entry must be a mapping; got {type(f).__name__}",
+                )
+                continue
+            for sub in ("path", "revision"):
+                if sub not in f:
+                    add(
+                        f"{fpath}.{sub}",
+                        "missing_field",
+                        f"fixture requires {sub!r}",
+                    )
+                    continue
+                v = f[sub]
+                if not isinstance(v, str):
+                    add(
+                        f"{fpath}.{sub}",
+                        "type_error",
+                        f"fixture.{sub} must be a string; got {type(v).__name__}",
+                    )
+                    continue
+                if not v:
+                    add(
+                        f"{fpath}.{sub}",
+                        "empty_string",
+                        f"fixture.{sub} must not be empty",
+                    )
+            # path must be repo-relative.
+            fpath_val = f.get("path", "")
+            if isinstance(fpath_val, str) and fpath_val.startswith("/"):
+                add(
+                    f"{fpath}.path",
+                    "absolute_path",
+                    f"fixture.path must be repository-relative; got {fpath_val!r}",
+                )
+
+    # expected_evidence: non-empty list, every entry has
+    # kind in ALLOWED_KINDS, target non-empty, reviewer
+    # non-empty.
+    evidence = data.get("expected_evidence", None)
+    if evidence is None:
+        add(
+            "expected_evidence",
+            "missing_field",
+            "required field 'expected_evidence' is missing",
+        )
+    elif not isinstance(evidence, list):
+        add(
+            "expected_evidence",
+            "type_error",
+            f"expected_evidence must be a list; got {type(evidence).__name__}",
+        )
+    elif not evidence:
+        add(
+            "expected_evidence",
+            "empty_list",
+            "expected_evidence must not be empty",
+        )
+    else:
+        for i, e in enumerate(evidence):
+            epath = f"expected_evidence.{i}"
+            if not isinstance(e, dict):
+                add(
+                    epath,
+                    "type_error",
+                    f"expected_evidence entry must be a mapping; got {type(e).__name__}",
+                )
+                continue
+            kind = e.get("kind", "")
+            allowed = {
+                "file_contains",
+                "command_exit",
+                "ledger_event",
+                "task_status",
+                "policy_decision",
+            }
+            if kind not in allowed:
+                add(
+                    f"{epath}.kind",
+                    "unknown_enum",
+                    f"kind must be one of {sorted(allowed)}; got {kind!r}",
+                )
+            target = e.get("target", "")
+            if not isinstance(target, str):
+                add(
+                    f"{epath}.target",
+                    "type_error",
+                    f"target must be a string; got {type(target).__name__}",
+                )
+            elif not target:
+                add(
+                    f"{epath}.target",
+                    "empty_string",
+                    "target must not be empty",
+                )
+            reviewer = e.get("reviewer", "")
+            if "reviewer" not in e:
+                add(
+                    f"{epath}.reviewer",
+                    "missing_field",
+                    "every expected_evidence entry requires a reviewer",
+                )
+            elif not isinstance(reviewer, str):
+                add(
+                    f"{epath}.reviewer",
+                    "type_error",
+                    f"reviewer must be a string; got {type(reviewer).__name__}",
+                )
+            elif not reviewer:
+                add(
+                    f"{epath}.reviewer",
+                    "empty_string",
+                    "reviewer must not be empty",
+                )
+
+    # Budget fields.
+    for fname, _default in (("timeout_seconds", 300), ("max_iterations", 20)):
+        if fname not in data:
+            continue  # Optional; default will be used.
+        v = data[fname]
+        if not isinstance(v, int) or isinstance(v, bool):
+            add(
+                fname,
+                "type_error",
+                f"{fname} must be an integer; got {type(v).__name__}",
+            )
+            continue
+        if v <= 0:
+            add(
+                fname,
+                "out_of_range",
+                f"{fname} must be positive; got {v}",
+            )
+
+    return errors
+
+
+def is_valid_case_manifest(data: Any) -> bool:
+    """Convenience: ``validate_case_manifest(data) == []``."""
+    return len(validate_case_manifest(data)) == 0
+
+
 __all__ = [
     "CASE_MANIFEST_SCHEMA_VERSION",
     "CaseCategory",
@@ -322,6 +599,9 @@ __all__ = [
     "ExpectedEvidence",
     "FixtureRef",
     "PrivacyClass",
+    "SchemaError",
     "case_manifest_from_dict",
     "case_manifest_to_dict",
+    "is_valid_case_manifest",
+    "validate_case_manifest",
 ]
