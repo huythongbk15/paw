@@ -1,0 +1,39 @@
+schema_version: "1.0.0"
+case_id: repo_understand_small_repo
+category: repo_understanding
+privacy_class: workspace
+goal: |
+  Enumerate the top-level entries of the small repository
+  fixture and identify which entries are source files
+  (under src/), test files (under tests/), and
+  documentation (under docs/). The expected outcome is
+  recorded as three independent pieces of evidence; the
+  runtime is not judged on prose, only on whether the
+  three checks pass.
+fixtures:
+  - path: benchmarks/e0/fixtures/small_repo_tree.txt
+    revision: f3ad4ef
+    purpose: |
+      Deterministic, version-pinned snapshot of a small
+      repository tree; the case author reviewed this file
+      on 2026-09-03 and the expected evidence below was
+      written against the exact content committed at
+      f3ad4ef.
+expected_evidence:
+  - kind: file_contains
+    target: benchmarks/e0/fixtures/small_repo_tree.txt
+    value: src/<package_name>/core.py
+    reviewer: alice@example.com
+  - kind: file_contains
+    target: benchmarks/e0/fixtures/small_repo_tree.txt
+    value: tests/test_core.py
+    reviewer: alice@example.com
+  - kind: file_contains
+    target: benchmarks/e0/fixtures/small_repo_tree.txt
+    value: docs/ARCHITECTURE.md
+    reviewer: alice@example.com
+timeout_seconds: 60
+max_iterations: 5
+tags:
+  - smoke
+  - registry

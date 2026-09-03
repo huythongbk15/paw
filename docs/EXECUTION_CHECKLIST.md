@@ -99,7 +99,7 @@ capability has a disposition. Estimated 15–22 days.
 
 ### Minimum case set
 
-- [ ] `E0-08` Add one repository-understanding case with reviewed evidence. `(0.5d, D1)`
+- [x] `E0-08` Add one repository-understanding case with reviewed evidence. `(0.5d, D1)` — PASS: `benchmarks/e0/cases/repo_understand_small_repo.yaml` parses + validates with 0 schema errors; 3 `file_contains` evidence entries cover the small repository fixture (`src/<package_name>/core.py`, `tests/test_core.py`, `docs/ARCHITECTURE.md`), each with a reviewer tag; the fixture file `benchmarks/e0/fixtures/small_repo_tree.txt` is committed at the named revision; 8 D1 unit tests in `tests/test_e0_08_repo_understand_case.py` cover static contract, all three verify commands, the two-fail-positive mutation, reviewer discipline, and the E0-23a paw.core 11-symbol surface guard. D1 verify: `pt.sh D1 tests/test_e0_08_repo_understand_case.py` → 8 passed in 2.83s; cross-link: PASSED.
 - [ ] `E0-09` Add one defect-localization case with reviewed evidence. `(0.5d, D1)`
 - [ ] `E0-10` Add one cross-module change case with executable verification. `(0.5d, D1)`
 - [ ] `E0-11` Add one refactoring case with preserved-invariant checks. `(0.5d, D1)`

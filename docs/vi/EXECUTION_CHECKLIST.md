@@ -91,7 +91,7 @@ research/readiness đo được; mọi public capability được phân loại. 
 
 ### Bộ case tối thiểu
 
-- [ ] `E0-08` Thêm case hiểu repository với evidence đã review. `(0.5d, D1)`
+- [x] `E0-08` Thêm case hiểu repository với evidence đã review. `(0.5d, D1)` — PASS: `benchmarks/e0/cases/repo_understand_small_repo.yaml` parse + validate với 0 schema error; 3 `file_contains` evidence entry cover small repository fixture (`src/<package_name>/core.py`, `tests/test_core.py`, `docs/ARCHITECTURE.md`), mỗi entry có reviewer tag; fixture file `benchmarks/e0/fixtures/small_repo_tree.txt` commit ở revision đã đặt tên; 8 D1 unit test trong `tests/test_e0_08_repo_understand_case.py` cover static contract, 3 verify command, two-fail-positive mutation, reviewer discipline, và E0-23a paw.core 11-symbol surface guard. D1 verify: `pt.sh D1 tests/test_e0_08_repo_understand_case.py` → 8 passed in 2.83s; cross-link: PASSED.
 - [ ] `E0-09` Thêm case khoanh vùng defect với evidence đã review. `(0.5d, D1)`
 - [ ] `E0-10` Thêm case thay đổi xuyên module có verification chạy được. `(0.5d, D1)`
 - [ ] `E0-11` Thêm case refactor có check invariant được giữ. `(0.5d, D1)`

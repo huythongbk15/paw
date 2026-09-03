@@ -1,0 +1,32 @@
+﻿# Small repository tree — fixture for E0-08
+#
+# This is a deliberately small, deterministic file tree
+# that the E0-08 case can reason about. It mimics the
+# structure of a real PAW-sized project but contains no
+# secrets, no network calls, and no runtime state.
+#
+# The case (benchmarks/e0/cases/repo_understand_small_repo.yaml)
+# uses this fixture to ask the runtime to enumerate the
+# top-level entries and to identify which files are
+# likely source files versus documentation.
+
+README.md
+pyproject.toml
+src/
+src/<package_name>/
+src/<package_name>/__init__.py
+src/<package_name>/core.py
+src/<package_name>/models.py
+tests/
+tests/test_core.py
+tests/test_models.py
+docs/
+docs/ARCHITECTURE.md
+docs/ROADMAP.md
+docs/EXECUTION_CHECKLIST.md
+benchmarks/
+benchmarks/e0/
+benchmarks/e0/cases/
+benchmarks/e0/runs/
+benchmarks/e0/fixtures/
+.gitignore
