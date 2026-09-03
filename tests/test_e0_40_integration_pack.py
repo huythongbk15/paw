@@ -118,7 +118,7 @@ def test_integration_pack_is_reproducible() -> None:
             seed="reproducible", deterministic_timestamps=True,
         )
         second.append((case_id, result2.rows[0].to_jsonl()))
-    for (id_a, json_a), (id_b, json_b) in zip(first, second):
+    for (id_a, json_a), (id_b, json_b) in zip(first, second, strict=True):
         assert id_a == id_b
         assert json_a == json_b, (
             f"{id_a}: second run produced a different row"

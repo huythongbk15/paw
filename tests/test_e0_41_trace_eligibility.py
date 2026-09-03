@@ -29,14 +29,14 @@ def _spec() -> VerificationSpec:
 
 
 def _eligible_record(**overrides) -> VerificationRecord:
-    defaults = dict(
-        spec=_spec(),
-        result=VerificationResult.PASS,
-        observed_outcome="x",
-        verifier_identity="alice@example.com",
-        started_at=datetime.now(UTC).isoformat(),
-        finished_at=datetime.now(UTC).isoformat(),
-    )
+    defaults = {
+        "spec": _spec(),
+        "result": VerificationResult.PASS,
+        "observed_outcome": "x",
+        "verifier_identity": "alice@example.com",
+        "started_at": datetime.now(UTC).isoformat(),
+        "finished_at": datetime.now(UTC).isoformat(),
+    }
     defaults.update(overrides)
     return VerificationRecord(**defaults)
 

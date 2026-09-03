@@ -44,7 +44,6 @@ import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
-from pathlib import Path
 from typing import Any
 
 
@@ -65,7 +64,7 @@ class VerificationResult(StrEnum):
     SKIPPED = "SKIPPED"
 
     @classmethod
-    def parse(cls, raw: str) -> "VerificationResult":
+    def parse(cls, raw: str) -> VerificationResult:
         try:
             return cls(raw)
         except ValueError as exc:
@@ -264,8 +263,8 @@ def make_spec_from_evidence(
 
 
 __all__ = [
+    "VerificationRecord",
     "VerificationResult",
     "VerificationSpec",
-    "VerificationRecord",
     "make_spec_from_evidence",
 ]
