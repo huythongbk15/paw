@@ -20,9 +20,23 @@ from .embeddings import (
 )
 from .logging import get_logger
 from .models import MemoryType
+from .privacy import PrivacyClass
 from .storage import db
 
 logger = get_logger(__name__)
+
+
+def _parse_privacy_class(raw: str) -> PrivacyClass:
+    """Parse a privacy_class string from a row, falling back
+    to ``INTERNAL`` when missing or unrecognized. Defense in
+    depth for pre-E1-03 SQLite files that lack the column.
+    """
+    if not raw:
+        return PrivacyClass.INTERNAL
+    try:
+        return PrivacyClass.parse(raw)
+    except ValueError:
+        return PrivacyClass.INTERNAL
 
 
 @dataclass
@@ -41,6 +55,10 @@ class MemoryRecord:
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     last_accessed: datetime | None = None
     access_count: int = 0
+    # --- E1-03: privacy class. Default INTERNAL keeps a fresh
+    # memory record conservatively classified; the caller must
+    # opt up to PUBLIC if the record is shareable.
+    privacy_class: PrivacyClass = PrivacyClass.INTERNAL
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -57,6 +75,7 @@ class MemoryRecord:
             "updated_at": self.updated_at.isoformat(),
             "last_accessed": self.last_accessed.isoformat() if self.last_accessed else None,
             "access_count": self.access_count,
+            "privacy_class": self.privacy_class.value,
         }
 
     def touch(self) -> None:
@@ -99,6 +118,9 @@ class MemoryRecord:
             updated_at=datetime.fromisoformat(row["updated_at"]),
             last_accessed=datetime.fromisoformat(row["last_accessed"]) if row.get("last_accessed") else None,
             access_count=row.get("access_count", 0),
+            # E1-03: privacy_class is on the SQL DEFAULT 'internal';
+            # defense in depth for pre-migration rows.
+            privacy_class=_parse_privacy_class(row.get("privacy_class", "")),
         )
 
 
@@ -262,8 +284,9 @@ class MemoryStore:
                 INSERT INTO memory_records (
                     id, memory_type, content, summary, keywords,
                     metadata, project_id, task_id, confidence,
-                    created_at, updated_at, last_accessed, access_count
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    created_at, updated_at, last_accessed, access_count,
+                    privacy_class
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     memory.id,
@@ -279,6 +302,7 @@ class MemoryStore:
                     memory.updated_at.isoformat(),
                     memory.last_accessed.isoformat() if memory.last_accessed else None,
                     memory.access_count,
+                    memory.privacy_class.value,
                 ),
             )
 

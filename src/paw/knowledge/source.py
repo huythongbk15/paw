@@ -14,6 +14,7 @@ from enum import StrEnum
 from typing import Any
 
 from paw.core.logging import get_logger
+from paw.core.privacy import PrivacyClass
 from paw.core.storage import db
 
 logger = get_logger(__name__)
@@ -79,6 +80,10 @@ class KnowledgeSource:
     invalidated_at: str | None = None
     invalidation_reason: str = ""
     superseded_by: str = ""
+    # --- E1-03: privacy class. Default INTERNAL keeps a fresh
+    # source conservatively classified; the caller must opt up
+    # to PUBLIC if the source is shareable.
+    privacy_class: PrivacyClass = PrivacyClass.INTERNAL
 
     @property
     def is_stale(self) -> bool:
@@ -118,10 +123,20 @@ class KnowledgeSource:
             "invalidated_at": self.invalidated_at,
             "invalidation_reason": self.invalidation_reason,
             "superseded_by": self.superseded_by,
+            "privacy_class": self.privacy_class.value,
         }
 
     @classmethod
     def from_row(cls, row: dict) -> KnowledgeSource:
+        # The privacy_class column has DEFAULT 'internal' on
+        # the SQL side, but a pre-E1-03 SQLite file may not
+        # have the column. Defense in depth: fall back to
+        # INTERNAL when the value is missing or unrecognized.
+        raw_pc = row.get("privacy_class", "")
+        try:
+            pc = PrivacyClass.parse(raw_pc) if raw_pc else PrivacyClass.INTERNAL
+        except ValueError:
+            pc = PrivacyClass.INTERNAL
         return cls(
             id=row["id"],
             name=row["name"],
@@ -139,6 +154,7 @@ class KnowledgeSource:
             invalidated_at=row.get("invalidated_at"),
             invalidation_reason=row.get("invalidation_reason", ""),
             superseded_by=row.get("superseded_by", ""),
+            privacy_class=pc,
         )
 
 
@@ -153,13 +169,18 @@ class KnowledgeSourceManager:
         metadata: dict[str, Any] | None = None,
         external_id: str = "",
         revision: str = "",
+        privacy_class: PrivacyClass = PrivacyClass.INTERNAL,
     ) -> KnowledgeSource:
         """Create a new knowledge source.
 
-        The E1-02 ``external_id`` and ``revision`` parameters are
-        optional and default to empty strings; the existing call
-        sites that only pass ``name``/``source_type``/``path`` keep
-        working unchanged.
+        The E1-02 ``external_id``/``revision`` and the
+        E1-03 ``privacy_class`` parameters are optional; the
+        existing call sites that only pass ``name``/
+        ``source_type``/``path`` keep working unchanged.
+        The ``privacy_class`` defaults to
+        ``PrivacyClass.INTERNAL`` so a freshly registered
+        source is conservatively classified; the caller
+        must opt up to ``PUBLIC`` if the source is shareable.
         """
         source = KnowledgeSource(
             id=uuid.uuid4().hex[:16],
@@ -169,6 +190,7 @@ class KnowledgeSourceManager:
             metadata=metadata or {},
             external_id=external_id,
             revision=revision,
+            privacy_class=privacy_class,
         )
         await self._save(source)
         logger.info("knowledge_source_created", name=name, type=source_type)
@@ -303,8 +325,8 @@ class KnowledgeSourceManager:
             (id, name, type, path, metadata, status, chunk_count, last_sync,
              created_at, updated_at, checksum,
              external_id, revision, invalidated_at, invalidation_reason,
-             superseded_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             superseded_by, privacy_class)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 source.id, source.name, source.type, source.path,
@@ -314,6 +336,7 @@ class KnowledgeSourceManager:
                 source.external_id, source.revision,
                 source.invalidated_at, source.invalidation_reason,
                 source.superseded_by,
+                source.privacy_class.value,
             ),
         )
 

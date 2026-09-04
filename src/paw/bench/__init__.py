@@ -49,29 +49,14 @@ from typing import Any, ClassVar
 CASE_MANIFEST_SCHEMA_VERSION = "1.0.0"
 
 
-class PrivacyClass(StrEnum):
-    """Where a case's source may be sent.
-
-    The values are ordered from least to most restricted so
-    that ``PrivacyClass`` can be used as a key in
-    benchmark-level rules (``min_privacy``).
-    """
-
-    PUBLIC = "public"             # May be sent to any provider.
-    INTERNAL = "internal"         # May be sent to approved cloud.
-    WORKSPACE = "workspace"        # Workspace only; no remote.
-    SECRET = "secret"             # Never sent off-box.
-
-    @classmethod
-    def parse(cls, raw: str) -> PrivacyClass:
-        """Strict parse: unknown values raise ``ValueError``."""
-        try:
-            return cls(raw)
-        except ValueError as exc:
-            raise ValueError(
-                f"unknown privacy class: {raw!r}; "
-                f"expected one of {[p.value for p in cls]}"
-            ) from exc
+# ``PrivacyClass`` is the canonical owner of the project
+# privacy taxonomy. E1-03 promotes the enum from
+# ``paw.bench`` to ``paw.core.privacy`` so the runtime
+# can import it without going through the benchmark
+# module. ``paw.bench`` re-exports the same enum for
+# backward compatibility with the E0-02 contract tests;
+# any new behavior belongs in ``paw.core.privacy``.
+from ..core.privacy import PrivacyClass  # noqa: E402
 
 
 class CaseCategory(StrEnum):

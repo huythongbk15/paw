@@ -281,7 +281,8 @@ CREATE TABLE IF NOT EXISTS memory_records (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     last_accessed TEXT,
-    access_count INTEGER NOT NULL DEFAULT 0
+    access_count INTEGER NOT NULL DEFAULT 0,
+    privacy_class TEXT NOT NULL DEFAULT 'internal'
 );
 
 CREATE INDEX IF NOT EXISTS idx_memory_type ON memory_records(memory_type);
@@ -505,12 +506,23 @@ class Database:
             "invalidated_at":      "TEXT",
             "invalidation_reason": "TEXT NOT NULL DEFAULT ''",
             "superseded_by":       "TEXT NOT NULL DEFAULT ''",
+            "privacy_class":       "TEXT NOT NULL DEFAULT 'internal'",
         }
         for col, col_def in ks_additions.items():
             if col not in ks_cols:
                 await self._conn.execute(
                     f"ALTER TABLE knowledge_sources ADD COLUMN {col} {col_def}"
                 )
+        # E1-03: also add the privacy_class column to
+        # memory_records with the same default. Additive, no
+        # row rewrite.
+        mr_cursor = await self._conn.execute("PRAGMA table_info(memory_records)")
+        mr_cols = {row[1] for row in await mr_cursor.fetchall()}
+        if "privacy_class" not in mr_cols:
+            await self._conn.execute(
+                "ALTER TABLE memory_records "
+                "ADD COLUMN privacy_class TEXT NOT NULL DEFAULT 'internal'"
+            )
         info_cursor = await self._conn.execute("PRAGMA table_info(model_selections)")
         columns = await info_cursor.fetchall()
         primary_key = [column[1] for column in columns if column[5]]

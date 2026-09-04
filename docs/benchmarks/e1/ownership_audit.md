@@ -45,6 +45,7 @@ side and do not need a dedicated column):
 | `updated_at` | `datetime` | `MemoryStore` | UTC; bumped by `MemoryRecord.touch()`. |
 | `last_accessed` | `datetime \| None` | `MemoryStore` | Nullable; bumped on `get_by_*` / `search`. |
 | `access_count` | `int` | `MemoryStore` | Bumped on `get_by_*` / `search`. |
+| `privacy_class` | `PrivacyClass` | `MemoryStore` | E1-03: `public` / `internal` / `workspace` / `secret`; default `internal`. Lets the context compiler filter candidates by remote-disclosure rules. |
 
 The `AdvancedMemoryRetriever` (hybrid lexical + semantic
 scoring) is the second concern: it reads Memory but does
@@ -57,7 +58,7 @@ without changing Memory.
 plus the boundary module cooperate; each owns one row
 family:
 
-### `source.py` — `KnowledgeSource` (17 fields)
+### `source.py` — `KnowledgeSource` (18 fields)
 
 | Field | Type | Owner | Notes |
 |---|---|---|---|
@@ -75,6 +76,7 @@ family:
 | `invalidated_at` | `str \| None` | `KnowledgeSource` | E1-02: UTC ISO-8601 timestamp the source was marked invalid; `None` while valid. |
 | `invalidation_reason` | `str` | `KnowledgeSource` | E1-02: one of the closed `INVALID_REASONS` codes (`checksum_mismatch` / `revision_changed` / `path_missing` / `superseded` / `manual`); empty while valid. |
 | `superseded_by` | `str` | `KnowledgeSource` | E1-02: `id` of the source that replaced this one; empty when not superseded. |
+| `privacy_class` | `PrivacyClass` | `KnowledgeSource` | E1-03: `public` / `internal` / `workspace` / `secret`; default `internal`. The canonical enum lives in `paw.core.privacy` and is re-exported from `paw.bench` for backward compatibility. |
 | `created_at` | `datetime` | `KnowledgeSource` | UTC. |
 | `updated_at` | `datetime` | `KnowledgeSource` | UTC. |
 

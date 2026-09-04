@@ -227,6 +227,8 @@ def test_audit_does_not_list_phantom_memory_source_field():
         "updated_at",
         "last_accessed",
         "access_count",
+        # E1-03: privacy class lives on every record.
+        "privacy_class",
     }
     assert rows == expected, (
         f"MemoryRecord audit field set drifted: extra={rows - expected}, "
@@ -266,6 +268,8 @@ def test_audit_documents_knowledge_source_real_fields():
         "invalidated_at",
         "invalidation_reason",
         "superseded_by",
+        # E1-03 addition:
+        "privacy_class",
     }:
         assert real in rows, (
             f"real KnowledgeSource field {real!r} missing from audit"

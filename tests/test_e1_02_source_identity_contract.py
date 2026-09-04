@@ -255,9 +255,11 @@ def test_ownership_audit_lists_e1_02_fields() -> None:
     )
     assert m is not None, "KnowledgeSource section not found in audit"
     field_count = int(m.group(1))
-    assert field_count == 17, (
+    # E1-03 added ``privacy_class``; total = 18 (12 original
+    # + 5 E1-02 + 1 E1-03).
+    assert field_count == 18, (
         f"audit KnowledgeSource field count = {field_count}; "
-        f"expected 17 (12 original + 5 E1-02 additions)"
+        f"expected 18 (12 original + 5 E1-02 + 1 E1-03)"
     )
     # The new fields are listed as rows in the same table.
     for col in (
