@@ -1,13 +1,10 @@
-"""PAW Core — deterministic repository scanner (E1-05).
+"""PAW Core — deterministic repository scanner (E1-05 + E1-08).
 
 ``scan_repo`` walks a real filesystem root deterministically
 and returns the repo-relative POSIX paths that a
-``RepoFilter`` accepts. The scanner is the *discovery*
-half of the repository-loading contract; the
-``RepoFilter`` is the *eligibility* half. The two are
-composed: the caller passes a filter, the scanner walks
-the tree, and every candidate is run through
-``filter.match`` before it is added to the result.
+``RepoFilter`` accepts. ``scan_tree`` turns the same walk
+into a bounded, hierarchical tree view. Both share the
+E1-05 symlink/traversal hardening.
 
 The scanner enforces the same hardening the existing
 ``LocalFilesystemExecutor`` does for *write* operations:
@@ -22,6 +19,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 from .repo_filter import RepoFilter
@@ -165,4 +163,131 @@ def scan_repo(
     return repo_filter.filter_paths(candidates)
 
 
-__all__ = ["scan_repo"]
+__all__ = ["TreeNode", "scan_repo", "scan_tree"]
+
+
+# --- E1-08: bounded tree view ----------------------------------------
+
+
+@dataclass(frozen=True)
+class TreeNode:
+    """A node in the bounded repository tree.
+
+    ``name`` is the single-part name (``"src"`` or
+    ``"memory.py"``); ``path`` is the full repo-relative
+    POSIX path. ``kind`` is ``"dir"`` for a directory and
+    ``"file"`` for a file. ``children`` is empty for
+    files; for directories, it is a tuple of
+    ``TreeNode`` whose combined ``file_count`` equals
+    this node's ``file_count``.
+
+    ``file_count`` is the recursive count of *files*
+    under this node (zero for a file, N for a directory
+    whose subtree contains N files). ``leaf_count`` is
+    the same as ``file_count`` but exposed for
+    reviewer-friendly display.
+    """
+
+    name: str
+    path: str
+    kind: str
+    children: tuple[TreeNode, ...] = ()
+    file_count: int = 0
+    leaf_count: int = 0
+
+    def is_dir(self) -> bool:
+        return self.kind == "dir"
+
+    def is_file(self) -> bool:
+        return self.kind == "file"
+
+
+def _build_tree(
+    rel_paths: Iterable[str],
+    *,
+    max_depth: int,
+) -> TreeNode:
+    """Assemble a ``TreeNode`` tree from a flat list of
+    repo-relative POSIX paths. The function is pure: it
+    does not touch the filesystem. ``max_depth`` is the
+    depth cutoff (paths with more parts than ``max_depth``
+    are dropped silently; the same contract
+    ``RepoFilter`` enforces).
+    """
+    # Group by parent path. A path ``a/b/c.py`` belongs to
+    # parent ``a/b``. The root's parent is ``.``.
+    # We use a dict-of-dicts structure that mirrors the
+    # directory hierarchy; ``""`` is the root's name.
+    # Each node in ``tree`` is a (kind, children_map) pair
+    # where ``kind`` is ``"dir"`` or ``"file"``.
+    children_map: dict[str, dict] = {}
+
+    for p in sorted(set(rel_paths)):
+        parts = PurePosixPath(p).parts
+        if not parts or len(parts) > max_depth:
+            continue
+        # Walk the tree, creating directories as we go.
+        cur = children_map
+        for i, part in enumerate(parts):
+            is_last = i == len(parts) - 1
+            if part not in cur:
+                cur[part] = {"kind": "dir", "children": {}}
+            node = cur[part]
+            if is_last:
+                # The leaf is a file; the directory was
+                # already created if the parent path
+                # exists.
+                node["kind"] = "file"
+                node["children"] = {}
+            cur = node["children"]
+
+    def _make_node(
+        name: str,
+        path: str,
+        node: dict,
+    ) -> TreeNode:
+        kind = node["kind"]
+        if kind == "file":
+            return TreeNode(
+                name=name, path=path, kind="file",
+                file_count=1, leaf_count=1,
+            )
+        # Directory: build children first, then count.
+        kids: list[TreeNode] = []
+        for child_name, child_node in sorted(node["children"].items()):
+            child_path = (
+                child_name if path == "."
+                else f"{path}/{child_name}"
+            )
+            kids.append(_make_node(child_name, child_path, child_node))
+        # Counts.
+        fc = sum(c.file_count for c in kids)
+        lc = sum(c.leaf_count for c in kids)
+        return TreeNode(
+            name=name, path=path, kind="dir",
+            children=tuple(kids),
+            file_count=fc, leaf_count=lc,
+        )
+
+    return _make_node(".", ".", {"kind": "dir", "children": children_map})
+
+
+def scan_tree(
+    root: str | Path,
+    repo_filter: RepoFilter,
+    *,
+    follow_symlinks: bool = False,
+) -> TreeNode:
+    """Walk ``root`` and return a bounded tree view.
+
+    The single root ``TreeNode`` has ``name='.'`` and
+    ``path='.'``; its children are the top-level
+    directories and files. The tree is bounded by
+    ``repo_filter`` (same include/exclude + max_files +
+    max_depth rules as ``scan_repo``). The tree is
+    deterministic: same input → same output, in the
+    same order. The function refuses to walk symlinks
+    (fail-closed posture from ``scan_repo``).
+    """
+    paths = scan_repo(root, repo_filter, follow_symlinks=follow_symlinks)
+    return _build_tree(paths, max_depth=repo_filter.max_depth)
