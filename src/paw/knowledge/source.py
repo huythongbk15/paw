@@ -39,9 +39,29 @@ class KnowledgeSourceStatus(StrEnum):
     ARCHIVED = "archived"
 
 
+# Stable invalidation_reason codes (E1-02). The contract test pins
+# this set; adding a new code is a change-control surface.
+INVALID_REASONS: frozenset[str] = frozenset(
+    {
+        "checksum_mismatch",
+        "revision_changed",
+        "path_missing",
+        "superseded",
+        "manual",
+    }
+)
+
+
 @dataclass
 class KnowledgeSource:
-    """A knowledge source with metadata and sync status."""
+    """A knowledge source with metadata and sync status.
+
+    E1-02 adds five fields for project-source identity, revision,
+    and invalidation metadata. The owner remains ``KnowledgeSource``
+    (per the E1-01 ownership audit). All new fields default to a
+    value that keeps the existing rows loadable without a migration
+    rewrite.
+    """
     id: str = ""
     name: str = ""
     type: str = KnowledgeSourceType.FILE.value
@@ -53,6 +73,32 @@ class KnowledgeSource:
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     checksum: str = ""
+    # --- E1-02: identity, revision, invalidation metadata ---
+    external_id: str = ""
+    revision: str = ""
+    invalidated_at: str | None = None
+    invalidation_reason: str = ""
+    superseded_by: str = ""
+
+    @property
+    def is_stale(self) -> bool:
+        """A source is stale when it is invalid, has been
+        superseded, or is in the ERROR status.
+
+        The contract test exercises every combination; this is
+        the minimal "is the decision still trustworthy" predicate
+        the E1 acceptance target asks for.
+        """
+        if self.invalidated_at is not None:
+            return True
+        if self.superseded_by:
+            return True
+        return self.status == KnowledgeSourceStatus.ERROR.value
+
+    @property
+    def is_fresh(self) -> bool:
+        """Inverse of ``is_stale``."""
+        return not self.is_stale
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -67,6 +113,11 @@ class KnowledgeSource:
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
             "checksum": self.checksum,
+            "external_id": self.external_id,
+            "revision": self.revision,
+            "invalidated_at": self.invalidated_at,
+            "invalidation_reason": self.invalidation_reason,
+            "superseded_by": self.superseded_by,
         }
 
     @classmethod
@@ -83,6 +134,11 @@ class KnowledgeSource:
             created_at=datetime.fromisoformat(row["created_at"]),
             updated_at=datetime.fromisoformat(row["updated_at"]),
             checksum=row.get("checksum", ""),
+            external_id=row.get("external_id", ""),
+            revision=row.get("revision", ""),
+            invalidated_at=row.get("invalidated_at"),
+            invalidation_reason=row.get("invalidation_reason", ""),
+            superseded_by=row.get("superseded_by", ""),
         )
 
 
@@ -95,14 +151,24 @@ class KnowledgeSourceManager:
         source_type: str = KnowledgeSourceType.FILE.value,
         path: str = "",
         metadata: dict[str, Any] | None = None,
+        external_id: str = "",
+        revision: str = "",
     ) -> KnowledgeSource:
-        """Create a new knowledge source."""
+        """Create a new knowledge source.
+
+        The E1-02 ``external_id`` and ``revision`` parameters are
+        optional and default to empty strings; the existing call
+        sites that only pass ``name``/``source_type``/``path`` keep
+        working unchanged.
+        """
         source = KnowledgeSource(
             id=uuid.uuid4().hex[:16],
             name=name,
             type=source_type,
             path=path,
             metadata=metadata or {},
+            external_id=external_id,
+            revision=revision,
         )
         await self._save(source)
         logger.info("knowledge_source_created", name=name, type=source_type)
@@ -138,6 +204,68 @@ class KnowledgeSourceManager:
         )
         return [KnowledgeSource.from_row(dict(r)) for r in rows]
 
+    async def list_stale(self) -> list[KnowledgeSource]:
+        """Return every source for which ``is_stale`` is ``True``.
+
+        The runner is a small SQL filter on the three persisted
+        columns that drive the predicate: ``invalidated_at``,
+        ``superseded_by``, and ``status``. The contract test
+        exercises the boundary between the SQL filter and the
+        in-Python ``is_stale`` predicate to make sure they agree.
+        """
+        rows = await db.fetchall(
+            "SELECT * FROM knowledge_sources "
+            "WHERE invalidated_at IS NOT NULL "
+            "   OR superseded_by != '' "
+            "   OR status = ? "
+            "ORDER BY updated_at DESC",
+            (KnowledgeSourceStatus.ERROR.value,),
+        )
+        return [KnowledgeSource.from_row(dict(r)) for r in rows]
+
+    async def mark_invalid(
+        self,
+        source_id: str,
+        reason: str,
+        superseded_by: str = "",
+    ) -> KnowledgeSource:
+        """Atomically mark a source invalid.
+
+        The ``reason`` is validated against the closed
+        ``INVALID_REASONS`` set; an unknown reason raises
+        ``ValueError``. The method also writes
+        ``status = 'error'`` so the SQL filter in ``list_stale``
+        picks the source up even before the predicate is
+        re-evaluated.
+        """
+        if reason not in INVALID_REASONS:
+            raise ValueError(
+                f"unknown invalidation_reason {reason!r}; "
+                f"must be one of {sorted(INVALID_REASONS)}"
+            )
+        now = datetime.now(UTC).isoformat()
+        await db.execute(
+            "UPDATE knowledge_sources SET "
+            "invalidated_at = ?, "
+            "invalidation_reason = ?, "
+            "superseded_by = ?, "
+            "status = ?, "
+            "updated_at = ? "
+            "WHERE id = ?",
+            (
+                now,
+                reason,
+                superseded_by,
+                KnowledgeSourceStatus.ERROR.value,
+                now,
+                source_id,
+            ),
+        )
+        result = await self.get(source_id)
+        if result is None:
+            raise ValueError(f"source not found: {source_id!r}")
+        return result
+
     async def update_status(self, source_id: str, status: str) -> bool:
         """Update source status."""
         await db.execute(
@@ -172,14 +300,20 @@ class KnowledgeSourceManager:
         await db.execute(
             """
             INSERT OR REPLACE INTO knowledge_sources
-            (id, name, type, path, metadata, status, chunk_count, last_sync, created_at, updated_at, checksum)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (id, name, type, path, metadata, status, chunk_count, last_sync,
+             created_at, updated_at, checksum,
+             external_id, revision, invalidated_at, invalidation_reason,
+             superseded_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 source.id, source.name, source.type, source.path,
                 json.dumps(source.metadata), source.status, source.chunk_count,
                 source.last_sync, source.created_at.isoformat(),
                 source.updated_at.isoformat(), source.checksum,
+                source.external_id, source.revision,
+                source.invalidated_at, source.invalidation_reason,
+                source.superseded_by,
             ),
         )
 

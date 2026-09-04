@@ -239,12 +239,15 @@ def test_audit_documents_knowledge_source_real_fields():
     fields (``kind``, ``uri``, ``revision``) instead of the
     real ones (``name``, ``type``, ``path``, ``status``,
     ``chunk_count``, ``last_sync``, ``checksum``,
-    ``updated_at``). The regenerated audit must list the
-    real field set."""
+    ``updated_at``). E1-02 promoted ``revision`` from
+    "phantom" to "real": the field is now a documented
+    E1-02 input on ``KnowledgeSource``. The test now rejects
+    only the still-phantom fields ``kind`` and ``uri`` and
+    asserts ``revision`` is listed as a real E1-02 field."""
     audit_text = AUDIT_PATH.read_text(encoding="utf-8")
     block = _table_under_heading(audit_text, "### `source.py`")
     rows = _parse_field_rows(block)
-    for phantom in {"kind", "uri", "revision"}:
+    for phantom in {"kind", "uri"}:
         assert phantom not in rows, (
             f"phantom KnowledgeSource field {phantom!r} reappeared in audit"
         )
@@ -257,6 +260,12 @@ def test_audit_documents_knowledge_source_real_fields():
         "last_sync",
         "checksum",
         "updated_at",
+        # E1-02 additions:
+        "external_id",
+        "revision",
+        "invalidated_at",
+        "invalidation_reason",
+        "superseded_by",
     }:
         assert real in rows, (
             f"real KnowledgeSource field {real!r} missing from audit"

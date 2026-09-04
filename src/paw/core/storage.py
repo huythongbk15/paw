@@ -328,6 +328,11 @@ CREATE TABLE IF NOT EXISTS knowledge_sources (
     chunk_count INTEGER NOT NULL DEFAULT 0,
     last_sync TEXT,
     checksum TEXT,
+    external_id TEXT NOT NULL DEFAULT '',
+    revision TEXT NOT NULL DEFAULT '',
+    invalidated_at TEXT,
+    invalidation_reason TEXT NOT NULL DEFAULT '',
+    superseded_by TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -485,6 +490,26 @@ class Database:
             if col not in skills_cols:
                 await self._conn.execute(
                     f"ALTER TABLE skills ADD COLUMN {col} {col_def}"
+                )
+        # Migrate knowledge_sources for E1-02: add project-source
+        # identity, revision, and invalidation metadata. The columns
+        # are additive (NOT NULL DEFAULT '' or nullable), so the
+        # existing rows load at their default values without a row
+        # rewrite. The CREATE TABLE above declares the same columns
+        # so a fresh database gets them without a migration step.
+        ks_cursor = await self._conn.execute("PRAGMA table_info(knowledge_sources)")
+        ks_cols = {row[1] for row in await ks_cursor.fetchall()}
+        ks_additions = {
+            "external_id":         "TEXT NOT NULL DEFAULT ''",
+            "revision":            "TEXT NOT NULL DEFAULT ''",
+            "invalidated_at":      "TEXT",
+            "invalidation_reason": "TEXT NOT NULL DEFAULT ''",
+            "superseded_by":       "TEXT NOT NULL DEFAULT ''",
+        }
+        for col, col_def in ks_additions.items():
+            if col not in ks_cols:
+                await self._conn.execute(
+                    f"ALTER TABLE knowledge_sources ADD COLUMN {col} {col_def}"
                 )
         info_cursor = await self._conn.execute("PRAGMA table_info(model_selections)")
         columns = await info_cursor.fetchall()

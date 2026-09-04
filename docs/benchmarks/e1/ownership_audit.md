@@ -57,7 +57,7 @@ without changing Memory.
 plus the boundary module cooperate; each owns one row
 family:
 
-### `source.py` — `KnowledgeSource` (12 fields)
+### `source.py` — `KnowledgeSource` (17 fields)
 
 | Field | Type | Owner | Notes |
 |---|---|---|---|
@@ -70,8 +70,30 @@ family:
 | `chunk_count` | `int` | `KnowledgeSource` | Cached count of chunks; maintained by `KnowledgeSourceManager`. |
 | `last_sync` | `datetime \| None` | `KnowledgeSource` | Nullable. |
 | `checksum` | `str` | `KnowledgeSource` | Content hash for invalidation. |
+| `external_id` | `str` | `KnowledgeSource` | E1-02: caller-supplied stable project identity (e.g. `repo:path:rev`). Default empty. |
+| `revision` | `str` | `KnowledgeSource` | E1-02: project revision the source was last synchronized against (e.g. git SHA). Default empty. |
+| `invalidated_at` | `str \| None` | `KnowledgeSource` | E1-02: UTC ISO-8601 timestamp the source was marked invalid; `None` while valid. |
+| `invalidation_reason` | `str` | `KnowledgeSource` | E1-02: one of the closed `INVALID_REASONS` codes (`checksum_mismatch` / `revision_changed` / `path_missing` / `superseded` / `manual`); empty while valid. |
+| `superseded_by` | `str` | `KnowledgeSource` | E1-02: `id` of the source that replaced this one; empty when not superseded. |
 | `created_at` | `datetime` | `KnowledgeSource` | UTC. |
 | `updated_at` | `datetime` | `KnowledgeSource` | UTC. |
+
+`KnowledgeSource` also exposes two computed properties (E1-02):
+
+- `is_stale` — `True` iff `invalidated_at` is set, `superseded_by` is
+  non-empty, or `status == "error"`. The minimal
+  "is the decision still trustworthy" predicate the E1 acceptance
+  target asks for.
+- `is_fresh` — inverse of `is_stale`.
+
+`KnowledgeSourceManager` exposes two E1-02 boundary methods:
+
+- `mark_invalid(source_id, reason, superseded_by="")` — atomically
+  marks a source invalid; `reason` is validated against the
+  closed `INVALID_REASONS` set (unknown reason raises `ValueError`).
+- `list_stale()` — returns every source for which `is_stale` is
+  `True`; the SQL filter agrees with the in-Python predicate
+  (the contract test pins both).
 
 ### `chunk.py` — `KnowledgeChunk` (7 fields)
 
