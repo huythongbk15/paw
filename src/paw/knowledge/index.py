@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any
 
 from paw.core.logging import get_logger
@@ -171,6 +172,112 @@ class KnowledgeIndex:
             "evidence_count": total_evidence,
             "average_confidence": round(avg_conf, 3) if avg_conf else 0.0,
         }
+
+    # --- E1-14: persist derived records through existing
+    # Knowledge ownership. The persisted state lives in
+    # the ``metadata`` JSON column on ``knowledge_sources``;
+    # the contract reuses the existing ownership boundary
+    # and does not introduce a new table.
+
+    _DERIVED_KEY = "paw_derived_views"
+    # A closed set of view kinds the E1-14 contract
+    # accepts. New kinds are added by editing this list
+    # and the contract test in the same change.
+    _DERIVED_VIEW_KINDS: frozenset[str] = frozenset(
+        {
+            "symbols",
+            "test_links",
+            "dependency_edges",
+            "recent_changes",
+            "affected_areas",
+        }
+    )
+
+    async def save_derived_view(
+        self,
+        source_id: str,
+        view_kind: str,
+        view_data: dict,
+    ) -> bool:
+        """Persist a derived view under the source's
+        ``metadata`` JSON, keyed by ``view_kind``.
+
+        The ``view_data`` is a JSON-serializable dict;
+        the caller's contract is "what I save is what I
+        get back". The function refuses an unknown
+        ``view_kind`` with ``ValueError``; the closed set
+        is the change-control surface.
+        """
+        if view_kind not in self._DERIVED_VIEW_KINDS:
+            raise ValueError(
+                f"unknown view_kind {view_kind!r}; "
+                f"must be one of {sorted(self._DERIVED_VIEW_KINDS)}"
+            )
+        # Read the existing metadata so the save is
+        # additive (multiple views per source).
+        row = await db.fetchone(
+            "SELECT metadata FROM knowledge_sources WHERE id = ?",
+            (source_id,),
+        )
+        if row is None:
+            return False
+        row_dict = dict(row)
+        existing = json.loads(row_dict["metadata"]) if row_dict.get("metadata") else {}
+        views = dict(existing.get(self._DERIVED_KEY, {}))
+        views[view_kind] = view_data
+        existing[self._DERIVED_KEY] = views
+        await db.write(
+            "UPDATE knowledge_sources SET metadata = ?, updated_at = ? WHERE id = ?",
+            (
+                json.dumps(existing),
+                datetime.now(UTC).isoformat(),
+                source_id,
+            ),
+        )
+        return True
+
+    async def load_derived_view(
+        self,
+        source_id: str,
+        view_kind: str,
+    ) -> dict:
+        """Load a previously-saved derived view.
+
+        Returns ``{}`` when no view has been stored yet
+        (the missing-key case is the common one — the
+        caller is a fresh session that has not yet
+        derived the view).
+        """
+        row = await db.fetchone(
+            "SELECT metadata FROM knowledge_sources WHERE id = ?",
+            (source_id,),
+        )
+        if row is None:
+            return {}
+        row_dict = dict(row)
+        if not row_dict.get("metadata"):
+            return {}
+        existing = json.loads(row_dict["metadata"])
+        views = existing.get(self._DERIVED_KEY, {})
+        return dict(views.get(view_kind, {}))
+
+    async def list_derived_views(
+        self,
+        source_id: str,
+    ) -> tuple[str, ...]:
+        """Return the view kinds persisted for a
+        source. Empty tuple when no views are stored."""
+        row = await db.fetchone(
+            "SELECT metadata FROM knowledge_sources WHERE id = ?",
+            (source_id,),
+        )
+        if row is None:
+            return ()
+        row_dict = dict(row)
+        if not row_dict.get("metadata"):
+            return ()
+        existing = json.loads(row_dict["metadata"])
+        return tuple(sorted(existing.get(self._DERIVED_KEY, {}).keys()))
 
     async def get_all_stats(self) -> dict:
         """Get global knowledge statistics."""
