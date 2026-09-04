@@ -345,7 +345,9 @@ CREATE TABLE IF NOT EXISTS knowledge_chunks (
     span_start INTEGER,
     span_end INTEGER,
     metadata TEXT,
-    created_at TEXT NOT NULL);
+    created_at TEXT NOT NULL,
+    stale_at TEXT,
+    stale_reason TEXT NOT NULL DEFAULT '');
 
 CREATE TABLE IF NOT EXISTS citations (
     id TEXT PRIMARY KEY,
@@ -354,7 +356,9 @@ CREATE TABLE IF NOT EXISTS citations (
     context TEXT,
     position INTEGER NOT NULL DEFAULT 0,
     metadata TEXT,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    stale_at TEXT,
+    stale_reason TEXT NOT NULL DEFAULT ''
 );
 
 
@@ -367,7 +371,9 @@ CREATE TABLE IF NOT EXISTS evidence (
     claim TEXT NOT NULL,
     confidence REAL,
     metadata TEXT,
-    created_at TEXT NOT NULL);
+    created_at TEXT NOT NULL,
+    stale_at TEXT,
+    stale_reason TEXT NOT NULL DEFAULT '');
 
 -- Durable runtime state. Feature modules must use these canonical tables.
 CREATE TABLE IF NOT EXISTS task_checkpoints (
@@ -523,6 +529,22 @@ class Database:
                 "ALTER TABLE memory_records "
                 "ADD COLUMN privacy_class TEXT NOT NULL DEFAULT 'internal'"
             )
+        # E1-07: add the stale_at / stale_reason columns to the
+        # three derived tables. Additive (TEXT NULL or TEXT NOT
+        # NULL DEFAULT ''), no row rewrite, no DROP, no
+        # PRAGMA user_version bump.
+        for table in ("knowledge_chunks", "evidence", "citations"):
+            t_cursor = await self._conn.execute(f"PRAGMA table_info({table})")
+            t_cols = {row[1] for row in await t_cursor.fetchall()}
+            if "stale_at" not in t_cols:
+                await self._conn.execute(
+                    f"ALTER TABLE {table} ADD COLUMN stale_at TEXT"
+                )
+            if "stale_reason" not in t_cols:
+                await self._conn.execute(
+                    f"ALTER TABLE {table} "
+                    f"ADD COLUMN stale_reason TEXT NOT NULL DEFAULT ''"
+                )
         info_cursor = await self._conn.execute("PRAGMA table_info(model_selections)")
         columns = await info_cursor.fetchall()
         primary_key = [column[1] for column in columns if column[5]]

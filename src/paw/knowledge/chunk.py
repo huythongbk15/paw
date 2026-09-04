@@ -20,7 +20,14 @@ logger = get_logger(__name__)
 
 @dataclass
 class KnowledgeChunk:
-    """A chunk of content from a knowledge source."""
+    """A chunk of content from a knowledge source.
+
+    E1-07 adds the ``stale_at`` / ``stale_reason`` fields.
+    A chunk is fresh iff ``stale_at is None``; when the
+    owning source is marked invalid, the
+    ``KnowledgeSourceManager.invalidate_derived_rows``
+    cascade sets these fields in the same transaction.
+    """
     id: str = ""
     source_id: str = ""
     content: str = ""
@@ -28,6 +35,12 @@ class KnowledgeChunk:
     span_end: int = 0
     metadata: dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    stale_at: str | None = None
+    stale_reason: str = ""
+
+    @property
+    def is_stale(self) -> bool:
+        return self.stale_at is not None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -38,6 +51,8 @@ class KnowledgeChunk:
             "span_end": self.span_end,
             "metadata": self.metadata,
             "created_at": self.created_at.isoformat(),
+            "stale_at": self.stale_at,
+            "stale_reason": self.stale_reason,
         }
 
     @classmethod
@@ -50,6 +65,8 @@ class KnowledgeChunk:
             span_end=row.get("span_end", 0),
             metadata=json.loads(row["metadata"]) if row.get("metadata") else {},
             created_at=datetime.fromisoformat(row["created_at"]),
+            stale_at=row.get("stale_at"),
+            stale_reason=row.get("stale_reason", ""),
         )
 
 

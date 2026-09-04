@@ -420,7 +420,9 @@ class KnowledgeSourceManager:
         ``ValueError``. The method also writes
         ``status = 'error'`` so the SQL filter in ``list_stale``
         picks the source up even before the predicate is
-        re-evaluated.
+        re-evaluated, and cascades the invalidation to the
+        derived rows (chunks, evidence, citations) via
+        ``invalidate_derived_rows``.
         """
         if reason not in INVALID_REASONS:
             raise ValueError(
@@ -445,10 +447,121 @@ class KnowledgeSourceManager:
                 source_id,
             ),
         )
+        # E1-07: cascade the invalidation to derived rows.
+        await self.invalidate_derived_rows(source_id, reason=reason)
         result = await self.get(source_id)
         if result is None:
             raise ValueError(f"source not found: {source_id!r}")
         return result
+
+    async def invalidate_derived_rows(
+        self,
+        source_id: str,
+        *,
+        reason: str,
+    ) -> int:
+        """Mark every chunk / evidence / citation that
+        derives from ``source_id`` as stale (E1-07).
+
+        The function walks the chunk -> evidence ->
+        citation chain in the same call. The recursion is
+        breadth-first: first all stale chunks, then all
+        evidence that references a stale chunk, then all
+        citations that reference a stale evidence. A row
+        that is already stale is left untouched (the
+        ``stale_at IS NULL`` guard).
+
+        The return value is the total number of rows
+        newly marked stale. A re-invocation on the same
+        source returns 0 (the cascade is idempotent).
+
+        The function refuses an unknown reason with
+        ``ValueError``; the closed reason set is the same
+        E1-02 ``INVALID_REASONS`` set.
+        """
+        if reason not in INVALID_REASONS:
+            raise ValueError(
+                f"unknown invalidation_reason {reason!r}; "
+                f"must be one of {sorted(INVALID_REASONS)}"
+            )
+        now = datetime.now(UTC).isoformat()
+        total = 0
+        # 1. Stale every chunk whose source_id matches.
+        cursor = await db.execute(
+            "UPDATE knowledge_chunks SET "
+            "stale_at = ?, stale_reason = ? "
+            "WHERE source_id = ? AND stale_at IS NULL",
+            (now, reason, source_id),
+        )
+        total += cursor.rowcount
+        # 2. Stale every evidence whose chunk_id references
+        # a chunk in this source. (We cannot read
+        # ``stale_at IS NULL`` from the chunk filter
+        # because we just wrote the chunks in step 1;
+        # ``source_id`` on the chunk is the durable
+        # ownership boundary.)
+        cursor = await db.execute(
+            "UPDATE evidence SET "
+            "stale_at = ?, stale_reason = ? "
+            "WHERE chunk_id IN (SELECT id FROM knowledge_chunks WHERE source_id = ?) "
+            "AND stale_at IS NULL",
+            (now, reason, source_id),
+        )
+        total += cursor.rowcount
+        # 3. Stale every citation whose evidence_id
+        # references an evidence in this source. (Same
+        # JOIN-on-source rationale as step 2.)
+        cursor = await db.execute(
+            "UPDATE citations SET "
+            "stale_at = ?, stale_reason = ? "
+            "WHERE evidence_id IN ("
+            "  SELECT e.id FROM evidence e "
+            "  JOIN knowledge_chunks c ON e.chunk_id = c.id "
+            "  WHERE c.source_id = ?"
+            ") "
+            "AND stale_at IS NULL",
+            (now, reason, source_id),
+        )
+        total += cursor.rowcount
+        return total
+
+    async def clear_derived_stale(self, source_id: str) -> int:
+        """Inverse of ``invalidate_derived_rows``: clear
+        the stale state on every chunk / evidence /
+        citation that derives from ``source_id``.
+
+        Called by ``update_checksum`` when a source goes
+        back to active after a successful re-ingest; the
+        cascade is the matching recovery for the
+        E1-02 + E1-07 invalidation chain.
+        """
+        total = 0
+        cursor = await db.execute(
+            "UPDATE knowledge_chunks SET "
+            "stale_at = NULL, stale_reason = '' "
+            "WHERE source_id = ?",
+            (source_id,),
+        )
+        total += cursor.rowcount
+        cursor = await db.execute(
+            "UPDATE evidence SET "
+            "stale_at = NULL, stale_reason = '' "
+            "WHERE chunk_id IN (SELECT id FROM knowledge_chunks WHERE source_id = ?)",
+            (source_id,),
+        )
+        total += cursor.rowcount
+        cursor = await db.execute(
+            "UPDATE citations SET "
+            "stale_at = NULL, stale_reason = '' "
+            "WHERE evidence_id IN ("
+            "  SELECT e.id FROM evidence e "
+            "  JOIN knowledge_chunks c ON e.chunk_id = c.id "
+            "  WHERE c.source_id = ?"
+            ")",
+            (source_id,),
+        )
+        total += cursor.rowcount
+        return total
 
     async def update_status(self, source_id: str, status: str) -> bool:
         """Update source status."""
@@ -486,7 +599,10 @@ class KnowledgeSourceManager:
         timestamp is recorded when the caller supplies
         one (the ingestion loop sets it to the current
         time so a reviewer can see when the source was
-        last verified on disk).
+        last verified on disk). E1-07 also clears the
+        stale state on the derived rows via
+        ``clear_derived_stale`` so a successful re-ingest
+        brings the whole chain back to fresh.
         """
         now = datetime.now(UTC).isoformat()
         sync = last_sync if last_sync is not None else now
@@ -503,6 +619,9 @@ class KnowledgeSourceManager:
             "WHERE id = ?",
             (new_sha256, sync, now, KnowledgeSourceStatus.ACTIVE.value, source_id),
         )
+        # E1-07: clear the derived stale state on a
+        # successful re-ingest.
+        await self.clear_derived_stale(source_id)
         return True
 
     async def mark_path_missing(self, source_id: str) -> KnowledgeSource:

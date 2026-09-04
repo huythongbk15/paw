@@ -97,7 +97,7 @@ family:
   `True`; the SQL filter agrees with the in-Python predicate
   (the contract test pins both).
 
-### `chunk.py` — `KnowledgeChunk` (7 fields)
+### `chunk.py` — `KnowledgeChunk` (9 fields)
 
 | Field | Type | Owner | Notes |
 |---|---|---|---|
@@ -108,8 +108,14 @@ family:
 | `span_end` | `int` | `KnowledgeChunk` | Byte offset into source. |
 | `metadata` | `JSON` | `KnowledgeChunk` | Chunk-specific tags. |
 | `created_at` | `datetime` | `KnowledgeChunk` | UTC. |
+| `stale_at` | `str \| None` | `KnowledgeChunk` | E1-07: UTC ISO-8601 timestamp the chunk was marked stale; `None` while fresh. The cascade sets it when the owning source is invalidated. |
+| `stale_reason` | `str` | `KnowledgeChunk` | E1-07: closed `INVALID_REASONS` code (`checksum_mismatch` / `revision_changed` / `path_missing` / `superseded` / `manual`); empty while fresh. |
 
-### `evidence.py` — `KnowledgeEvidence` (6 fields)
+`KnowledgeChunk` also exposes `is_stale` (True iff
+`stale_at is not None`); the property is derived and
+not stored.
+
+### `evidence.py` — `KnowledgeEvidence` (8 fields)
 
 | Field | Type | Owner | Notes |
 |---|---|---|---|
@@ -119,8 +125,12 @@ family:
 | `confidence` | `float` | `KnowledgeEvidence` | `[0.0, 1.0]`; default 0.5. |
 | `metadata` | `JSON` | `KnowledgeEvidence` | Evidence-specific tags. |
 | `created_at` | `datetime` | `KnowledgeEvidence` | UTC. |
+| `stale_at` | `str \| None` | `KnowledgeEvidence` | E1-07: UTC ISO-8601 timestamp the evidence was marked stale; `None` while fresh. The cascade sets it when the owning source is invalidated. |
+| `stale_reason` | `str` | `KnowledgeEvidence` | E1-07: closed `INVALID_REASONS` code; empty while fresh. |
 
-### `citation.py` — `KnowledgeCitation` (7 fields)
+`KnowledgeEvidence` also exposes `is_stale`.
+
+### `citation.py` — `KnowledgeCitation` (9 fields)
 
 | Field | Type | Owner | Notes |
 |---|---|---|---|
@@ -131,6 +141,10 @@ family:
 | `position` | `int` | `KnowledgeCitation` | Ordering within the citation list. |
 | `metadata` | `JSON` | `KnowledgeCitation` | Citation-specific tags. |
 | `created_at` | `datetime` | `KnowledgeCitation` | UTC. |
+| `stale_at` | `str \| None` | `KnowledgeCitation` | E1-07: UTC ISO-8601 timestamp the citation was marked stale; `None` while fresh. The cascade sets it when the owning source is invalidated. |
+| `stale_reason` | `str` | `KnowledgeCitation` | E1-07: closed `INVALID_REASONS` code; empty while fresh. |
+
+`KnowledgeCitation` also exposes `is_stale`.
 
 ### `index.py` and `normalization.py` — no owned fields
 

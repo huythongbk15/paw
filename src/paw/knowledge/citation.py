@@ -21,7 +21,13 @@ logger = get_logger(__name__)
 
 @dataclass
 class KnowledgeCitation:
-    """A citation linking evidence to a task context."""
+    """A citation linking evidence to a task context.
+
+    E1-07 adds the ``stale_at`` / ``stale_reason`` fields;
+    the cascade marks a row stale when the chain
+    evidence -> citation is broken by a source
+    invalidation.
+    """
     id: str = ""
     task_id: str = ""
     evidence_id: str = ""
@@ -29,6 +35,12 @@ class KnowledgeCitation:
     position: int = 0
     metadata: dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    stale_at: str | None = None
+    stale_reason: str = ""
+
+    @property
+    def is_stale(self) -> bool:
+        return self.stale_at is not None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -39,6 +51,8 @@ class KnowledgeCitation:
             "position": self.position,
             "metadata": self.metadata,
             "created_at": self.created_at.isoformat(),
+            "stale_at": self.stale_at,
+            "stale_reason": self.stale_reason,
         }
 
     @classmethod
@@ -51,6 +65,8 @@ class KnowledgeCitation:
             position=row.get("position", 0),
             metadata=json.loads(row["metadata"]) if row.get("metadata") else {},
             created_at=datetime.fromisoformat(row["created_at"]),
+            stale_at=row.get("stale_at"),
+            stale_reason=row.get("stale_reason", ""),
         )
 
 
