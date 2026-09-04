@@ -150,9 +150,15 @@ def scan_repo(
     # the max_files cap.
     candidates: list[str] = []
     root_resolved = root_path.resolve(strict=False)
+    # The walk is rooted at ``root_path``; the yielded
+    # ``Path`` objects are relative to the cwd (the same
+    # form as ``root_path`` itself). Resolve each one so
+    # the ``relative_to`` step works regardless of
+    # whether the caller passed an absolute or relative
+    # ``root``.
     for p in _walk(root_path):
         try:
-            rel = p.relative_to(root_resolved)
+            rel = p.resolve(strict=False).relative_to(root_resolved)
         except ValueError:
             # Defensive: the is_relative_to guard above
             # should have caught this. Skip and continue.
