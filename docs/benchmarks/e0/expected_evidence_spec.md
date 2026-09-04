@@ -70,29 +70,29 @@ command exits with the integer given in `value`.
 
 | Field | Semantics |
 |---|---|
-| `target` | A POSIX shell command line. Must be read-only. The reviewer signs that they ran it and saw the exit code. |
+| `target` | A Python list literal of arguments (e.g. `["grep", "-F", "-q", "--", "src/<package_name>", "fixture.txt"]`). The runner parses the literal via `ast.literal_eval` and runs the argv with `subprocess.run(..., shell=False)`. Shell strings are rejected: the deny-list cannot catch every metacharacter, and `shell=False` is the only way to guarantee the runner never invokes a shell. The reviewer signs that they ran the argv list and saw the exit code. |
 | `value`  | The integer exit code as a string (e.g. `"0"`, `"1"`). |
 | `reviewer` | The human who ran the command. |
 
 **Verify command (deterministic)**:
-```bash
-<target> >/dev/null 2>&1
-case "$?" in
-    <value>) echo PASS ;;
-    *)      echo FAIL ;;
-esac
+```python
+import ast, subprocess
+argv = ast.literal_eval(evidence.target)
+result = subprocess.run(argv, shell=False, check=False, capture_output=True, timeout=10)
+assert result.returncode == int(evidence.value)
 ```
 
 Safety rules the runner enforces before running:
-- The command is parsed by `shlex.split`; tokens starting
-  with a redirect `>`, `<`, `|`, or shell metacharacter
-  outside an allow-list trigger FAIL.
-- The runner refuses commands that contain `rm -rf`,
-  `mkfs`, `dd if=`, `> /dev/sd`, `curl ... | sh`, or any
-  other token in the deny-list shipped in
-  `paw.bench.runner.deny_list` (E0-16).
-- The command runs with a 5-second wall-clock cap; timeout
-  = FAIL.
+- The target must start with `[` and parse as a Python
+  list of strings; a non-list target (shell string) is
+  rejected with a clear diagnostic.
+- The first token (program name) is checked against
+  `paw.bench.runner.DEFAULT_DENY_LIST` (`rm`, `mkfs`,
+  `dd`, `shutdown`, `reboot`, `poweroff`). Defense-in-depth:
+  the list is small and shell=False already prevents
+  shell expansion, but the check stays.
+- The command runs with a 10-second wall-clock cap;
+  timeout = FAIL.
 
 ---
 

@@ -21,8 +21,8 @@ acceptance criteria are fully closed.
 | Scope | Current result | Meaning |
 |---|---|---|
 | Core Stabilization | `VERIFIED` on `f3ad4ef` | All S0–S6 acceptance items passed the clean-revision D3 gate; the `f3ad4ef` freeze commit is the canonical evidence. |
-| E0 (Engineering benchmark and feature subtraction) | `IN PROGRESS`, 0/42 tracked items (E0-01..E0-16 already marked [x] with evidence; the `E0-17..42` queue is unblocked) | The contract, the minimum case set, the deterministic evidence runner, and the integration-pack record are in place. The next item is whatever the reviewer picks from `EXECUTION_CHECKLIST.md`. |
-| E1–E3 and BETA | `READY` | E0 is no longer the prerequisite; E1 is the next track per ROADMAP sequencing. |
+| E0 (Engineering benchmark and feature subtraction) | `VERIFIED` for the deterministic offline fixture-validation baseline on `f3ad4ef` | The contract, the 13-case set (8 minimum E0-08..15 + 5 research-decision E0-28..35), the deterministic evidence runner (`shell=False` for `command_exit`), and the integration-pack record are in place. The 13/13 SUCCESS line in `docs/benchmarks/e0/integration_pack_run.md` is **fixture-validation** evidence, not an agent-quality gate; the runtime-driven agent-quality tier is post-gate work (E0-40). The cloud baseline remains deferred per the project charter. |
+| E1–E3 and BETA | `READY` | E0 is no longer the prerequisite; E1 is the next track per ROADMAP sequencing. E1-01 (ownership audit) has been reopened and regenerated from source; E1 is `IN PROGRESS` 1/34 with `tests/test_e1_ownership_audit_contract.py` (16 D1 tests) pinning the audit. |
 | E4 controlled adaptation | `BLOCKED`, optional | Requires E0–E3 and a verified dataset; it is not required for BETA. |
 
 The engineering-intelligence direction dated 2026-09-01 is recorded in the

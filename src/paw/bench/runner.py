@@ -199,45 +199,53 @@ def _verify_file_contains(evidence: ExpectedEvidence, project_root: Path) -> tup
 def _verify_command_exit(evidence: ExpectedEvidence, project_root: Path) -> tuple[bool, str]:
     """Run the E0-03 ``command_exit`` verify command.
 
-    The ``target`` field can be either a shell command
-    string or a Python list literal of arguments. The
-    list form is the safe one: ``["grep", "-c", "-F",
-    "src/<package>", "fixture.txt"]``. The shell form is
-    accepted but is more dangerous (and the deny-list
-    catches the obvious cases).
+    The ``target`` field is a Python list literal of
+    arguments: ``["grep", "-c", "-F", "src/<package>",
+    "fixture.txt"]``. The list is parsed by
+    ``ast.literal_eval`` so the runner can never receive
+    a shell string and ``subprocess.run`` is always
+    invoked with ``shell=False``; the deny-list still
+    rejects ``rm``, ``mkfs`` and similar programs as
+    defense-in-depth.
+
+    Shell-string targets are no longer accepted; the
+    runner reports a clear diagnostic instead of falling
+    back to ``shell=True``. This is the hardening
+    recorded in the E1 reopen: a shell-string target
+    could embed metacharacters that the deny-list
+    does not catch, and the runner runs read-only
+    evidence only.
     """
     try:
         expected_exit = int(evidence.value)
     except ValueError as exc:
         return False, f"value is not an integer: {evidence.value!r}: {exc}"
 
-    # Decide: shell string or list literal.
     target = evidence.target
-    if target.startswith("["):
-        try:
-            import ast
-            argv = ast.literal_eval(target)
-        except (ValueError, SyntaxError) as exc:
-            return False, f"target is not a valid list literal: {exc}"
-        if not isinstance(argv, list) or not argv or not all(
-            isinstance(a, str) for a in argv
-        ):
-            return False, "target list literal must be a list of strings"
-        # Deny-list check on the program name (first token).
-        program = Path(argv[0]).name
-        if program in DEFAULT_DENY_LIST:
-            return False, f"command {program!r} is on the deny-list"
-        cmd_argv = argv
-        use_shell = False
-    else:
-        _check_deny_list(target, DEFAULT_DENY_LIST)
-        cmd_argv = target
-        use_shell = True
+    if not target.startswith("["):
+        return False, (
+            "command_exit target must be a list literal "
+            "(e.g. ['grep', '-F', '-q', '--', 'pattern', 'path']); "
+            f"got shell-string {target!r}"
+        )
+    try:
+        import ast
+        argv = ast.literal_eval(target)
+    except (ValueError, SyntaxError) as exc:
+        return False, f"target is not a valid list literal: {exc}"
+    if not isinstance(argv, list) or not argv or not all(
+        isinstance(a, str) for a in argv
+    ):
+        return False, "target list literal must be a list of strings"
+    # Deny-list check on the program name (first token).
+    program = Path(argv[0]).name
+    if program in DEFAULT_DENY_LIST:
+        return False, f"command {program!r} is on the deny-list"
 
     try:
         result = subprocess.run(
-            cmd_argv,
-            shell=use_shell,
+            argv,
+            shell=False,
             check=False,
             capture_output=True,
             timeout=10,

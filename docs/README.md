@@ -8,15 +8,25 @@ The recorded post-stabilization direction specializes PAW in code, systems and
 software architecture: local control/context/memory supports selectively gated
 cloud reasoning, and bounded source-backed research must produce a readiness
 decision before implementation planning. This is a documented target, not
-implemented status; Core Stabilization remains the only active track.
+implemented status; Core Stabilization is the only track with a verified
+freeze, E0 has shipped its fixture-validation baseline, and E1–E4 / BETA
+remain unblocked by the E0 gate.
 
-Current gate result: **`PARTIAL`**. S0–S6 repair behavior is observed in the
-working tree, but SX has not yet qualified one reviewed clean revision. E0–E3,
-BETA and optional E4 therefore remain `BLOCKED`; SX-01 through SX-03 have
-focused evidence and the next item is `SX-04`.
+Current gate result:
 
-Audit baseline: repository commit `c48a22e` plus the current Core Stabilization
-working tree, inspected on 2026-08-31.
+| Track | Result | Meaning |
+|---|---|---|
+| Core Stabilization | **`VERIFIED`** on `f3ad4ef` | S0–S6 acceptance passed the clean-revision D3 gate; the freeze commit is the canonical evidence. |
+| E0 (fixture-validation baseline) | **`VERIFIED`** for deterministic offline | The contract, 13 cases (8 minimum + 5 research-decision), the deterministic evidence runner, and the integration-pack record are in place. The 13/13 SUCCESS line is **fixture-validation**, not an agent-quality gate; the runtime-driven agent-quality tier is post-gate work (E0-40). |
+| E1 (Local project intelligence) | `IN PROGRESS`, 1/34 closed (E1-01 ownership audit) | The ownership audit (`docs/benchmarks/e1/ownership_audit.md`) is regenerated from source and pinned by `tests/test_e1_ownership_audit_contract.py`. |
+| E2, E3, BETA | `READY` | E0 is no longer the prerequisite; the next track is E1 per ROADMAP sequencing. |
+| E4 (controlled adaptation) | `BLOCKED`, optional | Requires E0–E3 and a verified dataset; not required for BETA. |
+
+Audit baseline: repository commit `f3ad4ef` (Core Stabilization freeze) plus
+the current working tree, inspected on 2026-09-04. The E0 gate verdict
+(`VERIFIED` for fixture-validation) and the E1-01 reopen
+(`docs/benchmarks/e1/ownership_audit.md` regenerated from source + contract
+test) are the most recent state changes.
 
 Vietnamese readers: see the synchronized [bộ tài liệu tiếng Việt](vi/README.md).
 The English files remain the canonical contract text; the source code and tests
@@ -27,7 +37,8 @@ remain the final authority for implemented behavior.
 1. [Product charter](PRODUCT_CHARTER.md) — why PAW exists, what PAW owns and
    what is deliberately out of scope.
 2. [Core architecture](ARCHITECTURE.md) — target runtime contract, dependency
-   direction and invariants.
+   direction and invariants. Paragraphs are marked `[CURRENT]` / `[RATIFIED TARGET]` /
+   `[FUTURE]`; the status legend at the top explains how to read them.
 3. [Implementation map](IMPLEMENTATION_MAP.md) — where those concepts exist in
    the current source and where implementation diverges from the contract.
 4. [Stabilization roadmap](ROADMAP.md) — repair order and binary exit gates.
@@ -40,6 +51,10 @@ remain the final authority for implemented behavior.
 `api.md` and `examples.md` are source-backed references for the stabilized core;
 the offline example was executed against an isolated wheel install. They remain
 secondary to current source and contract tests.
+
+The benchmarks themselves are the read-only, deterministic tier of E0;
+`docs/benchmarks/e0/integration_pack_run.md` records the 13/13 SUCCESS result
+as a **fixture-validation** gate, not an agent-quality gate.
 
 Reproducible developer setup uses the PAW-only lock:
 

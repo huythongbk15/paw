@@ -697,17 +697,65 @@ release-gate adoption.
   reports `CONTRACT PASSED`; `./scripts/pt.sh D0 docs`
   reports OK.
 
-### Active decision record: E1-01 ownership audit
+### Active decision record: E1-01 ownership audit (reopened 2026-09-04)
 
-Decision class: FAST. Readiness: READY for the audit document only; this does not authorize any new field, migration, or runtime path.
+Decision class: STANDARD (was FAST for the original audit, reopened because the
+original audit listed phantom `MemoryRecord.source`, missing
+`keywords`/`updated_at`/`last_accessed`, and phantom `KnowledgeSource.kind`/
+`uri`/`revision` — the contract test makes it STANDARD). Readiness: READY for
+the regenerated audit + contract test.
 
-- **Problem:** E1-01 requires a record of which module owns every existing field in Memory, Knowledge, and the Context Compiler, so the E1 reviewer can add a new field without creating a second owner.
-- **Constraints:** one canonical owner per concept (Architecture Safety invariant #1); the audit is read-only (no new field, no migration, no code change); the audit records where a new field would land, not that any new field is committed.
-- **Evidence:** the source files in src/paw/core/memory.py (10 fields in MemoryRecord + MemoryStore), src/paw/knowledge/{source,chunk,evidence,citation,index,normalization}.py (4 row families + boundary), and src/paw/core/context_compiler.py (5 fields in TaskContext shape).
-- **Option A — selected:** a single doc at docs/benchmarks/e1/ownership_audit.md that enumerates the existing fields, names the owner module for each, and records the five-step procedure for adding a new field. The audit is the change-control surface for the E1 ownership contract.
-- **Option B — rejected:** a Python dataclass with audit metadata. It would couple the audit to a runtime import and make the contract a runtime check, which the Architecture forbids for ownership.
-- **Option C — rejected:** a contract test in tests/ that asserts the field count. The audit is a one-time snapshot; the test would re-evaluate on every change and the per-field check is too strict to be useful.
-- **Phase 4 sync contract:** the audit table is the source of truth for E1 ownership; a later E1 item that adds a new field must update the table in the same change. If the new field lives in a module that is not listed, the change is introducing a new owner and the change is wrong.
+- **Problem:** the original E1-01 audit (`f909f65`) listed field sets that did
+  not match the actual dataclasses (`MemoryRecord` had a phantom `source` and
+  was missing `keywords`/`updated_at`/`last_accessed`; `KnowledgeSource` had
+  phantom `kind`/`uri`/`revision` and was missing the real `name`/`type`/
+  `path`/`status`/`chunk_count`/`last_sync`/`checksum`/`updated_at`; the
+  ContextCompiler section listed only 5 `TaskContext` fields and missed
+  `ContextBudget`, `ContextPlan`, and the compiler-instance fields).
+- **Constraints:** one canonical owner per concept (Architecture Safety
+  invariant #1); the audit is read-only (no new field, no migration, no
+  runtime code path); the audit must be regenerated from source on every change
+  that adds a field to one of the owned dataclasses.
+- **Evidence (regenerated):**
+  - `src/paw/core/memory.py` `MemoryRecord` — 13 persistent fields
+    (`id`, `project_id`, `task_id`, `memory_type`, `content`, `summary`,
+    `keywords`, `metadata`, `confidence`, `created_at`, `updated_at`,
+    `last_accessed`, `access_count`); 13 SQL columns on `memory_records`
+    (`keywords` is JSON-encoded).
+  - `src/paw/knowledge/source.py` `KnowledgeSource` — 12 fields (`id`,
+    `name`, `type`, `path`, `metadata`, `status`, `chunk_count`,
+    `last_sync`, `checksum`, `created_at`, `updated_at`).
+  - `src/paw/knowledge/chunk.py` `KnowledgeChunk` — 7 fields.
+  - `src/paw/knowledge/evidence.py` `KnowledgeEvidence` — 6 fields.
+  - `src/paw/knowledge/citation.py` `KnowledgeCitation` — 7 fields.
+  - `src/paw/core/context.py` `TaskContext` — 8 fields; `ContextBudget` —
+    8 fields.
+- **Option A — selected:** regenerate `docs/benchmarks/e1/ownership_audit.md`
+  from source (every field on every owned dataclass, plus the transient
+  `KnowledgeSearchResult`/`ContextCandidate`/`ContextPlan`/`ContextCompiler`
+  fields the original audit dropped). Pin the audit with a contract test
+  `tests/test_e1_ownership_audit_contract.py` (16 D1 tests) that asserts
+  every audit row is a real dataclass field and every dataclass field
+  appears in the audit.
+- **Option B — rejected:** regenerate the audit from source without a
+  contract test. A reviewer could re-introduce the regression (phantom
+  fields, missing fields) in the next E1 change; the audit would silently
+  drift and the bug would only surface on a manual diff.
+- **Option C — rejected:** replace the audit with a runtime import that
+  introspects the dataclasses. The Architecture forbids ownership being a
+  runtime check; the audit must be human-readable prose plus a test that
+  pins it.
+- **Two-fail-positive proven:** swapping the regenerated audit with the
+  original `f909f65` audit causes the contract test to fail 16/16
+  (every owned dataclass trips the "audit missing field" or
+  "audit lists phantom field" assertion). The test is doing its job; the
+  audit was wrong.
+- **Phase 4 sync contract:** the audit is the source of truth for E1
+  ownership; the contract test pins the audit to the actual dataclass
+  fields. A later E1 item that adds a new field must update both the audit
+  table and the test expectation in the same change, or the test fails.
+  If the new field lives in a module that is not listed, the change is
+  introducing a new owner and the change is wrong.
 
 ### Recorded verification baseline — not current exit proof
 
