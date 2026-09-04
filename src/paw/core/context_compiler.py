@@ -858,3 +858,167 @@ def format_explain_report(
         )
 
     return "\n".join(lines)
+
+
+# --- E1-18: closed set of exclusion / compression reasons -------------
+
+
+EXCLUDED_REASONS: frozenset[str] = frozenset(
+    {
+        # E1-18 hard reasons: candidate dropped because
+        # the budget cannot accommodate it.
+        "max_sources_exceeded",
+        "token_budget_exceeded",
+        "content_too_large",
+        # E1-19 soft reason: candidate kept but body
+        # skipped because the full body exceeds
+        # ``max_content_length``.
+        "body_skipped_exceeds_max_content_length",
+    }
+)
+
+
+class BudgetExceededError(Exception):
+    """Raised by ``ContextCompiler.compile_manifest``
+    when the final payload still exceeds the approved
+    budget after re-budgeting (E1-20).
+
+    The exception carries the post-re-budget token
+    total so the caller can decide whether to widen
+    the budget or trim the query.
+    """
+    def __init__(self, final_tokens: int, max_tokens: int, task_id: str):
+        super().__init__(
+            f"context manifest for task {task_id!r} is "
+            f"{final_tokens} tokens; budget is {max_tokens}"
+        )
+        self.final_tokens = final_tokens
+        self.max_tokens = max_tokens
+        self.task_id = task_id
+
+    def __repr__(self) -> str:
+        return (
+            f"BudgetExceededError(task_id={self.task_id!r}, "
+            f"final_tokens={self.final_tokens}, "
+            f"max_tokens={self.max_tokens})"
+        )
+
+
+# --- E1-20: compile_manifest entry point -----------------------------
+
+
+def _build_manifest(
+    self,
+    task_id: str,
+    context: TaskContext,
+    selected: list[ContextCandidate],
+    excluded: list[ContextCandidate],
+    *,
+    budget: ContextBudget,
+    explain_mode: bool = False,
+) -> ContextManifest:
+    """Build a ``ContextManifest`` from the compiler
+    output. Pure helper (no I/O)."""
+    from .context_compiler import ContextManifest
+
+    # Compute final_tokens by summing the selected
+    # candidates' token_estimate (the same number the
+    # compiler used to allocate the budget).
+    final_tokens = sum(c.token_estimate for c in selected)
+
+    # Provenance: the scan_paths + repo_filter_repr that
+    # the compiler used. The ContextCompiler instance
+    # exposes the active scan through ``self.budget``;
+    # the filter repr is recorded when set.
+    filter_repr = ""
+    if getattr(self, "_last_plan", None) is not None:
+        plan = self._last_plan
+        if plan.repo_filter is not None:
+            filter_repr = repr(plan.repo_filter)
+
+    return ContextManifest(
+        task_id=task_id,
+        budget=budget,
+        included=tuple(selected),
+        excluded=tuple(excluded),
+        # The E1-09 / E1-10 / E1-11 / E1-12 snapshot
+        # fields are populated by callers that have the
+        # E1-09 / E1-10 / E1-11 / E1-12 results; the
+        # default empty tuple is the right initial value.
+        scan_paths=tuple(getattr(self, "_last_scan_paths", ())),
+        repo_filter_repr=filter_repr,
+        final_tokens=final_tokens,
+    )
+
+
+# Patch the ``ContextCompiler`` class to add
+# ``compile_manifest`` (the E1-13 + E1-16 + E1-20 entry
+# point). The method reuses the existing ``compile``
+# pipeline; the new work is the post-rebudget
+# ``BudgetExceededError`` check and the
+# ``ContextManifest`` return type.
+async def _compile_manifest(
+    self,
+    task_id: str,
+    query: str,
+    *,
+    session_id: str | None = None,
+    budget: ContextBudget | None = None,
+    execution_profile: ExecutionProfile | None = None,
+) -> ContextManifest:
+    """Compile a ``ContextManifest`` for a task.
+
+    Reuses the existing ``compile`` pipeline. The new
+    work is the post-rebudget ``BudgetExceededError``
+    check + the ``ContextManifest`` return type.
+    """
+    from .context_compiler import (
+        BudgetExceededError,
+        ContextManifest,  # noqa: F401
+    )
+
+    # Run the existing pipeline.
+    context, candidates = await self.compile(
+        task_id=task_id,
+        query=query,
+        session_id=session_id,
+        budget=budget,
+        execution_profile=execution_profile,
+    )
+
+    # The compiler populates ``self.budget`` from the
+    # argument (or the default); we use the post-call
+    # budget for the over-budget check.
+    effective_budget = self.budget
+    if budget is not None:
+        effective_budget = budget
+
+    # Recompute the final token count from the
+    # included candidates (the same number the
+    # ``_build_context`` re-budgeting produced). The
+    # ``context.token_count`` is the word/3 heuristic;
+    # we use the ``token_estimate`` sum for the
+    # over-budget check because that is what
+    # ``_allocate_budget`` consults.
+    included = [c for c in candidates if c.metadata.get("included")]
+    excluded = [c for c in candidates if "excluded_reason" in c.metadata]
+    final_tokens = sum(c.token_estimate for c in included)
+
+    if final_tokens > effective_budget.max_tokens:
+        raise BudgetExceededError(
+            final_tokens=final_tokens,
+            max_tokens=effective_budget.max_tokens,
+            task_id=task_id,
+        )
+
+    return _build_manifest(
+        self,
+        task_id=task_id,
+        context=context,
+        selected=included,
+        excluded=excluded,
+        budget=effective_budget,
+    )
+
+
+ContextCompiler.compile_manifest = _compile_manifest  # type: ignore[attr-defined]
