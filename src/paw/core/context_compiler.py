@@ -18,6 +18,7 @@ from .embeddings import cosine_similarity
 from .ledger import TaskEventType, TaskLedger
 from .logging import get_logger
 from .memory import AdvancedMemoryRetriever, MemoryRecord
+from .privacy import PrivacyClass
 from .semantic import AdvancedSkillSelector
 from .skills import get_skill_fabric
 from .storage import db
@@ -97,6 +98,19 @@ class ContextCandidate:
     token_estimate: int = 0          # Estimated tokens
     priority: float = 1.0            # Source priority weight
     metadata: dict[str, Any] = field(default_factory=dict)
+    # E1-17: per-item record fields. The E1-04
+    # ``repo_filter`` already records the filter
+    # repr; the E1-02 / E1-06 ``KnowledgeSource.checksum``
+    # + ``external_id`` + ``revision`` are recorded
+    # on the source candidate so a reviewer can
+    # trace the candidate back to the source revision.
+    # The privacy class is the E1-03 default;
+    # ``None`` is treated as ``INTERNAL`` by the
+    # downstream gate.
+    source_hash: str = ""            # SHA-256 of the source content
+    external_id: str = ""            # E1-02 stable project identity
+    revision: str = ""               # E1-02 project revision
+    privacy_class: PrivacyClass | None = None
 
     # Skill-specific
     skill_level: int = 0             # 0=metadata only, 1=body, 2=resources
@@ -104,6 +118,50 @@ class ContextCandidate:
     def __lt__(self, other: ContextCandidate) -> bool:
         """For sorting: higher relevance * priority first."""
         return (self.relevance_score * self.priority) > (other.relevance_score * other.priority)
+
+
+# --- E1-16: ContextManifest --------------------------------------------
+
+
+@dataclass(frozen=True)
+class ContextManifest:
+    """A snapshot of the items a context compiler
+    selected for a task, clipped to a budget.
+
+    See ``docs/benchmarks/e1/context_manifest.md`` for
+    the full contract. Every field is the change-control
+    surface for a later E1 item: ``included`` is the
+    E1-17 per-item record, ``excluded`` is the E1-18
+    reason, the budget fields are the E1-13 ceiling, the
+    snapshot fields are the E1-09 / E1-10 / E1-11 / E1-12
+    inputs.
+
+    The dataclass is frozen; a new manifest is a new
+    instance. The optional E1-09 / E1-10 / E1-11 / E1-12
+    snapshot fields are typed loosely (``tuple`` of
+    ``Any``) to avoid the import cycle the strict types
+    would create; the runtime and tests can validate
+    the contents as needed.
+    """
+    task_id: str
+    budget: ContextBudget
+    included: tuple[ContextCandidate, ...] = ()
+    excluded: tuple[ContextCandidate, ...] = ()
+    # E1-09 / E1-10 / E1-11 / E1-12 snapshots. Typed
+    # as ``tuple`` of ``Any`` to keep the manifest
+    # decoupled from the import order of the four
+    # modules.
+    recent_changes: tuple = ()
+    affected_areas: tuple = ()
+    symbols: tuple = ()
+    test_links: tuple = ()
+    dependency_edges: tuple = ()
+    # E1-04 / E1-05 / E1-08 provenance: the inputs the
+    # compiler used to build the manifest.
+    scan_paths: tuple[str, ...] = ()
+    repo_filter_repr: str = ""
+    # E1-20: the final token total after re-budgeting.
+    final_tokens: int = 0
 
 
 # --- ContextCompiler ---

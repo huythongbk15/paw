@@ -36,7 +36,7 @@ class TokenEstimator:
 
 # --- Context Budget ---
 
-@dataclass
+@dataclass(frozen=True)
 class ContextBudget:
     """Budget constraints for context assembly."""
     max_tokens: int = 12000
@@ -52,7 +52,13 @@ class ContextBudget:
         "skill": 0.15,
         "knowledge": 0.1,
     })
-    token_estimator: TokenEstimator = field(default_factory=TokenEstimator)
+    # ``token_estimator`` is excluded from equality
+    # because the dataclass ``==`` would otherwise
+    # compare the estimator object by identity; the
+    # estimator is a behavior, not a value.
+    token_estimator: TokenEstimator = field(
+        default_factory=TokenEstimator, compare=False
+    )
 
     def estimate_fragment_tokens(self, fragment: ContextFragment) -> int:
         """Estimate tokens for a fragment."""
