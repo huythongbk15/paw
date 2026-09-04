@@ -197,7 +197,7 @@ gate. They live here so the E1 reviewer sees them early.
 
 ### Derived project views
 
-- [ ] `E1-08` Produce a bounded repository tree view. `(0.5d, D1)`
+- [x] `E1-08` Produce a bounded repository tree view. `(0.5d, D1)` — PASS: `docs/benchmarks/e1/bounded_tree_view.md` defines the contract. `scan_tree` is a new function in `paw/core/repo_scanner.py` (sibling of `scan_repo`); it reuses the E1-05 `_walk` hardening and turns the flat path list into a `TreeNode` hierarchy. The `TreeNode` dataclass is frozen and carries 6 fields (`name`, `path`, `kind`, `children`, `file_count`, `leaf_count`) plus `is_dir`/`is_file` properties. The root `TreeNode` has `name='.'` and `path='.'`; the tree is bounded by the same `RepoFilter` the E1-05 scanner uses (include/exclude + `max_files` + `max_depth`); the result is deterministic (same input → byte-identical output). The contract test `tests/test_e1_08_bounded_tree_contract.py` (13 D1 tests) pins: `TreeNode` frozen + properties; empty root; single file; mixed tree (with recursive `file_count`/`leaf_count` invariants); the E1-05 symlink negative controls (symlink root rejected, `follow_symlinks=True` rejected, symlink file/dir skipped); `safe_default` excludes `__pycache__`; `max_files` cap; `max_depth` cap; determinism. D1 verify: `pytest -q tests/test_e1_08_bounded_tree_contract.py` → 13 passed.
 - [ ] `E1-09` Produce dependency edges with source locations and confidence. `(1d, D1)`
 - [ ] `E1-10` Produce symbol ownership/signature records for the first supported language. `(1d, D1)`
 - [ ] `E1-11` Produce test-to-source associations with explicit unknowns. `(1d, D1)`
@@ -418,7 +418,7 @@ gate-progress view, not permission to call observed implementation `DONE`.
 |---|---|---:|---|---|---|
 | SX | `VERIFIED` | 14/14 | none | `SX-14` closed | `f3ad4ef` (548 passed in 303.72s) |
 | E0 | `IN PROGRESS` | 42/42 items marked [x] (deterministic baseline gate) | none (E0-17..22 deferred: cloud baseline is charter-deferred; E0-26..42 features dispositions done) | re-open any E0-17..42 if a follow-up review needs it | `f3ad4ef` (777 passed, ruff clean) |
-| E1 | `IN PROGRESS` | 7/34 (+ 3 backlog items in E1-BL1..3) | none (E0 gate satisfied) | `E1-08` | `f3ad4ef` |
+| E1 | `IN PROGRESS` | 8/34 (+ 3 backlog items in E1-BL1..3) | none (E0 gate satisfied) | `E1-09` | `f3ad4ef` |
 | E2 | `BLOCKED` | 0/50 | E1 gate | `E2-01` | — |
 | E3 | `BLOCKED` | 0/25 | E2 gate | `E3-01` | — |
 | BETA | `BLOCKED` | 0/14 | E3 gate | `B-01` | — |

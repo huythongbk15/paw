@@ -166,7 +166,7 @@ không giảm chất lượng/an toàn. Ước lượng 25–35 ngày.
 
 ### Project view dẫn xuất
 
-- [ ] `E1-08` Tạo repository tree view có giới hạn. `(0.5d, D1)`
+- [x] `E1-08` Tạo repository tree view có giới hạn. `(0.5d, D1)` — PASS: `docs/benchmarks/e1/bounded_tree_view.md` định nghĩa contract. `scan_tree` là hàm mới trong `paw/core/repo_scanner.py` (anh em với `scan_repo`); tái sử dụng hardening E1-05 `_walk` và biến danh sách path phẳng thành cây `TreeNode`. Dataclass `TreeNode` đóng băng mang 6 field (`name`, `path`, `kind`, `children`, `file_count`, `leaf_count`) cộng property `is_dir`/`is_file`. `TreeNode` gốc có `name='.'` và `path='.'`; cây bị bound bởi cùng `RepoFilter` mà scanner E1-05 dùng (include/exclude + `max_files` + `max_depth`); kết quả là xác định (cùng input → output byte-identical). Contract test `tests/test_e1_08_bounded_tree_contract.py` (13 D1 test) pin: `TreeNode` frozen + property; root rỗng; một file; cây hỗn hợp (với bất biến `file_count`/`leaf_count` đệ quy); negative control symlink E1-05 (symlink root reject, `follow_symlinks=True` reject, symlink file/dir skip); `safe_default` loại trừ `__pycache__`; cap `max_files`; cap `max_depth`; determinism. D1 verify: `pytest -q tests/test_e1_08_bounded_tree_contract.py` → 13 passed.
 - [ ] `E1-09` Tạo dependency edge có source location và confidence. `(1d, D1)`
 - [ ] `E1-10` Tạo record owner/signature symbol cho ngôn ngữ đầu tiên. `(1d, D1)`
 - [ ] `E1-11` Tạo quan hệ test-to-source với unknown tường minh. `(1d, D1)`
@@ -386,7 +386,7 @@ thái tiến độ gate, không cho phép gọi implementation quan sát đượ
 |---|---|---:|---|---|---|
 | SX | `PARTIAL` | 0/14 | Cần revision sạch đã review | `SX-01` | — |
 | E0 | `BLOCKED` | 0/41 | Gate SX | `E0-01` | — |
-| E1 | `IN PROGRESS` | 7/34 (+ 3 backlog E1-BL1..3) | không (E0 gate thỏa) | `E1-08` | `f3ad4ef` |
+| E1 | `IN PROGRESS` | 8/34 (+ 3 backlog E1-BL1..3) | không (E0 gate thỏa) | `E1-09` | `f3ad4ef` |
 | E2 | `BLOCKED` | 0/50 | Gate E1 | `E2-01` | — |
 | E3 | `BLOCKED` | 0/25 | Gate E2 | `E3-01` | — |
 | BETA | `BLOCKED` | 0/14 | Gate E3 | `B-01` | — |
