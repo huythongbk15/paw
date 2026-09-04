@@ -386,7 +386,7 @@ thái tiến độ gate, không cho phép gọi implementation quan sát đượ
 |---|---|---:|---|---|---|
 | SX | `PARTIAL` | 0/14 | Cần revision sạch đã review | `SX-01` | — |
 | E0 | `BLOCKED` | 0/41 | Gate SX | `E0-01` | — |
-| E1 | `IN PROGRESS` | 10/34 (+ 3 backlog E1-BL1..3) | không (E0 gate thỏa) | `E1-11` | `f3ad4ef` |
+| E1 | `IN PROGRESS` | 11/34 (+ 3 backlog E1-BL1..3) | không (E0 gate thỏa) | `E1-12` | `f3ad4ef` |
 | E2 | `BLOCKED` | 0/50 | Gate E1 | `E2-01` | — |
 | E3 | `BLOCKED` | 0/25 | Gate E2 | `E3-01` | — |
 | BETA | `BLOCKED` | 0/14 | Gate E3 | `B-01` | — |
