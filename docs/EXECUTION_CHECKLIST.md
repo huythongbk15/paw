@@ -211,9 +211,9 @@ gate. They live here so the E1 reviewer sees them early.
 
 - [ ] `E1-16` Define the context manifest through existing context contracts. `(0.5d, D1)`
 - [ ] `E1-17` Record include reason, source/hash, score, privacy and token estimate per item. `(0.5d, D1)`
-- [ ] `E1-18` Record exclusion/compression reasons for inspectable candidates. `(0.5d, D1)`
-- [ ] `E1-19` Re-budget after loading full skill bodies. `(0.5d, D2)`
-- [ ] `E1-20` Reject a final payload that exceeds its approved budget. `(3h, D2)`
+- [x] `E1-18` Record exclusion/compression reasons for inspectable candidates. `(0.5d, D1)` — PASS: `docs/benchmarks/e1/exclusion_reasons.md` defines the contract. `paw/core/context_compiler.py` gains the `EXCLUDED_REASONS` closed set (`max_sources_exceeded`, `token_budget_exceeded`, `content_too_large`, `body_skipped_exceeds_max_content_length`); the pre-existing `_allocate_budget` already records one of these on every dropped candidate. The contract is the closed set itself: a reviewer who reads the spec knows every possible reason the runtime can give, no more. The contract test `tests/test_e1_18_19_20_budget_contract.py` (`test_allocate_budget_records_excluded_reason`) pins the contract.
+- [x] `E1-19` Re-budget after loading full skill bodies. `(0.5d, D2)` — PASS: the pre-existing `_build_context` step 1 (`cand.content = body; cand.token_estimate = body_tokens; cand.skill_level = 1`) and step 2 (`selected, newly_excluded = self._allocate_budget(selected)`) already implement the post-skill-upgrade re-budget. The contract test `test_build_context_re_budgets_after_skill_upgrade` exercises the path: a skill candidate is upgraded to Level 1 and the re-budget produces a `TaskContext` whose `token_count` reflects the post-rebudget total.
+- [x] `E1-20` Reject a final payload that exceeds its approved budget. `(3h, D2)` — PASS: `paw/core/context_compiler.py` gains the `BudgetExceededError` exception (carries `final_tokens`, `max_tokens`, `task_id`) and the `ContextCompiler.compile_manifest` method. The new `compile_manifest` is the E1-13 + E1-16 + E1-20 entry point: it runs the existing pipeline, then checks the post-rebudget `final_tokens` against `budget.max_tokens`; when the check fails, it raises `BudgetExceededError`. The contract test `tests/test_e1_18_19_20_budget_contract.py` (8 D2 tests, shared with E1-18 + E1-19) pins: the closed set, the exception's payload contract, the happy path, the over-budget exception's API, the closed-reason on every dropped candidate, the post-skill-upgrade re-budget, and the zero-candidate empty manifest. D2 verify: `pytest -q tests/test_e1_18_19_20_budget_contract.py` → 8 passed.
 - [ ] `E1-21` Gate remote disclosure from the final manifest before provider invocation. `(1d, D2)`
 - [ ] `E1-22` Add a CLI/library inspection projection for the current manifest. `(0.5d, D2)`
 
@@ -419,7 +419,7 @@ gate-progress view, not permission to call observed implementation `DONE`.
 |---|---|---:|---|---|---|
 | SX | `VERIFIED` | 14/14 | none | `SX-14` closed | `f3ad4ef` (548 passed in 303.72s) |
 | E0 | `IN PROGRESS` | 42/42 items marked [x] (deterministic baseline gate) | none (E0-17..22 deferred: cloud baseline is charter-deferred; E0-26..42 features dispositions done) | re-open any E0-17..42 if a follow-up review needs it | `f3ad4ef` (777 passed, ruff clean) |
-| E1 | `IN PROGRESS` | 16/34 (+ 3 backlog items in E1-BL1..3) | none (E0 gate satisfied) | `E1-16` | `f3ad4ef` |
+| E1 | `IN PROGRESS` | 19/34 (+ 3 backlog items in E1-BL1..3) | none (E0 gate satisfied) | `E1-20` | `f3ad4ef` |
 | E2 | `BLOCKED` | 0/50 | E1 gate | `E2-01` | — |
 | E3 | `BLOCKED` | 0/25 | E2 gate | `E3-01` | — |
 | BETA | `BLOCKED` | 0/14 | E3 gate | `B-01` | — |
