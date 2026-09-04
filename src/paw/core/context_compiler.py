@@ -25,6 +25,7 @@ from .storage import db
 if TYPE_CHECKING:
     from .context import TaskContext
     from .execution_profile import ExecutionProfile
+    from .repo_filter import RepoFilter
 
 logger = get_logger(__name__)
 
@@ -70,6 +71,14 @@ class ContextPlan:
 
     # Repository filtering
     repo_paths: list[str] = field(default_factory=list)
+    # E1-04: optional deterministic include/exclude rule
+    # applied to ``repo_paths`` when ``include_repo`` is True.
+    # ``None`` means "no filter"; ``ContextCompiler`` falls
+    # back to ``RepoFilter.safe_default()`` when
+    # ``include_repo`` is True and the plan has no explicit
+    # filter, so the runtime never loads ``__pycache__`` /
+    # ``.git`` / etc. into a context by accident.
+    repo_filter: RepoFilter | None = None
 
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -465,9 +474,44 @@ class ContextCompiler:
         return candidates
 
     async def _retrieve_repo_candidates(self, plan: ContextPlan) -> list[ContextCandidate]:
-        """Retrieve repository files as candidates."""
-        # Placeholder for future implementation
-        return []
+        """Retrieve repository files as candidates (E1-04).
+
+        Resolves the active filter (plan.repo_filter if set,
+        else ``RepoFilter.safe_default()`` as the fail-closed
+        default), runs it over ``plan.repo_paths``, and
+        returns one ``ContextCandidate`` per surviving path.
+        The candidate is lazy: ``content`` is empty, the
+        path is the ``source_id`` and ``reference``, and
+        the filter's repr is recorded in
+        ``metadata["filter"]`` so the E1-17 manifest
+        inspector can show why a path was included.
+        """
+        from .repo_filter import RepoFilter
+
+        active_filter: RepoFilter = (
+            plan.repo_filter if plan.repo_filter is not None
+            else RepoFilter.safe_default()
+        )
+        kept = active_filter.filter_paths(plan.repo_paths)
+        candidates: list[ContextCandidate] = []
+        for path in kept:
+            candidates.append(
+                ContextCandidate(
+                    source="repository",
+                    source_id=path,
+                    content="",
+                    reference=path,
+                    relevance_score=0.5,
+                    reason="repo_filter:match",
+                    token_estimate=0,
+                    priority=1.0,
+                    metadata={
+                        "filter": repr(active_filter),
+                        "kind": "repository_path",
+                    },
+                )
+            )
+        return candidates
 
     def _rank_candidates(self, candidates: list[ContextCandidate], query: str) -> list[ContextCandidate]:
         """Rank candidates by relevance to query."""
