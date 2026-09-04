@@ -11,11 +11,14 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
+from pathlib import Path
 from typing import Any
 
 from paw.core.logging import get_logger
 from paw.core.privacy import PrivacyClass
 from paw.core.storage import db
+
+from .checksum import compute_checksum
 
 logger = get_logger(__name__)
 
@@ -156,6 +159,165 @@ class KnowledgeSource:
             superseded_by=row.get("superseded_by", ""),
             privacy_class=pc,
         )
+
+
+# --- E1-06: incremental changed/unchanged/deleted source detection ----
+
+
+@dataclass(frozen=True)
+class DiffNew:
+    """A path that is on disk but not in the persisted set.
+
+    ``sha256`` is the freshly-computed hash; the
+    ingestion loop stores it back via
+    ``KnowledgeSourceManager.update_checksum`` when the
+    new chunks land.
+    """
+
+    path: str
+    sha256: str
+
+
+@dataclass(frozen=True)
+class DiffChanged:
+    """A path that is in the persisted set AND on disk,
+    but the on-disk SHA-256 differs from the persisted
+    ``checksum``. The old row is preserved in
+    ``source``; the new SHA is in ``new_sha256``."""
+
+    source: KnowledgeSource
+    new_sha256: str
+
+
+@dataclass(frozen=True)
+class DiffUnchanged:
+    """A path that is in the persisted set AND on disk,
+    and the on-disk SHA-256 matches the persisted
+    ``checksum``. The ingestion loop skips this row."""
+
+    source: KnowledgeSource
+
+
+@dataclass(frozen=True)
+class DiffDeleted:
+    """A path that is in the persisted set but no longer
+    on disk. The ingestion loop calls
+    ``KnowledgeSourceManager.mark_path_missing`` (or
+    ``mark_invalid`` with ``reason='path_missing'``) to
+    record the deletion."""
+
+    source: KnowledgeSource
+
+
+@dataclass(frozen=True)
+class SourceDiff:
+    """The 3-way classification of a fresh scan against
+    the persisted source rows.
+
+    Each bucket is a list; the lists are non-overlapping
+    (a path is in exactly one bucket).
+    ``len(new) + len(changed) + len(unchanged)`` equals
+    ``len(scan_paths)``; ``len(changed) + len(unchanged) +
+    len(deleted)`` equals ``len(persisted)``.
+    """
+
+    new: tuple[DiffNew, ...] = ()
+    changed: tuple[DiffChanged, ...] = ()
+    unchanged: tuple[DiffUnchanged, ...] = ()
+    deleted: tuple[DiffDeleted, ...] = ()
+
+    @property
+    def total(self) -> int:
+        return len(self.new) + len(self.changed) + len(self.unchanged) + len(self.deleted)
+
+
+def _sha256_of_file(repo_root: Path, rel_path: str) -> str:
+    """Resolve ``rel_path`` against ``repo_root`` and
+    hash the file content. The helper exists so the
+    diff function can take a list of repo-relative
+    paths and a single repo root.
+    """
+    absolute = repo_root / rel_path
+    return compute_checksum(absolute)
+
+
+async def diff_sources(
+    scan_paths: list[str],
+    persisted: list[KnowledgeSource],
+    *,
+    repo_root: Path | None = None,
+) -> SourceDiff:
+    """Classify ``scan_paths`` against ``persisted``.
+
+    The function reads the file content for every *new*
+    path (to compute the SHA-256 the caller will store
+    back) and for every *changed* path (to know what
+    changed). The function does **not** read unchanged
+    files — that is the incremental optimization.
+
+    ``scan_paths`` is the result of ``scan_repo``
+    (E1-05): already-filtered, already-deterministic,
+    already-sorted repo-relative POSIX paths. The diff
+    function does not re-walk; it accepts the list
+    as-is.
+
+    ``persisted`` is the caller's snapshot of the
+    relevant ``KnowledgeSource`` rows. The function
+    matches by ``source.path``; a path in
+    ``scan_paths`` but not in any persisted row's
+    ``path`` is ``new``; a persisted row whose
+    ``path`` is not in ``scan_paths`` is ``deleted``;
+    a persisted row whose ``path`` is in
+    ``scan_paths`` is ``changed`` (SHA differs) or
+    ``unchanged`` (SHA matches).
+
+    ``repo_root`` is the on-disk root the paths are
+    relative to. Required when ``scan_paths`` is
+    non-empty (the function needs to hash the files);
+    optional when both inputs are empty.
+    """
+    new_bucket: list[DiffNew] = []
+    changed_bucket: list[DiffChanged] = []
+    unchanged_bucket: list[DiffUnchanged] = []
+    deleted_bucket: list[DiffDeleted] = []
+
+    persisted_by_path: dict[str, KnowledgeSource] = {
+        s.path: s for s in persisted
+    }
+    scan_set: set[str] = set(scan_paths)
+
+    # Walk the scan_paths and classify against persisted.
+    for p in scan_paths:
+        existing = persisted_by_path.get(p)
+        if existing is None:
+            # New path: hash the file.
+            assert repo_root is not None, (
+                "diff_sources requires repo_root when scan_paths is non-empty"
+            )
+            sha = _sha256_of_file(repo_root, p)
+            new_bucket.append(DiffNew(path=p, sha256=sha))
+        else:
+            # Persisted + on disk: compare SHA.
+            assert repo_root is not None, (
+                "diff_sources requires repo_root when scan_paths is non-empty"
+            )
+            sha = _sha256_of_file(repo_root, p)
+            if sha == existing.checksum:
+                unchanged_bucket.append(DiffUnchanged(source=existing))
+            else:
+                changed_bucket.append(DiffChanged(source=existing, new_sha256=sha))
+
+    # Persisted rows not in the scan set are deleted.
+    for s in persisted:
+        if s.path not in scan_set:
+            deleted_bucket.append(DiffDeleted(source=s))
+
+    return SourceDiff(
+        new=tuple(new_bucket),
+        changed=tuple(changed_bucket),
+        unchanged=tuple(unchanged_bucket),
+        deleted=tuple(deleted_bucket),
+    )
 
 
 class KnowledgeSourceManager:
@@ -303,6 +465,54 @@ class KnowledgeSourceManager:
             (count, datetime.now(UTC).isoformat(), source_id),
         )
         return True
+
+    async def update_checksum(
+        self,
+        source_id: str,
+        new_sha256: str,
+        *,
+        last_sync: str | None = None,
+    ) -> bool:
+        """Atomically write a new content hash for a
+        source. The incremental ingestion loop calls
+        this with the SHA-256 the ``SourceDiff`` returned
+        for a ``new`` or ``changed`` bucket.
+
+        The method also clears any ``invalidated_at``
+        whose reason was ``checksum_mismatch`` — a
+        successful re-ingest of the same content
+        supersedes the previous invalidation, and the
+        source goes back to ``active``. A ``last_sync``
+        timestamp is recorded when the caller supplies
+        one (the ingestion loop sets it to the current
+        time so a reviewer can see when the source was
+        last verified on disk).
+        """
+        now = datetime.now(UTC).isoformat()
+        sync = last_sync if last_sync is not None else now
+        await db.execute(
+            "UPDATE knowledge_sources SET "
+            "checksum = ?, "
+            "last_sync = ?, "
+            "updated_at = ?, "
+            "status = ?, "
+            "invalidated_at = CASE WHEN invalidation_reason = 'checksum_mismatch' "
+            "                        THEN NULL ELSE invalidated_at END, "
+            "invalidation_reason = CASE WHEN invalidation_reason = 'checksum_mismatch' "
+            "                            THEN '' ELSE invalidation_reason END "
+            "WHERE id = ?",
+            (new_sha256, sync, now, KnowledgeSourceStatus.ACTIVE.value, source_id),
+        )
+        return True
+
+    async def mark_path_missing(self, source_id: str) -> KnowledgeSource:
+        """One-liner for the ``deleted`` bucket of
+        ``SourceDiff``: marks the source invalid with
+        the closed reason ``path_missing``. Returns
+        the updated source. Delegates to
+        ``mark_invalid`` so the closed-reason
+        validation is the same."""
+        return await self.mark_invalid(source_id, "path_missing")
 
     async def delete(self, source_id: str) -> bool:
         """Delete a knowledge source."""

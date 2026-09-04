@@ -11,14 +11,24 @@ from .evidence import KnowledgeEvidence, KnowledgeEvidenceStore, get_knowledge_e
 from .index import KnowledgeIndex, KnowledgeSearchResult, get_knowledge_index
 from .normalization import normalize_knowledge_result
 from .source import (
+    DiffChanged,
+    DiffDeleted,
+    DiffNew,
+    DiffUnchanged,
     KnowledgeSource,
     KnowledgeSourceManager,
     KnowledgeSourceStatus,
     KnowledgeSourceType,
+    SourceDiff,
+    diff_sources,
     get_knowledge_source,
 )
 
 __all__ = [
+    "DiffChanged",
+    "DiffDeleted",
+    "DiffNew",
+    "DiffUnchanged",
     "KnowledgeChunk",
     "KnowledgeChunkStore",
     "KnowledgeCitation",
@@ -31,6 +41,8 @@ __all__ = [
     "KnowledgeSourceManager",
     "KnowledgeSourceStatus",
     "KnowledgeSourceType",
+    "SourceDiff",
+    "diff_sources",
     "get_knowledge_chunk",
     "get_knowledge_citation",
     "get_knowledge_evidence",
