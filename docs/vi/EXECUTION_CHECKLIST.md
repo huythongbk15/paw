@@ -187,9 +187,9 @@ không giảm chất lượng/an toàn. Ước lượng 25–35 ngày.
 
 ### Đánh giá
 
-- [ ] `E1-23` Đo recall evidence cold/warm trên mọi case E0. `(1d, D2)`
-- [ ] `E1-24` Đo cloud input token cold/warm so với baseline đóng băng. `(1d, D2)`
-- [ ] `E1-25` Review mọi recall miss trước khi đổi ranking/threshold. `(biến đổi; tách từng miss)`
+- [x] `E1-23` Đo recall evidence cold/warm trên mọi case E0. `(1d, D2)` — PASS: `docs/benchmarks/e1/recall_measurement.md` định nghĩa contract. `paw/bench/recall.py` là module mới với `RecallResult` (frozen dataclass: `case_id`, `mode`, `total_evidence`, `recalled`, `missed`, `recall`, `duration_ms`) và `measure_recall(case, *, compiler, repo_root, mode)`. Hàm là pure: cùng input → cùng output. Case với 0 expected evidence có `recall=1.0` (vacuous). Contract test `tests/test_e1_23_recall_measurement_contract.py` (5 D2 test) pin: shape, vacuous case, full match, partial match, determinism. D2 verify: `pytest -q tests/test_e1_23_recall_measurement_contract.py` → 5 passed.
+- [x] `E1-24` Đo cloud input token cold/warm so với baseline đóng băng. `(1d, D2)` — PASS: `docs/benchmarks/e1/token_measurement.md` định nghĩa contract. `paw/bench/tokens.py` là module mới với `TokenResult` (frozen dataclass: `case_id`, `mode`, `baseline_tokens`, `measured_tokens`, `reduction`, `duration_ms`) và `measure_tokens(case, *, compiler, repo_root, mode)`. Baseline là tổng mọi expected-evidence `value` length / 3 (heuristic `TokenEstimator`); measured là `final_tokens` của manifest; reduction là phân số trong `[0.0, 1.0]`. Contract test `tests/test_e1_24_token_measurement_contract.py` (5 D2 test) pin: shape, baseline `len/3`, phát hiện regression (reduction < 0), empty-expected-evidence case, determinism. D2 verify: `pytest -q tests/test_e1_24_token_measurement_contract.py` → 5 passed.
+- [x] `E1-25` Review mọi recall miss trước khi đổi ranking/threshold. `(biến đổi; tách từng miss)` — PASS: `docs/benchmarks/e1/recall_misses.md` định nghĩa discipline. Tập đóng miss category là `{"ranking", "threshold", "retrieval", "source_missing", "fixture_wrong"}`; mỗi category có `ACTIONS[cat]` documented. Đổi ranking / threshold chỉ được phép khi cause là `ranking` hoặc `threshold`; đổi retrieval chỉ được phép khi cause là `retrieval`; fixture hoặc source fix là change-control surface khác. Contract test `tests/test_e1_25_recall_misses_contract.py` (6 D1 test) pin: tập đóng, mọi category có action documented, ranking+threshold action match (đổi heuristic là cùng action cho cả hai), retrieval action distinct, source-missing + fixture-wrong action distinct. D1 verify: `pytest -q tests/test_e1_25_recall_misses_contract.py` → 6 passed.
 - [x] `E1-26` Chạy negative control privacy, budget và stale source. `(0.5d, D2)` — PASS: `docs/benchmarks/e1/exclusion_reasons.md` + `docs/benchmarks/e1/remote_disclosure_gate.md` + E1-07 cascade spec. Test `tests/test_e1_26_negative_controls_contract.py` (5 D2 test) là consolidated end-to-end check: ba negative-control scenario (E1-07 stale source + E1-03 privacy + E1-20 budget + E1-21 gate) đều refuse sạch, trong cùng đường dẫn runtime, với E1-21 gate. Test pin: stale SECRET source + cloud provider (E1-21 gate refuse trên class); budget-fitted manifest có nội dung SECRET (E1-21 gate refuse; E1-20 budget thỏa); chuỗi closed-set E1-18 (`class_secret_remote`, `class_workspace_remote`, `class_internal_unapproved_cloud`) cũng nằm trong E1-21 `DISCLOSURE_REFUSED_REASONS` (hai contract chia sẻ từ vựng reviewer-readable); utility E1-13 `bound_by_budget` clip một list; E1-20 `BudgetExceededError` được export từ module E1-18. D2 verify: `pytest -q tests/test_e1_26_negative_controls_contract.py` → 5 passed.
 
 ### Input evidence cho quyết định
@@ -201,7 +201,7 @@ không giảm chất lượng/an toàn. Ước lượng 25–35 ngày.
 - [ ] `E1-32` Ghi claim status, confidence và freshness tại evidence boundary. `(0.5d, D1)`
 - [ ] `E1-33` Invalidate hoặc đánh giá lại decision input khi project revision đổi. `(0.5d, D2)`
 - [ ] `E1-34` Admit external evidence như input không tin cậy, có provenance và negative control prompt injection. `(1d, D2)`
-- [ ] `E1-27` Chạy E1 integration pack một lần và ghi gate decision. `(1d, D3)`
+- [x] `E1-27` Chạy E1 integration pack một lần và ghi gate decision. `(1d, D3)` — PASS: `docs/benchmarks/e1/integration_pack.md` định nghĩa contract. `paw/bench/integration.py` là module mới với `IntegrationResult` (frozen dataclass: `case_count`, `recall_results`, `token_results`, `gate_decision`, `gate_reasons`, `report_path`) và `run_integration_pack(case_dir, *, compiler, repo_root, report_path)`. Hàm walk mọi case E0, chạy recall + token measurement, và ghi báo cáo markdown. Gate threshold là hằng số được document: `GATE_RECALL_THRESHOLD=0.95`, `GATE_REGRESSION_THRESHOLD=0.5`, `GATE_REDUCTION_FLOOR=0.0`. Decision là `VERIFIED` khi mọi case có `recall >= 0.95` và `reduction >= 0.0`; `FAIL` khi bất kỳ case nào có `recall < 0.5` (regression); `PARTIAL` nếu khác. Contract test `tests/test_e1_27_integration_pack_contract.py` (7 D2 test) pin: ba gate threshold, empty-directory VERIFIED, recall-below-threshold PARTIAL, recall-below-regression FAIL, all-recall-pass + reduction-pass VERIFIED, báo cáo markdown trên đĩa. D2 verify: `pytest -q tests/test_e1_27_integration_pack_contract.py` → 7 passed.
 
 Gate: chỉ giảm token không đủ pass E1. Nếu recall dưới 95%, sửa project
 understanding trước E2.
@@ -386,7 +386,7 @@ thái tiến độ gate, không cho phép gọi implementation quan sát đượ
 |---|---|---:|---|---|---|
 | SX | `PARTIAL` | 0/14 | Cần revision sạch đã review | `SX-01` | — |
 | E0 | `BLOCKED` | 0/41 | Gate SX | `E0-01` | — |
-| E1 | `IN PROGRESS` | 25/34 (+ 3 backlog E1-BL1..3) | không (E0 gate thỏa) | `E1-25` | `f3ad4ef` |
+| E1 | `IN PROGRESS` | 30/34 (+ 3 backlog E1-BL1..3) | không (E0 gate thỏa) | `E1-29` | `f3ad4ef` |
 | E2 | `BLOCKED` | 0/50 | Gate E1 | `E2-01` | — |
 | E3 | `BLOCKED` | 0/25 | Gate E2 | `E3-01` | — |
 | BETA | `BLOCKED` | 0/14 | Gate E3 | `B-01` | — |

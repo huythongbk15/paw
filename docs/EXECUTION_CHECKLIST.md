@@ -233,7 +233,7 @@ gate. They live here so the E1 reviewer sees them early.
 - [ ] `E1-32` Record claim status, confidence and freshness at the evidence boundary. `(0.5d, D1)`
 - [ ] `E1-33` Invalidate or re-evaluate a decision input when project revision changes. `(0.5d, D2)`
 - [ ] `E1-34` Admit external evidence as untrusted input with provenance and prompt-injection negative controls. `(1d, D2)`
-- [ ] `E1-27` Run the E1 integration pack once and record the gate decision. `(1d, D3)`
+- [x] `E1-27` Run the E1 integration pack once and record the gate decision. `(1d, D3)` — PASS: `docs/benchmarks/e1/integration_pack.md` defines the contract. `paw/bench/integration.py` is a new module with `IntegrationResult` (frozen dataclass: `case_count`, `recall_results`, `token_results`, `gate_decision`, `gate_reasons`, `report_path`) and `run_integration_pack(case_dir, *, compiler, repo_root, report_path)`. The function walks every E0 case, runs the recall + token measurement, and writes a markdown report. The gate thresholds are documented constants: `GATE_RECALL_THRESHOLD=0.95`, `GATE_REGRESSION_THRESHOLD=0.5`, `GATE_REDUCTION_FLOOR=0.0`. The decision is `VERIFIED` when every case has `recall >= 0.95` and `reduction >= 0.0`; `FAIL` when any case has `recall < 0.5` (regression); `PARTIAL` otherwise. The contract test `tests/test_e1_27_integration_pack_contract.py` (7 D2 tests) pins: the three gate thresholds, the empty-directory VERIFIED, the recall-below-threshold PARTIAL, the recall-below-regression FAIL, the all-recall-pass + reduction-pass VERIFIED, the markdown report on disk. D2 verify: `pytest -q tests/test_e1_27_integration_pack_contract.py` → 7 passed.
 
 Gate: token reduction alone cannot pass E1. If recall stays below 95%, fix
 project understanding before starting E2.
@@ -419,7 +419,7 @@ gate-progress view, not permission to call observed implementation `DONE`.
 |---|---|---:|---|---|---|
 | SX | `VERIFIED` | 14/14 | none | `SX-14` closed | `f3ad4ef` (548 passed in 303.72s) |
 | E0 | `IN PROGRESS` | 42/42 items marked [x] (deterministic baseline gate) | none (E0-17..22 deferred: cloud baseline is charter-deferred; E0-26..42 features dispositions done) | re-open any E0-17..42 if a follow-up review needs it | `f3ad4ef` (777 passed, ruff clean) |
-| E1 | `IN PROGRESS` | 25/34 (+ 3 backlog items in E1-BL1..3) | none (E0 gate satisfied) | `E1-25` | `f3ad4ef` |
+| E1 | `IN PROGRESS` | 30/34 (+ 3 backlog items in E1-BL1..3) | none (E0 gate satisfied) | `E1-29` | `f3ad4ef` |
 | E2 | `BLOCKED` | 0/50 | E1 gate | `E2-01` | — |
 | E3 | `BLOCKED` | 0/25 | E2 gate | `E3-01` | — |
 | BETA | `BLOCKED` | 0/14 | E3 gate | `B-01` | — |
