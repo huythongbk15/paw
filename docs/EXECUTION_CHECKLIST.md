@@ -226,9 +226,9 @@ gate. They live here so the E1 reviewer sees them early.
 
 ### Decision evidence inputs
 
-- [ ] `E1-28` Define a decision-evidence view through existing Knowledge/Evidence ownership. `(0.5d, D1)`
-- [ ] `E1-29` Capture current behavior or reproduced root cause with source locations. `(0.5d, D1)`
-- [ ] `E1-30` Capture hard constraints, goals and non-goals without treating preferences as facts. `(0.5d, D1)`
+- [x] `E1-28` Define a decision-evidence view through existing Knowledge/Evidence ownership. `(0.5d, D1)` — PASS: `docs/benchmarks/e1/decision_evidence_view.md` defines the contract. `paw/knowledge/changes.py` gains `recent_change_to_evidence(change, *, repo_root) -> list[KnowledgeEvidence]`: a pure function that turns a `RecentChange` into one `KnowledgeEvidence` per changed file. The `claim` is the commit's first-line message; the `chunk_id` is the file path; the `confidence` is `0.5` (the evidence is a *change record*, not a static claim); the `created_at` is the commit timestamp (deterministic). The contract test `tests/test_e1_28_decision_evidence_contract.py` (6 D1 tests) pins: one-row-per-file, claim is the commit message, confidence is 0.5, metadata carries commit metadata, empty change returns empty, determinism. D1 verify: `pytest -q tests/test_e1_28_decision_evidence_contract.py` → 6 passed.
+- [x] `E1-29` Capture current behavior or reproduced root cause with source locations. `(0.5d, D1)` — PASS: `docs/benchmarks/e1/observation_record.md` defines the contract. `paw/knowledge/observations.py` is a new module with a frozen `Observation` dataclass (5 fields: `kind`, `description`, `file`, `line`, `col`); `kind` is one of `"behavior"` or `"root_cause"`; `line` is 1-based; `col` is 0-based. The contract test `tests/test_e1_29_observation_contract.py` (7 D1 tests) pins: the shape, the default `col=0`, the two kinds, the frozen + hashable invariants, the line/col convention. D1 verify: `pytest -q tests/test_e1_29_observation_contract.py` → 7 passed.
+- [x] `E1-30` Capture hard constraints, goals and non-goals without treating preferences as facts. `(0.5d, D1)` — PASS: `docs/benchmarks/e1/constraint_record.md` defines the contract. `paw/knowledge/constraints.py` is a new module with a frozen `Constraint` dataclass (3 fields: `kind`, `description`, `metric`); `kind` is one of `"constraint"`, `"goal"`, `"non_goal"`; `metric` is the optional measurement (e.g. `"30%"` for a goal; `None` for constraint / non-goal). The contract test `tests/test_e1_30_constraint_contract.py` (8 D1 tests) pins: the shape, the three kinds, the `metric` semantics (string when present; the kind drives the semantic), the frozen + hashable invariants. D1 verify: `pytest -q tests/test_e1_30_constraint_contract.py` → 8 passed.
 - [ ] `E1-31` Retrieve relevant prior decisions and verification history with provenance. `(0.5d, D1)`
 - [ ] `E1-32` Record claim status, confidence and freshness at the evidence boundary. `(0.5d, D1)`
 - [ ] `E1-33` Invalidate or re-evaluate a decision input when project revision changes. `(0.5d, D2)`
@@ -419,7 +419,7 @@ gate-progress view, not permission to call observed implementation `DONE`.
 |---|---|---:|---|---|---|
 | SX | `VERIFIED` | 14/14 | none | `SX-14` closed | `f3ad4ef` (548 passed in 303.72s) |
 | E0 | `IN PROGRESS` | 42/42 items marked [x] (deterministic baseline gate) | none (E0-17..22 deferred: cloud baseline is charter-deferred; E0-26..42 features dispositions done) | re-open any E0-17..42 if a follow-up review needs it | `f3ad4ef` (777 passed, ruff clean) |
-| E1 | `IN PROGRESS` | 22/34 (+ 3 backlog items in E1-BL1..3) | none (E0 gate satisfied) | `E1-22` | `f3ad4ef` |
+| E1 | `IN PROGRESS` | 25/34 (+ 3 backlog items in E1-BL1..3) | none (E0 gate satisfied) | `E1-25` | `f3ad4ef` |
 | E2 | `BLOCKED` | 0/50 | E1 gate | `E2-01` | — |
 | E3 | `BLOCKED` | 0/25 | E2 gate | `E3-01` | — |
 | BETA | `BLOCKED` | 0/14 | E3 gate | `B-01` | — |
