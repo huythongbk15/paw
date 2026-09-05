@@ -159,7 +159,15 @@ tokens after warm-up, without quality/safety regression. Estimated 25–35 days.
 These are cleanups the F0 review identified but did not block the E0
 gate. They live here so the E1 reviewer sees them early.
 
-- [x] `E1-BL1` Broaden the contract check status-vocabulary rule. `(2h, D0)` — PASS: `skills/bootstrap-canonical-docs/scripts/contract-checks.sh` gains a *broader* status-vocabulary check: any of the six forbidden tokens (`DONE` / `TODO` / `FIXME` / `XXX` / `WIP`) used as a status word anywhere in the canonical docs is a contract failure (the narrower check requires the forbidden word to follow an item-shaped clause `(\d+[hd],\s*D[0-9])`). The broader check uses Python so it can skip code-fences (``\`\`\`` ... ``\`\`\``) and backtick spans (so the rules themselves are not flagged). The contract test `tests/test_e1_bl1_status_vocabulary_contract.py` (5 D0 tests) pins: a clean canonical doc passes; a line with `already DONE` is caught by the broader check; a forbidden word in a backtick span passes; a forbidden word in a code-fence passes; a forbidden word inside the item-shaped clause is caught (by either the narrower or the broader check). D0 verify: `pytest -q tests/test_e1_bl1_status_vocabulary_contract.py` → 5 passed.
+- [ ] `E1-BL1` Broaden the contract check status-vocabulary rule. The current
+  rule (`forbidden='DONE|TODO|FIXME|XXX|WIP'` in
+  `skills/bootstrap-canonical-docs/scripts/contract-checks.sh`) only
+  matches when the forbidden word appears inside an item-shaped
+  clause (`(\d+[hd],\s*D[0-9])`). A roadmap line such as
+  `already DONE` slipped through. The next E1 item adds a
+  broader check that flags any of the six forbidden tokens
+  used as a status word anywhere in the canonical docs.
+  `(2h, D0)`
 - [ ] `E1-BL2` Tighten `paw.bench` wildcard exports. The current
   `paw/bench/__init__.py` re-exports stdlib symbols
   (`Any`, `ClassVar`, `StrEnum`, `dataclass`, `field`) plus
@@ -411,7 +419,7 @@ gate-progress view, not permission to call observed implementation `DONE`.
 |---|---|---:|---|---|---|
 | SX | `VERIFIED` | 14/14 | none | `SX-14` closed | `f3ad4ef` (548 passed in 303.72s) |
 | E0 | `IN PROGRESS` | 42/42 items marked [x] (deterministic baseline gate) | none (E0-17..22 deferred: cloud baseline is charter-deferred; E0-26..42 features dispositions done) | re-open any E0-17..42 if a follow-up review needs it | `f3ad4ef` (777 passed, ruff clean) |
-| E1 | `IN PROGRESS` | 35/37 (+ 2 backlog items in E1-BL2..3) | none (E0 gate satisfied) | `E1-BL1` | `f3ad4ef` |
+| E1 | `IN PROGRESS` | 34/34 (+ 3 backlog items in E1-BL1..3) | none (E0 gate satisfied) | `E1-34` | `f3ad4ef` |
 | E2 | `BLOCKED` | 0/50 | E1 gate | `E2-01` | — |
 | E3 | `BLOCKED` | 0/25 | E2 gate | `E3-01` | — |
 | BETA | `BLOCKED` | 0/14 | E3 gate | `B-01` | — |
