@@ -19,8 +19,13 @@ with the E0-02 contract tests.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from enum import StrEnum
 from types import MappingProxyType
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .context_compiler import ContextManifest
 
 
 class PrivacyClass(StrEnum):
@@ -107,11 +112,94 @@ def can_disclose_to_provider(privacy_class: PrivacyClass, provider_kind: str) ->
 
 
 __all__ = [
+    "DISCLOSURE_REFUSED_REASONS",
     "PROVIDER_CLOUD_APPROVED",
     "PROVIDER_CLOUD_UNAPPROVED",
     "PROVIDER_KINDS",
     "PROVIDER_LOCAL",
     "REMOTE_DISCLOSURE_DEFAULTS",
+    "DisclosureResult",
     "PrivacyClass",
     "can_disclose_to_provider",
+    "gate_remote_disclosure",
 ]
+
+
+# --- E1-21: gate_remote_disclosure ------------------------------------
+
+
+# Closed set of refusal reasons the gate can record.
+# Adding a new reason is a change-control surface that
+# requires updating this set and the contract test in
+# the same change.
+DISCLOSURE_REFUSED_REASONS: frozenset[str] = frozenset(
+    {
+        "class_workspace_remote",
+        "class_secret_remote",
+        "class_internal_unapproved_cloud",
+        "class_none_unapproved_cloud",
+        "unknown_provider_kind",
+    }
+)
+
+
+@dataclass(frozen=True)
+class DisclosureResult:
+    """The result of ``gate_remote_disclosure``.
+
+    ``allowed`` is True iff every included item in the
+    manifest may be sent to the named provider kind.
+    ``refused`` is a tuple of ``(candidate, reason)``
+    pairs for every item that is refused; empty when
+    ``allowed`` is True.
+    """
+    allowed: bool
+    refused: tuple = ()
+
+
+def _refusal_reason(privacy_class: PrivacyClass | None, provider_kind: str) -> str:
+    """Map a (class, provider) pair to the closed refusal
+    reason the gate records. ``None`` is treated as
+    ``INTERNAL`` (the E1-03 default)."""
+    cls = privacy_class if privacy_class is not None else PrivacyClass.INTERNAL
+    if provider_kind not in PROVIDER_KINDS:
+        return "unknown_provider_kind"
+    if cls == PrivacyClass.WORKSPACE and provider_kind != PROVIDER_LOCAL:
+        return "class_workspace_remote"
+    if cls == PrivacyClass.SECRET and provider_kind != PROVIDER_LOCAL:
+        return "class_secret_remote"
+    if cls == PrivacyClass.INTERNAL and provider_kind == PROVIDER_CLOUD_UNAPPROVED:
+        return "class_internal_unapproved_cloud"
+    return ""  # allowed
+
+
+def gate_remote_disclosure(
+    manifest: ContextManifest,
+    *,
+    provider_kind: str,
+) -> DisclosureResult:
+    """Check every included item in ``manifest`` against
+    the E1-03 ``can_disclose_to_provider`` table.
+
+    Returns a ``DisclosureResult`` with two fields:
+    - ``allowed``: True iff every included item may be
+      sent to ``provider_kind``; False if any item is
+      refused.
+    - ``refused``: a tuple of ``(candidate, reason)``
+      pairs for every item that is refused; empty when
+      ``allowed`` is True.
+
+    The function is pure: it does not raise on a
+    refused item; the caller is responsible for
+    inspecting ``allowed`` and refusing the
+    invocation when it is False.
+    """
+    refused: list = []
+    for cand in manifest.included:
+        reason = _refusal_reason(cand.privacy_class, provider_kind)
+        if reason:
+            refused.append((cand, reason))
+    return DisclosureResult(
+        allowed=not refused,
+        refused=tuple(refused),
+    )

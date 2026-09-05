@@ -1022,3 +1022,81 @@ async def _compile_manifest(
 
 
 ContextCompiler.compile_manifest = _compile_manifest  # type: ignore[attr-defined]
+
+
+# --- E1-22: render_manifest -------------------------------------------
+
+
+def render_manifest(manifest: ContextManifest) -> str:
+    """Return a human-readable string rendering of
+    ``manifest``. The format is deterministic: two
+    calls with the same input produce the same output.
+
+    The format is line-oriented and human-readable. A
+    CLI command or a library caller prints the result
+    to stdout; a script can grep / parse it. The
+    exact field order and indentation are
+    implementation details; the *contract* is that
+    the output is deterministic and reviewable.
+    """
+    lines: list[str] = []
+    lines.append("# ContextManifest")
+    lines.append(f"task_id: {manifest.task_id}")
+    lines.append(f"budget.max_tokens: {manifest.budget.max_tokens}")
+    lines.append(f"final_tokens: {manifest.final_tokens}")
+    # Included.
+    lines.append(f"included: {len(manifest.included)} items")
+    for c in manifest.included:
+        priv = c.privacy_class.value if c.privacy_class else "none"
+        lines.append(
+            f"  [{c.source}] {c.source_id}  "
+            f"relevance={c.relevance_score}  "
+            f"priority={c.priority}  "
+            f"tokens={c.token_estimate}  "
+            f"privacy={priv}"
+        )
+    # Excluded.
+    lines.append(f"excluded: {len(manifest.excluded)} items")
+    for c in manifest.excluded:
+        reason = c.metadata.get("excluded_reason", "unknown")
+        lines.append(
+            f"  [{c.source}] {c.source_id}  reason={reason}"
+        )
+    # Recent changes.
+    lines.append(f"recent_changes: {len(manifest.recent_changes)} items")
+    for ch in manifest.recent_changes:
+        lines.append(
+            f"  {ch.short_sha} {ch.date} {ch.author}  {ch.message}"
+        )
+    # Affected areas.
+    lines.append(
+        f"affected_areas: {len(manifest.affected_areas)} items"
+    )
+    for a in manifest.affected_areas:
+        lines.append(
+            f"  {a.change.short_sha}  "
+            f"affected_symbols={len(a.affected_symbols)}  "
+            f"affected_tests={len(a.affected_tests)}"
+        )
+    # Symbols.
+    lines.append(f"symbols: {len(manifest.symbols)} items")
+    for s in manifest.symbols:
+        lines.append(f"  {s.qualified_name}")
+    # Test links.
+    lines.append(f"test_links: {len(manifest.test_links)} items")
+    for tl in manifest.test_links:
+        sq = tl.source_qualified_name or "unknown"
+        lines.append(
+            f"  {tl.test_qualified_name} -> {sq} "
+            f"(conf={tl.confidence}, reason={tl.reason})"
+        )
+    # Dependency edges.
+    lines.append(
+        f"dependency_edges: {len(manifest.dependency_edges)} items"
+    )
+    for de in manifest.dependency_edges:
+        lines.append(
+            f"  {de.from_path}:{de.line}:{de.col} -> {de.to_module} "
+            f"(kind={de.kind}, conf={de.confidence})"
+        )
+    return "\n".join(lines) + "\n"
