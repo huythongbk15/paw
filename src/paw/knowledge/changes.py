@@ -20,10 +20,15 @@ from __future__ import annotations
 import subprocess
 from collections.abc import Iterable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from .symbols import SymbolRecord, extract_symbols
 from .test_associations import TestLink, associate_tests
+
+if TYPE_CHECKING:
+    from .evidence import KnowledgeEvidence
 
 # The Unit-Separator character is not valid in commit
 # messages or repo-relative POSIX paths; using it as a
@@ -206,4 +211,64 @@ def affected_areas(
     return out
 
 
-__all__ = ["AffectedArea", "RecentChange", "affected_areas", "recent_changes"]
+# --- E1-28: recent_change_to_evidence -------------------------------
+
+
+def recent_change_to_evidence(
+    change: RecentChange,
+    *,
+    repo_root: Path,
+) -> list[KnowledgeEvidence]:
+    """Turn a ``RecentChange`` into a list of
+    ``KnowledgeEvidence`` rows.
+
+    The function is pure: same input -> same output,
+    in the same order. One row per changed file; the
+    ``claim`` is the commit's first-line message; the
+    ``chunk_id`` is the file path; the ``confidence``
+    is ``0.5`` (the evidence is a *change record*, not
+    a static claim).
+
+    The ``repo_root`` is reserved for a future
+    per-file evidence expansion; the E1-28 contract is
+    the join shape, not the analysis.
+    """
+    from .evidence import KnowledgeEvidence
+
+    # The ``created_at`` is set to the commit's
+    # timestamp so two calls produce identical
+    # records (the default factory is a fresh
+    # ``datetime.now(UTC)`` and would not be
+    # deterministic).
+    created_at = (
+        datetime.fromisoformat(change.date)
+        if change.date
+        else datetime.now(UTC)
+    )
+    out: list[KnowledgeEvidence] = []
+    for path in change.changed_files:
+        out.append(
+            KnowledgeEvidence(
+                chunk_id=path,
+                claim=change.message,
+                confidence=0.5,
+                metadata={
+                    "paw_evidence_kind": "change_record",
+                    "commit_sha": change.sha,
+                    "commit_short_sha": change.short_sha,
+                    "author": change.author,
+                    "date": change.date,
+                },
+                created_at=created_at,
+            )
+        )
+    return out
+
+
+__all__ = [
+    "AffectedArea",
+    "RecentChange",
+    "affected_areas",
+    "recent_change_to_evidence",
+    "recent_changes",
+]
