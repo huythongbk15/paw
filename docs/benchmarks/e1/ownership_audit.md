@@ -115,7 +115,7 @@ family:
 `stale_at is not None`); the property is derived and
 not stored.
 
-### `evidence.py` — `KnowledgeEvidence` (8 fields)
+### `evidence.py` — `KnowledgeEvidence` (10 fields)
 
 | Field | Type | Owner | Notes |
 |---|---|---|---|
@@ -127,6 +127,8 @@ not stored.
 | `created_at` | `datetime` | `KnowledgeEvidence` | UTC. |
 | `stale_at` | `str \| None` | `KnowledgeEvidence` | E1-07: UTC ISO-8601 timestamp the evidence was marked stale; `None` while fresh. The cascade sets it when the owning source is invalidated. |
 | `stale_reason` | `str` | `KnowledgeEvidence` | E1-07: closed `INVALID_REASONS` code; empty while fresh. |
+| `status` | `str` | `KnowledgeEvidence` | E1-32: closed set (`unverified` / `verified` / `disputed` / `stale`); default `unverified`. |
+| `freshness` | `str \| None` | `KnowledgeEvidence` | E1-32: ISO-8601 timestamp of last verify; `None` when never verified. |
 
 `KnowledgeEvidence` also exposes `is_stale`.
 

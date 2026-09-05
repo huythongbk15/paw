@@ -34,6 +34,9 @@ class KnowledgeEvidence:
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     stale_at: str | None = None
     stale_reason: str = ""
+    # E1-32: claim status + freshness.
+    status: str = "unverified"
+    freshness: str | None = None
 
     @property
     def is_stale(self) -> bool:
@@ -49,6 +52,8 @@ class KnowledgeEvidence:
             "created_at": self.created_at.isoformat(),
             "stale_at": self.stale_at,
             "stale_reason": self.stale_reason,
+            "status": self.status,
+            "freshness": self.freshness,
         }
 
     @classmethod
@@ -62,6 +67,8 @@ class KnowledgeEvidence:
             created_at=datetime.fromisoformat(row["created_at"]),
             stale_at=row.get("stale_at"),
             stale_reason=row.get("stale_reason", ""),
+            status=row.get("status", "unverified") or "unverified",
+            freshness=row.get("freshness"),
         )
 
 
@@ -151,3 +158,15 @@ def get_knowledge_evidence() -> KnowledgeEvidenceStore:
     if _knowledge_evidence_store is None:
         _knowledge_evidence_store = KnowledgeEvidenceStore()
     return _knowledge_evidence_store
+
+
+# --- E1-32: claim status, confidence, freshness ------------------
+
+
+# Closed set of E1-32 claim-status codes the runtime
+# can record. ``unverified`` is the default; the
+# reviewer marks evidence as ``verified`` /
+# ``disputed`` / ``stale`` as the workflow progresses.
+EVIDENCE_STATUSES: frozenset[str] = frozenset(
+    {"unverified", "verified", "disputed", "stale"}
+)
