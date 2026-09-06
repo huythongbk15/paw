@@ -30,6 +30,8 @@ from paw.bench import (
     ExpectedEvidence,
     FixtureRef,
     PrivacyClass,
+)
+from paw.bench.verification import (
     VerificationRecord,
     VerificationResult,
     VerificationSpec,

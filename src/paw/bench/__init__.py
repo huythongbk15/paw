@@ -589,46 +589,18 @@ __all__ = [
     "case_manifest_to_dict",
     "is_valid_case_manifest",
     "validate_case_manifest",
-]
-
-
-# E0-16: re-export the runner so callers can use
-# ``from paw.bench import run_case, load_case, ...`` without
-# importing the runner submodule explicitly.
-from .runner import (  # noqa: E402
-    CaseRunResult,
-    RunnerError,
-    RunRow,
-    load_case,
-    run_case,
-    run_case_file,
-    write_runs_jsonl,
-)
-
-__all__ += [
+    # E1-BL2: CaseRunResult is the benchmark contract
+    # result type (a pure dataclass). Submodule functions
+    # (run_case, load_case, etc.) and verification types
+    # stay importable via their explicit paths:
+    # ``from paw.bench.runner import ...`` /
+    # ``from paw.bench.verification import ...``.
     "CaseRunResult",
-    "RunRow",
-    "RunnerError",
-    "load_case",
-    "run_case",
-    "run_case_file",
-    "write_runs_jsonl",
 ]
 
 
-# E0-39: re-export the verification types so callers can
-# ``from paw.bench import VerificationSpec, ...`` without
-# importing the verification submodule explicitly.
-from .verification import (  # noqa: E402
-    VerificationRecord,
-    VerificationResult,
-    VerificationSpec,
-    make_spec_from_evidence,
-)
-
-__all__ += [
-    "VerificationRecord",
-    "VerificationResult",
-    "VerificationSpec",
-    "make_spec_from_evidence",
-]
+# Import CaseRunResult for the __all__ surface only.
+# The runner module's other symbols (run_case, load_case,
+# run_case_file, write_runs_jsonl, RunRow, RunnerError)
+# are accessible via ``from paw.bench.runner import ...``.
+from .runner import CaseRunResult  # noqa: E402

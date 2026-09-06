@@ -142,7 +142,7 @@ def test_every_case_is_loadable_by_the_runner(case_id: str) -> None:
     the E0-26 review confirms the runner can still load
     and run each one without raising.
     """
-    from paw.bench import load_case, run_case
+    from paw.bench.runner import load_case, run_case
     case_path = (
         PROJECT_ROOT / "benchmarks" / "e0" / "cases" / f"{case_id}.yaml"
     )

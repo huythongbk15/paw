@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from paw.bench import load_case, run_case
+from paw.bench.runner import load_case, run_case
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]

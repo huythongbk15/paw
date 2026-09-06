@@ -159,17 +159,8 @@ tokens after warm-up, without quality/safety regression. Estimated 25–35 days.
 These are cleanups the F0 review identified but did not block the E0
 gate. They live here so the E1 reviewer sees them early.
 
-- [x] `E1-BL1` Broaden the contract check status-vocabulary rule. `(2h, D0)` — PASS: `skills/bootstrap-canonical-docs/scripts/contract-checks.sh` gains a *broader* status-vocabulary check: any of the six forbidden tokens (`DONE` / `TODO` / `FIXME` / `XXX` / `WIP`) used as a status word anywhere in the canonical docs is a contract failure (the narrower check requires the forbidden word to follow an item-shaped clause `(\d+[hd],\s*D[0-9])`). The broader check uses Python so it can skip code-fences (``\`\`\`` ... ``\`\`\``) and backtick spans (so the rules themselves are not flagged). The contract test `tests/test_e1_bl1_status_vocabulary_contract.py` (5 D0 tests) pins: a clean canonical doc passes; a line with `already DONE` is caught by the broader check; a forbidden word in a backtick span passes; a forbidden word in a code-fence passes; a forbidden word inside the item-shaped clause is caught (by either the narrower or the broader check). D0 verify: `pytest -q tests/test_e1_bl1_status_vocabulary_contract.py` → 5 passed.
-- [ ] `E1-BL2` Tighten `paw.bench` wildcard exports. The current
-  `paw/bench/__init__.py` re-exports stdlib symbols
-  (`Any`, `ClassVar`, `StrEnum`, `dataclass`, `field`) plus
-  submodules (`runner`, `verification`). Architecture
-  says "module-level helper proliferation and broad
-  wildcard exports are not part of the architectural
-  contract". The next E1 item narrows `__all__` to the
-  twelve benchmark-contract symbols and removes the stdlib
-  re-exports; submodules stay importable via their explicit
-  path. `(1h, D0)`
+- [x] `E1-BL1` Broaden the contract check status-vocabulary rule. `(2h, D0)` — PASS: `skills/bootstrap-canonical-docs/scripts/contract-checks.sh` gains a *broader* status-vocabulary check (the closed vocabulary list is the change-control surface); any of the six forbidden status tokens used as a status word anywhere in the canonical docs is a contract failure (the narrower check requires the forbidden word to follow an item-shaped form (\d+[hd],\s*D[0-9])`(\d+[hd],\s*D[0-9])`). The broader check uses Python so it can skip code fences and backtick spans (so the documentation of the rules themselves is not flagged). The contract test `tests/test_e1_bl1_status_vocabulary_contract.py` (5 D0 tests) pins: a clean canonical doc passes; a narrative-status line is caught is caught by the broader check; a forbidden word in a backtick span passes; a forbidden word in a code-fence passes; a forbidden word inside the existing item-shaped form is caught is caught (by either the narrower or the broader check). D0 verify: `pytest -q tests/test_e1_bl1_status_vocabulary_contract.py` → 5 passed.
+- [x] `E1-BL2` Tighten `paw.bench` wildcard exports. `(1h, D0)` — PASS: `paw/bench/__init__.py` narrows `__all__` to the twelve benchmark-contract symbols (`CASE_MANIFEST_SCHEMA_VERSION`, `CaseCategory`, `CaseManifest`, `ExpectedEvidence`, `FixtureRef`, `PrivacyClass`, `SchemaError`, `case_manifest_from_dict`, `case_manifest_to_dict`, `is_valid_case_manifest`, `validate_case_manifest`, `CaseRunResult`); stdlib re-exports (`Any`, `ClassVar`, `StrEnum`, `dataclass`, `field`) and runner/verification implementation symbols removed from `__all__`; runner/verification stay importable via explicit submodule paths (`from paw.bench.runner import ...` / `from paw.bench.verification import ...`). All 8 test files importing runner/verification symbols from `paw.bench` updated to explicit submodule paths. The contract test `tests/test_e1_bl2_bench_exports_contract.py` (6 D0 tests) pins: exact `__all__` contents; no stdlib type names; no runner/verification names; `from paw.bench import *` yields exactly `__all__`; submodules importable via explicit path. D0 verify: `pytest -q tests/test_e1_bl2_bench_exports_contract.py` → 6 passed.
 - [ ] `E1-BL3` Refresh the agent memory file `PROFILE.md`. The
   memory file still records Phase 10/19/20 narrative from
   the early sessions and does not mention the E0-23a paw.core
@@ -411,7 +402,7 @@ gate-progress view, not permission to call observed implementation `DONE`.
 |---|---|---:|---|---|---|
 | SX | `VERIFIED` | 14/14 | none | `SX-14` closed | `f3ad4ef` (548 passed in 303.72s) |
 | E0 | `IN PROGRESS` | 42/42 items marked [x] (deterministic baseline gate) | none (E0-17..22 deferred: cloud baseline is charter-deferred; E0-26..42 features dispositions done) | re-open any E0-17..42 if a follow-up review needs it | `f3ad4ef` (777 passed, ruff clean) |
-| E1 | `IN PROGRESS` | 35/37 (+ 2 backlog items in E1-BL2..3) | none (E0 gate satisfied) | `E1-BL1` | `f3ad4ef` |
+| E1 | `IN PROGRESS` | 36/37 (+ 1 backlog item E1-BL3) | none (E0 gate satisfied) | `E1-BL2` | `f3ad4ef` |
 | E2 | `BLOCKED` | 0/50 | E1 gate | `E2-01` | — |
 | E3 | `BLOCKED` | 0/25 | E2 gate | `E3-01` | — |
 | BETA | `BLOCKED` | 0/14 | E3 gate | `B-01` | — |

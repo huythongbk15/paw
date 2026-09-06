@@ -30,10 +30,9 @@ from paw.bench import (
     PrivacyClass,
     case_manifest_from_dict,
     is_valid_case_manifest,
-    load_case,
-    run_case,
     validate_case_manifest,
 )
+from paw.bench.runner import load_case, run_case
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]

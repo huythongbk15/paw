@@ -13,7 +13,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from paw.bench import (
+from paw.bench.verification import (
     VerificationRecord,
     VerificationResult,
     VerificationSpec,

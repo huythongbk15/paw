@@ -36,6 +36,8 @@ from paw.bench import (
     ExpectedEvidence,
     FixtureRef,
     PrivacyClass,
+)
+from paw.bench.runner import (
     RunRow,
     RunnerError,
     load_case,
@@ -398,7 +400,7 @@ def test_cli_runs_one_case(tmp_path) -> None:
             "-c",
             (
                 "from pathlib import Path;"
-                "from paw.bench import run_case_file, write_runs_jsonl;"
+                "from paw.bench.runner import run_case_file, write_runs_jsonl;"
                 f"r = run_case_file(Path({str(case_path)!r}));"
                 f"write_runs_jsonl(r, Path({str(out)!r}))"
             ),
