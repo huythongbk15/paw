@@ -37,7 +37,7 @@ target-version = "py312"
 line-length = 120
 exclude = [
     ".git", "__pycache__", ".venv", "dist", "build",
-    "src/paw/__pycache__", "skills", "demo_paw.py",
+    "src/paw/__pycache__", "skills", "demo_paw.py", "scripts",
 ]
 
 [tool.ruff.lint]
