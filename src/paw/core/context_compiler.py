@@ -886,6 +886,8 @@ EXCLUDED_REASONS: frozenset[str] = frozenset(
         "max_sources_exceeded",
         "token_budget_exceeded",
         "content_too_large",
+        # E1-20: fragment count ceiling exceeded.
+        "max_fragments_exceeded",
         # E1-19 soft reason: candidate kept but body
         # skipped because the full body exceeds
         # ``max_content_length``.

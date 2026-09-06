@@ -3,7 +3,7 @@
 This is the only active work sequence. Historical numbered phases describe how
 the repository grew; they do not determine what should be built next.
 
-Current track: **continue the E0 benchmark work that is now unblocked**.
+Current track: **E2 — evidence-backed research gate and selective local/cloud reasoning (E2-01 ModelRouter audit)**.
 Core Stabilization is `VERIFIED` on the frozen revision
 `f3ad4ef` (SX-14 verdict, 685/685 tests pass, D3 release check
 green, 8/8 minimum cases produce `SUCCESS` with
@@ -12,17 +12,17 @@ green, 8/8 minimum cases produce `SUCCESS` with
 `ENGINEERING_RULES` analog), the case-manifest contract
 (`paw.bench`), 14 minimum + research-decision cases with
 reviewed evidence, the deterministic evidence runner, and
-the E0-27 integration pack record. The next item is `E0-17`
-(see the second-priority queue below) or any `E0-08..42`
-item that the reviewer wants to open next; E1–E3 and BETA
-remain unblocked by E0 and may start as soon as the E0
-acceptance criteria are fully closed.
+the E0-27 integration pack record. E0 is closed; E1 is
+`VERIFIED` (37/37 core + 13/13 backlog ALL DONE, 1148 tests
+pass; ruff clean). E1-23/24/25 contracts are written but re-opened
+pending real measurement against E0 cases. E2 is the next track;
+the first item is `E2-01` (audit ModelRouter inputs/outputs/callers).
 
 | Scope | Current result | Meaning |
 |---|---|---|
 | Core Stabilization | `VERIFIED` on `f3ad4ef` | All S0–S6 acceptance items passed the clean-revision D3 gate; the `f3ad4ef` freeze commit is the canonical evidence. |
 | E0 (Engineering benchmark and feature subtraction) | `VERIFIED` for the deterministic offline fixture-validation baseline on `f3ad4ef` | The contract, the 13-case set (8 minimum E0-08..15 + 5 research-decision E0-28..35), the deterministic evidence runner (`shell=False` for `command_exit`), and the integration-pack record are in place. The 13/13 SUCCESS line in `docs/benchmarks/e0/integration_pack_run.md` is **fixture-validation** evidence, not an agent-quality gate; the runtime-driven agent-quality tier is post-gate work (E0-40). The cloud baseline remains deferred per the project charter. |
-| E1–E3 and BETA | `READY` | E0 is no longer the prerequisite; E1 is the next track per ROADMAP sequencing. E1-01 (ownership audit) has been reopened and regenerated from source; E1-02 (project-source identity, revision, content hash, invalidation metadata), E1-03 (privacy classes + remote-disclosure defaults), E1-04 (deterministic include/exclude rules for repository files), E1-05 (traversal and symlink negative cases for source discovery), and E1-06 (incremental changed/unchanged/deleted source detection) have been added. E1 is `IN PROGRESS` 6/34 with six contract tests pinning the work: `tests/test_e1_ownership_audit_contract.py` (16 D1), `tests/test_e1_02_source_identity_contract.py` (22 D1), `tests/test_e1_03_privacy_contract.py` (30 D1), `tests/test_e1_04_repo_filter_contract.py` (35 D1), `tests/test_e1_05_repo_scanner_contract.py` (14 D2), and `tests/test_e1_06_source_diff_contract.py` (16 D2). |
+| E1 | `VERIFIED` | 37/37 core + 13/13 backlog items ALL DONE (E1-23/24/25 contracts written but re-opened pending real measurement against E0 cases; E1-34 complete). 1148 tests pass; ruff clean. Evidence revision `126c1aa`. E1 is no longer a prerequisite gate; E2 is the next track. |
 | E4 controlled adaptation | `BLOCKED`, optional | Requires E0–E3 and a verified dataset; it is not required for BETA. |
 
 The engineering-intelligence direction dated 2026-09-01 is recorded in the
@@ -528,10 +528,6 @@ appear complete.
    (`./scripts/pt.sh D2 tests/test_e0_*.py`) so the focused tests catch
    regressions early; reserve the D3 full-suite run (`./scripts/pt.sh D3`)
    for the track freeze.
-3. When the E0 acceptance criteria are fully closed (the cloud-baseline
-   deferral is the only remaining item, and the charter scope lock makes
-   it out of scope), freeze one clean candidate and record the
-   `VERIFIED` gate decision in `docs/ROADMAP.md` and
-   `docs/benchmarks/e0/integration_pack_run.md`. Only that verdict
-   unblocks E1; E1–E3 and BETA are now merely waiting on E0 closure
-   for the per-track handoff, not on the SX gate.
+3. When E2 is complete, freeze one clean candidate and record the
+   `VERIFIED` gate decision in `docs/ROADMAP.md`. Only that verdict
+   unblocks E3; BETA is the final gate.

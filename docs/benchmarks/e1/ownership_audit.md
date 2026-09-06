@@ -24,11 +24,10 @@ and the audit is the artifact that must be updated.
 ## Memory (`src/paw/core/memory.py`)
 
 `MemoryStore` is the single owner. The `MemoryRecord`
-dataclass declares 16 fields; the SQL table
+dataclass declares 14 fields; the SQL table
 `memory_records` declares the same 14 persistent
-columns (the dataclass adds `keywords` and
-`last_accessed` which are JSON/nullable on the SQL
-side and do not need a dedicated column):
+columns (all fields have a one-to-one column
+mapping, including the JSON-blob `keywords` column):
 
 | Field | Type | Owner | Notes |
 |---|---|---|---|

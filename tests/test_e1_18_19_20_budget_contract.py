@@ -41,6 +41,7 @@ def test_excluded_reasons_is_closed_set() -> None:
             "max_sources_exceeded",
             "token_budget_exceeded",
             "content_too_large",
+            "max_fragments_exceeded",
             "body_skipped_exceeds_max_content_length",
         }
     ) == EXCLUDED_REASONS

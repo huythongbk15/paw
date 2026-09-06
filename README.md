@@ -14,12 +14,13 @@ is suitable for exercising those boundaries. General chat still has a
 deterministic stand-in, while explicit read/list/write commands can use the
 workspace-scoped local filesystem executor after Policy and exact approval.
 
-Current gate result is **`PARTIAL`**: S0–S6 repair behavior is present, but the
-14-item SX qualification has not yet produced one reviewed clean revision with
-current D3 evidence. SX-01 through SX-03 have focused evidence, including the
-canonical Task/Plan identity repair. E0–E3, BETA and optional E4 remain
-`BLOCKED`; the next authorized item is `SX-04`. This is not a `DONE` or
-release-ready claim.
+The SX clean-revision gate is `VERIFIED` on commit `f3ad4ef`. E0 (the
+deterministic fixture-validation baseline) is `VERIFIED`. E1 (the
+source-context benchmark track) is `VERIFIED` with 37/37 core items + 13/13
+backlog items complete (1148 tests pass; ruff clean). E1-23/24/25 contract
+tests are written but re-opened pending real measurement against E0 cases.
+E2 (evidence-backed research gate and selective local/cloud reasoning) is
+`READY`; the first item is `E2-01` (audit ModelRouter inputs/outputs/callers).
 
 The recorded post-stabilization direction is an engineering agent in which
 local state, project context, memory and evaluated narrow inference reduce
