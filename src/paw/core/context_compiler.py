@@ -421,6 +421,10 @@ class ContextCompiler:
                     "semantic_score": round(res.semantic_score, 4),
                     "has_embedding": res.has_embedding,
                 },
+                # E1-17 per-item record: privacy_class comes from the
+                # MemoryRecord (E1-03 default INTERNAL). Memory records
+                # do not carry revision identity.
+                privacy_class=row.privacy_class,
             ))
 
         return candidates
@@ -461,6 +465,13 @@ class ContextCompiler:
 
                 full_content = content + evidence_text
 
+                # E1-17: populate per-item record fields from the
+                # owning KnowledgeSource (source_hash, external_id,
+                # revision, privacy_class).
+                from paw.knowledge.source import get_knowledge_source
+                src_mgr = get_knowledge_source()
+                ksrc = await src_mgr.get(result.source_id) if result.source_id else None
+
                 candidates.append(ContextCandidate(
                     source="knowledge",
                     source_id=result.chunk_id,
@@ -476,6 +487,11 @@ class ContextCompiler:
                         "citation_count": len(citation_list),
                     },
                     reference=result.chunk_id,
+                    # E1-17 per-item record
+                    source_hash=ksrc.checksum if ksrc else "",
+                    external_id=ksrc.external_id if ksrc else "",
+                    revision=ksrc.revision if ksrc else "",
+                    privacy_class=ksrc.privacy_class if ksrc else None,
                 ))
             return candidates
         except Exception as e:

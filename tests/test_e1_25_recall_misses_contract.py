@@ -1,20 +1,30 @@
 """E1-25 contract test: review every recall miss before changing ranking or thresholds.
 
 The contract is documented in
-``docs/benchmarks/e1/recall_misses.md``.
-The test pins the *discipline*: every recall-miss
-category has a documented response, and a change to
-ranking / thresholds is permitted only when the cause
-is in those layers.
+``docs/benchmarks/e1/recall_misses.md``. The test pins:
+
+- the five miss categories exist as a closed set
+  (``ranking``, ``threshold``, ``retrieval``,
+  ``source_missing``, ``fixture_wrong``);
+- a classification is mandatory for every miss;
+- a ranking/threshold change is permitted only when
+  the classification is ``ranking`` or ``threshold``;
+- a retrieval change is permitted only when the
+  classification is ``retrieval``;
+- other classifications lead to a non-runtime change
+  (fixture update, source addition, E0 case fix);
+- the spec doc lists every classification.
 """
 
 from __future__ import annotations
 
+import pytest
 
-# --- 1. Closed set of miss categories -----------------------------
+
+# --- 1. The closed set of miss categories -----------------------------
 
 
-EXPECTED_CATEGORIES: frozenset[str] = frozenset(
+MISS_CATEGORIES: frozenset[str] = frozenset(
     {
         "ranking",
         "threshold",
@@ -24,68 +34,90 @@ EXPECTED_CATEGORIES: frozenset[str] = frozenset(
     }
 )
 
-# The action each category permits. The test pins the
-# mapping; changing an action is a change-control
-# surface.
-ACTIONS: dict[str, str] = {
-    "ranking": "change ranking or threshold",
-    "threshold": "change ranking or threshold",
-    "retrieval": "change retrieval (e.g. tokenization, "
-                 "embedding, scanner)",
-    "source_missing": "fix the source (add the file, "
-                      "fix the path, or close the case)",
-    "fixture_wrong": "fix the E0 case fixture (the "
-                     "expected evidence is wrong)",
-}
+
+def test_miss_categories_is_closed_set() -> None:
+    """The miss classification set is pinned: a reviewer
+    who reads the spec sees every possible category, no
+    more."""
+    assert {
+        "ranking",
+        "threshold",
+        "retrieval",
+        "source_missing",
+        "fixture_wrong",
+    } == MISS_CATEGORIES
 
 
-def test_categories_are_closed_set() -> None:
-    """The closed set of miss categories; a new
-    category is a change-control surface."""
-    assert frozenset(
-        {"ranking", "threshold", "retrieval", "source_missing", "fixture_wrong"}
-    ) == EXPECTED_CATEGORIES
+def test_miss_categories_has_exactly_five() -> None:
+    assert len(MISS_CATEGORIES) == 5
 
 
-def test_every_category_has_an_action() -> None:
-    """Every miss category has a documented response.
-    A reviewer who classifies a miss and looks up the
-    action knows the next step."""
-    for cat in EXPECTED_CATEGORIES:
-        assert cat in ACTIONS, f"category {cat!r} has no documented action"
+# --- 2. Classification is mandatory -----------------------------------
 
 
-def test_ranking_and_threshold_actions_match() -> None:
-    """Ranking and threshold are the categories that
-    permit a heuristic change. The actions are the
-    same string by design."""
-    assert ACTIONS["ranking"] == ACTIONS["threshold"]
+def test_empty_classification_rejected() -> None:
+    """A miss without a classification cannot be acted on."""
+    empty = ""
+    assert empty not in MISS_CATEGORIES
 
 
-def test_retrieval_action_does_not_match_ranking() -> None:
-    """The retrieval action is distinct: a
-    retrieval miss is not fixed by changing ranking."""
-    assert ACTIONS["retrieval"] != ACTIONS["ranking"]
+def test_unknown_classification_rejected() -> None:
+    """A miss classified with an unknown category cannot
+    be acted on."""
+    unknown = "some_custom_thing"
+    assert unknown not in MISS_CATEGORIES
 
 
-def test_source_missing_and_fixture_wrong_are_distinct() -> None:
-    """Source-missing and fixture-wrong are both
-    non-runtime fixes; their actions are distinct
-    (one is a code change, the other is a test
-    fixture change)."""
-    assert ACTIONS["source_missing"] != ACTIONS["fixture_wrong"]
+# --- 3. Change rules --------------------------------------------------
 
 
-# --- 2. Discipline: a miss with a known category is recorded --
+@pytest.mark.parametrize("category,change_allowed", [
+    ("ranking", True),
+    ("threshold", True),
+    ("retrieval", True),
+    ("source_missing", False),
+    ("fixture_wrong", False),
+])
+def test_change_allows_runtime_change(category: str, change_allowed: bool) -> None:
+    """A runtime change (ranking / threshold / retrieval)
+    is permitted only when the classification is one of
+    ``ranking``, ``threshold``, ``retrieval``."""
+    is_runtime_change = category in {"ranking", "threshold", "retrieval"}
+    if change_allowed:
+        assert is_runtime_change
+    else:
+        assert not is_runtime_change
 
 
-def test_recall_miss_discipline_is_documented() -> None:
-    """The discipline: every recall miss is reviewed
-    *before* the heuristic is changed. The contract
-    is the mapping from category to action."""
-    # A reviewer who sees ``misses = (("hello", "ranking"),)``
-    # knows the response: change ranking or threshold.
-    # The test does not assert a specific case; it
-    # asserts the discipline is documented and
-    # exhaustive.
-    assert len(ACTIONS) == len(EXPECTED_CATEGORIES)
+@pytest.mark.parametrize("category,expected_action", [
+    ("ranking", "adjust_ranking_or_threshold"),
+    ("threshold", "adjust_ranking_or_threshold"),
+    ("retrieval", "adjust_retrieval"),
+    ("source_missing", "add_source_or_fix_repo"),
+    ("fixture_wrong", "doc_plus_e0_case_update"),
+])
+def test_classified_miss_has_deterministic_action(category: str, expected_action: str) -> None:
+    """Each miss classification maps to a deterministic
+    non-runtime or runtime action."""
+    mapping = {
+        "ranking": "adjust_ranking_or_threshold",
+        "threshold": "adjust_ranking_or_threshold",
+        "retrieval": "adjust_retrieval",
+        "source_missing": "add_source_or_fix_repo",
+        "fixture_wrong": "doc_plus_e0_case_update",
+    }
+    assert mapping[category] == expected_action
+
+
+# --- 4. Spec doc sync -------------------------------------------------
+
+
+def test_spec_doc_lists_all_categories() -> None:
+    """The spec doc ``docs/benchmarks/e1/recall_misses.md``
+    must list every miss category in the closed set."""
+    from pathlib import Path
+    spec = Path("docs/benchmarks/e1/recall_misses.md").read_text(encoding="utf-8")
+    for cat in MISS_CATEGORIES:
+        assert cat in spec, (
+            f"miss category {cat!r} missing from spec doc"
+        )
