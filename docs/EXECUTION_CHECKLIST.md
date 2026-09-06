@@ -187,7 +187,7 @@ gate. They live here so the E1 reviewer sees them early.
 
 ### Context manifests
 
-- [ ] `E1-16` Define the context manifest through existing context contracts. `(0.5d, D1)`
+- [x] `E1-16` Define the context manifest through existing context contracts. `(0.5d, D1)`
 - [ ] `E1-17` Record include reason, source/hash, score, privacy and token estimate per item. `(0.5d, D1)`
 - [x] `E1-18` Record exclusion/compression reasons for inspectable candidates. `(0.5d, D1)` — PASS: `docs/benchmarks/e1/exclusion_reasons.md` defines the contract. `paw/core/context_compiler.py` gains the `EXCLUDED_REASONS` closed set (`max_sources_exceeded`, `token_budget_exceeded`, `content_too_large`, `body_skipped_exceeds_max_content_length`); the pre-existing `_allocate_budget` already records one of these on every dropped candidate. The contract is the closed set itself: a reviewer who reads the spec knows every possible reason the runtime can give, no more. The contract test `tests/test_e1_18_19_20_budget_contract.py` (`test_allocate_budget_records_excluded_reason`) pins the contract.
 - [x] `E1-19` Re-budget after loading full skill bodies. `(0.5d, D2)` — PASS: the pre-existing `_build_context` step 1 (`cand.content = body; cand.token_estimate = body_tokens; cand.skill_level = 1`) and step 2 (`selected, newly_excluded = self._allocate_budget(selected)`) already implement the post-skill-upgrade re-budget. The contract test `test_build_context_re_budgets_after_skill_upgrade` exercises the path: a skill candidate is upgraded to Level 1 and the re-budget produces a `TaskContext` whose `token_count` reflects the post-rebudget total.
@@ -397,7 +397,7 @@ gate-progress view, not permission to call observed implementation `DONE`.
 |---|---|---:|---|---|---|
 | SX | `VERIFIED` | 14/14 | none | `SX-14` closed | `f3ad4ef` (548 passed in 303.72s) |
 | E0 | `IN PROGRESS` | 42/42 items marked [x] (deterministic baseline gate) | none (E0-17..22 deferred: cloud baseline is charter-deferred; E0-26..42 features dispositions done) | re-open any E0-17..42 if a follow-up review needs it | `f3ad4ef` (777 passed, ruff clean) |
-| E1 | `IN PROGRESS` | 37/37 (+ 0 backlog items) | none (E0 gate satisfied) | `E1-BL3` | `f3ad4ef` |
+| E1 | `IN PROGRESS` | 33/37 (+ 0 backlog items) | E1-17, E1-23, E1-24, E1-25 not yet implemented (0 remaining) | `E1-34` | `f3ad4ef` |
 | E2 | `BLOCKED` | 0/50 | E1 gate | `E2-01` | — |
 | E3 | `BLOCKED` | 0/25 | E2 gate | `E3-01` | — |
 | BETA | `BLOCKED` | 0/14 | E3 gate | `B-01` | — |
