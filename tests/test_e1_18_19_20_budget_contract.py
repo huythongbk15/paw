@@ -169,37 +169,41 @@ def test_allocate_budget_records_excluded_reason() -> None:
 
 
 async def test_build_context_re_budgets_after_skill_upgrade() -> None:
-    """E1-19: the post-skill-upgrade re-budget is
-    exercised by the existing ``_build_context`` step 1
-    + step 2. The smoke test ensures the call returns
-    a ``TaskContext`` whose ``token_count`` reflects
-    the post-rebudget total (the pre-rebudget total
-    was the *selected* sum; the post-rebudget total
-    may differ).
-    """
-    from paw.core.context_compiler import ContextCandidate
-    from paw.core.context import TokenEstimator, ContextFragment
+    """E1-19: the post-skill-upgrade re-budget actually drops
+    candidates when loading skill bodies pushes tokens over the
+    budget. The invariant to falsify: after ``_build_context``,
+    the final ``selected`` list must have a total token_estimate
+    <= ``max_tokens``, and any candidate that was dropped must
+    have ``excluded_reason`` set from the closed set."""
+    from paw.core.context_compiler import ContextCandidate, ContextCompiler
+    from paw.core.context import ContextBudget
 
-    compiler = ContextCompiler()
-    # Two skill candidates: one body loads; one is
-    # too large. The post-rebudget total reflects the
-    # kept set.
-    candidates = [
-        ContextCandidate(
-            source="skill", source_id="small_skill", content="x" * 30,
-            token_estimate=10, skill_level=0,
-        ),
-    ]
+    compiler = ContextCompiler(
+        budget=ContextBudget(max_tokens=50, max_fragments=5, max_sources=3),
+    )
+    # Two candidates: one small (10 tokens), one large (60 tokens).
+    # After loading the large skill body, the total (10 + 60 = 70)
+    # exceeds max_tokens=50. The re-budget must drop the large one.
+    small = ContextCandidate(
+        source="skill", source_id="small_skill", content="x" * 30,
+        token_estimate=10, skill_level=0,
+    )
+    large = ContextCandidate(
+        source="skill", source_id="large_skill", content="x" * 600,
+        token_estimate=60, skill_level=0,
+    )
     context = await compiler._build_context(
         task_id="t1",
-        selected=candidates,
+        selected=[small, large],
         excluded=[],
         explain_mode=False,
     )
-    # The post-rebudget context has the right
-    # ``token_count`` and at least one fragment.
-    assert context.token_count >= 0
-    assert len(context.fragments) >= 0
+    # The re-budget must have dropped at least one candidate.
+    assert len(context.fragments) <= 2
+    # The final token_count must be <= budget.max_tokens
+    assert context.token_count <= 50, (
+        f"Re-budget failed: token_count={context.token_count} > max_tokens=50"
+    )
 
 
 # --- 8. E1-20: a 0-candidate manifest has final_tokens == 0 -

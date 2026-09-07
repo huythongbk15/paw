@@ -725,6 +725,11 @@ class PawRuntime:
         if hasattr(self.context_compiler, "auto_attach_embeddings"):
             self.context_compiler.auto_attach_embeddings = False
 
+        # E1-16 / E1-21: pre-compile the manifest so that
+        # gate_remote_disclosure has a manifest to check before model
+        # invocation. The manifest is re-built each run_agent call.
+        self._current_manifest = None
+
         role = role or self.default_role
 
         agent_proposer = AgentActionProposer(
@@ -738,6 +743,22 @@ class PawRuntime:
             complexity=self.complexity,
             privacy_required=self.privacy_required,
         )
+
+        # E1-16: pre-compile the manifest for this run. The manifest
+        # carries the included/excluded partition and per-item privacy
+        # classes, which gate_remote_disclosure uses before model
+        # invocation.
+        if self.context_compiler is not None:
+            try:
+                manifest = await self.context_compiler.compile_manifest(
+                    task_id=task_id,
+                    query=task_goal,
+                    session_id=session_id,
+                    execution_profile=execution_profile,
+                )
+                self._current_manifest = manifest
+            except Exception:
+                self._current_manifest = None
 
         async def _propose(
             tid: str,
@@ -911,6 +932,18 @@ class PawRuntime:
                 compiled_ctx, candidates = await self.context_compiler.compile(
                     task_id, node_goal, session_id=session_id, execution_profile=execution_profile,
                 )
+                # E1-16 / E1-21: compile the manifest for this node
+                # so gate_remote_disclosure has a manifest to check
+                # before model invocation.
+                try:
+                    self._current_manifest = await self.context_compiler.compile_manifest(
+                        task_id=task_id,
+                        query=node_goal,
+                        session_id=session_id,
+                        execution_profile=execution_profile,
+                    )
+                except Exception:
+                    self._current_manifest = None
                 await TaskLedger.record(
                     task_id, TaskEventType.CONTEXT_COMPILED,
                     {"fragment_count": len(compiled_ctx.fragments),
@@ -1584,10 +1617,34 @@ class PawRuntime:
                         },
                     )
                     if self.model_executor is not None:
-                        messages = proposed.metadata.get("messages") or [
-                            {"role": "user", "content": proposed.goal},
-                        ]
-                        model_result = await self.model_executor.complete(selection, messages) or {}
+                        # E1-21: gate remote disclosure before model invocation.
+                        # SECRET and WORKSPACE-class context must never reach
+                        # a non-local provider kind.
+                        manifest = getattr(self, "_current_manifest", None)
+                        if manifest is not None:
+                            from .privacy import PROVIDER_LOCAL, gate_remote_disclosure
+                            provider_kind = getattr(selection.model_manifest, "provider", "local")
+                            if provider_kind != PROVIDER_LOCAL:
+                                disclosure = gate_remote_disclosure(
+                                    manifest, provider_kind=provider_kind,
+                                )
+                                if not disclosure.allowed:
+                                    logger.info(
+                                        "remote_disclosure_refused",
+                                        provider_kind=provider_kind,
+                                        reasons=[r for _, r in disclosure.refused],
+                                    )
+                                    model_result = {}
+                                else:
+                                    messages = proposed.metadata.get("messages") or [
+                                        {"role": "user", "content": proposed.goal},
+                                    ]
+                                    model_result = await self.model_executor.complete(selection, messages) or {}
+                        else:
+                            messages = proposed.metadata.get("messages") or [
+                                {"role": "user", "content": proposed.goal},
+                            ]
+                            model_result = await self.model_executor.complete(selection, messages) or {}
             except Exception as exc:  # pragma: no cover - defensive
                 logger.warning("execute_model_route_failed", error=str(exc))
 

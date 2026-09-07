@@ -180,3 +180,33 @@ def test_manifest_final_tokens_reflects_post_rebudget_total() -> None:
     )
     assert m.final_tokens == 750
     assert m.final_tokens <= m.budget.max_tokens
+
+# --- 5. Corruption guard: no candidate in both included and excluded ---
+
+
+def test_manifest_no_corruption_no_candidate_in_both_lists() -> None:
+    """Regression guard: after the second ``_allocate_budget`` call
+    inside ``_build_context``, a candidate must not appear in BOTH
+    ``manifest.included`` AND ``manifest.excluded`` simultaneously.
+    The stale ``included=True`` flag was not cleared when a candidate
+    got newly excluded during re-budgeting (E1-20 fix)."""
+    from paw.core.context_compiler import ContextCompiler
+    import asyncio
+
+    async def _run() -> None:
+        compiler = ContextCompiler(
+            budget=ContextBudget(max_tokens=500, max_fragments=5, max_sources=3),
+        )
+        manifest = await compiler.compile_manifest(
+            task_id="t1",
+            query="test corruption guard",
+            budget=ContextBudget(max_tokens=500, max_fragments=5, max_sources=3),
+        )
+        included_ids = {c.source_id for c in manifest.included}
+        excluded_ids = {c.source_id for c in manifest.excluded}
+        overlap = included_ids & excluded_ids
+        assert not overlap, (
+            f"Corruption: candidates appear in both included and excluded: {overlap}"
+        )
+
+    asyncio.run(_run())

@@ -17,7 +17,7 @@ workspace-scoped local filesystem executor after Policy and exact approval.
 The SX clean-revision gate is `VERIFIED` on commit `f3ad4ef`. E0 (the
 deterministic fixture-validation baseline) is `VERIFIED`. E1 (the
 source-context benchmark track) is `VERIFIED` with 37/37 core items + 13/13
-backlog items complete (1148 tests pass; ruff clean). E1-23/24/25 contract
+backlog items complete (~1188 tests pass; ruff clean). E1-23/24/25 contract
 tests are written but re-opened pending real measurement against E0 cases.
 E2 (evidence-backed research gate and selective local/cloud reasoning) is
 `READY`; the first item is `E2-01` (audit ModelRouter inputs/outputs/callers).

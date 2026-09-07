@@ -111,6 +111,25 @@ class ModelScorer:
             reason=reason,
         )
 
+    def score_model_for_task(
+        self,
+        manifest: ModelManifest,
+        role: str = "fast",
+        context_size: int = 0,
+        complexity: str = "medium",
+        privacy_required: bool = False,
+        prefer_cheap: bool = True,
+    ) -> ModelScore:
+        """Score a model for a specific task. This is the same as
+        ``score()`` but is the explicit entry point used by the
+        preferred-model branch of ``route()`` so that callers get
+        a typed ``ModelScore`` with all dimension fits populated.
+        """
+        return self.score(
+            manifest, role, context_size, complexity,
+            privacy_required, prefer_cheap,
+        )
+
     def _score_capability(self, manifest: ModelManifest, role: str) -> float:
         """Score capability fit: role match + model capability scores."""
         score = 0.0

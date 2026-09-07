@@ -4,14 +4,14 @@ The contract is documented in
 ``docs/benchmarks/e1/exclusion_reasons.md`` (E1-18) +
 ``docs/benchmarks/e1/remote_disclosure_gate.md`` (E1-21)
 + the E1-07 cascade spec. The test is a *consolidated*
-end-to-end check: the three negative-control scenarios
+unit-level check: the three negative-control scenarios
 (E1-03 privacy, E1-07 stale-source, E1-20 budget)
 all refuse cleanly, in the same runtime path, against
 the E1-21 gate.
 
 The test uses a real temp file database (the autouse
 ``session_db`` fixture); the consolidation is
-end-to-end, not a unit test.
+integrated, not end-to-end (no full runtime loop).
 """
 
 from __future__ import annotations

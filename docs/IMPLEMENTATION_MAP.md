@@ -8,7 +8,7 @@ changes.
 
 | Item | Observed value |
 |---|---|
-| Revision | `c48a22e` on `main` + Core Stabilization working tree |
+| Revision | `f21a508` on `main` + Core Stabilization working tree |
 | Source root | `src/paw/` |
 | Runtime Python files | 50 |
 | Runtime Python lines | 16,798 |
@@ -25,7 +25,7 @@ implementation preserved them and this map describes the combined current tree.
 
 ### SX-01/SX-02 working-tree capture and classification
 
-Capture date: 2026-09-02. Base revision: `c48a22edc70c585f45dbabb0f1f25743e472aac7`.
+Capture date: 2026-09-02. Base revision: `f21a508`.
 The captured tree has 69 changed paths. The tracked diff at capture time has 50
 files, 3,696 insertions and 2,245 deletions; untracked paths are included in the
 classification below but not in that diff statistic.

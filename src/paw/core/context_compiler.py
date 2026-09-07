@@ -788,7 +788,12 @@ class ContextCompiler:
         #    total token count over ``max_tokens``; re-allocate and drop the
         #    lowest-priority survivors so the assembled context stays within
         #    budget. ``excluded`` is extended so explain reports stay accurate.
+        #    Clear stale ``included`` flag on candidates that get newly
+        #    excluded to prevent the same candidate appearing in both
+        #    included and excluded.
         selected, newly_excluded = self._allocate_budget(selected)
+        for cand in newly_excluded:
+            cand.metadata.pop("included", None)
         excluded.extend(newly_excluded)
 
         # 3. Build fragments from the final (post-re-budget) selected set.
@@ -1011,15 +1016,14 @@ async def _compile_manifest(
     if budget is not None:
         effective_budget = budget
 
-    # Recompute the final token count from the
-    # included candidates (the same number the
-    # ``_build_context`` re-budgeting produced). The
-    # ``context.token_count`` is the word/3 heuristic;
-    # we use the ``token_estimate`` sum for the
-    # over-budget check because that is what
-    # ``_allocate_budget`` consults.
-    included = [c for c in candidates if c.metadata.get("included")]
-    excluded = [c for c in candidates if "excluded_reason" in c.metadata]
+    # Recompute the final token count and the
+    # included/excluded partition from the candidates
+    # that survived ``_build_context``'s second
+    # ``_allocate_budget`` call. Clear stale flags to
+    # prevent the same candidate appearing in both
+    # included and excluded (corruption bug).
+    included = [c for c in candidates if c.metadata.get("included") and "excluded_reason" not in c.metadata]
+    excluded = [c for c in candidates if "excluded_reason" in c.metadata and not c.metadata.get("included")]
     final_tokens = sum(c.token_estimate for c in included)
 
     if final_tokens > effective_budget.max_tokens:

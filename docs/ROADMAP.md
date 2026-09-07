@@ -13,7 +13,7 @@ green, 8/8 minimum cases produce `SUCCESS` with
 (`paw.bench`), 14 minimum + research-decision cases with
 reviewed evidence, the deterministic evidence runner, and
 the E0-27 integration pack record. E0 is closed; E1 is
-`VERIFIED` (37/37 core + 13/13 backlog ALL DONE, 1148 tests
+`VERIFIED` (37/37 core + 13/13 backlog ALL DONE, ~1188 tests
 pass; ruff clean). E1-23/24/25 contracts are written but re-opened
 pending real measurement against E0 cases. E2 is the next track;
 the first item is `E2-01` (audit ModelRouter inputs/outputs/callers).
@@ -22,7 +22,7 @@ the first item is `E2-01` (audit ModelRouter inputs/outputs/callers).
 |---|---|---|
 | Core Stabilization | `VERIFIED` on `f3ad4ef` | All S0–S6 acceptance items passed the clean-revision D3 gate; the `f3ad4ef` freeze commit is the canonical evidence. |
 | E0 (Engineering benchmark and feature subtraction) | `VERIFIED` for the deterministic offline fixture-validation baseline on `f3ad4ef` | The contract, the 13-case set (8 minimum E0-08..15 + 5 research-decision E0-28..35), the deterministic evidence runner (`shell=False` for `command_exit`), and the integration-pack record are in place. The 13/13 SUCCESS line in `docs/benchmarks/e0/integration_pack_run.md` is **fixture-validation** evidence, not an agent-quality gate; the runtime-driven agent-quality tier is post-gate work (E0-40). The cloud baseline remains deferred per the project charter. |
-| E1 | `VERIFIED` | 37/37 core + 13/13 backlog items ALL DONE (E1-23/24/25 contracts written but re-opened pending real measurement against E0 cases; E1-34 complete). 1148 tests pass; ruff clean. Evidence revision `126c1aa`. E1 is no longer a prerequisite gate; E2 is the next track. |
+| E1 | `VERIFIED` | 37/37 core + 13/13 backlog items ALL DONE. Additional fixes in this session: E1-19/E1-20 tests rewritten to falsify invariants; E1-20 corruption fix (stale `included` flag); `score_model_for_task` added to `ModelScorer` (was missing); `gate_remote_disclosure` wired into `PawRuntime._execute_action`; `compile_manifest()` wired into `run_agent`/`run_graph`; E1-21 runtime tests (7 new). ~1188 tests pass; ruff clean. |
 | E4 controlled adaptation | `BLOCKED`, optional | Requires E0–E3 and a verified dataset; it is not required for BETA. |
 
 The engineering-intelligence direction dated 2026-09-01 is recorded in the
