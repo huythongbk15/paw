@@ -582,23 +582,39 @@ class ModelRouter:
         prefer_cheap: bool,
     ) -> list[tuple[ModelManifest, ModelScore]]:
         """Drop candidates whose provider is unavailable, falling back to
-        ``local`` models when nothing else is reachable."""
+        ``local`` models when nothing else is reachable.
+
+        The local-fallback branch:
+        - filters by ``role`` support AND ``enabled`` (no leakage of
+          models that do not serve the requested role);
+        - re-scores using the canonical entry point
+          (``ModelRouter.score_model_for_task``) for consistency with the
+          preferred-model branch of ``route()``;
+        - sorts the result by score descending so registration order does
+          not change the final selection.
+
+        When no local model supports the role, returns ``[]`` (not all
+        locals). This makes the failure mode observable: a missing-role
+        model is not silently substituted by the wrong-role one.
+        """
         available = await self._available_provider_names()
         if available is None:
             return scored
         filtered = [(m, s) for (m, s) in scored if m.provider in available]
         if filtered:
             return filtered
-        # Re-score local models using the canonical entry point
-        # (ModelRouter.score_model_for_task) for consistency with
-        # the preferred-model branch of route().
+        # Local fallback: re-score local models that actually support the
+        # role, then sort by score descending. Do NOT iterate the whole
+        # ``list_enabled()`` in dict-insertion order -- registration order
+        # is not a valid tiebreaker.
         local_scored = [
             (m, self.score_model_for_task(
-                m, role, context_size, complexity, privacy_required, prefer_cheap
+                m, role, context_size, complexity, privacy_required, prefer_cheap,
             ))
             for m in self.registry.list_enabled()
-            if m.provider == "local"
+            if m.provider == "local" and m.supports_role(role)
         ]
+        local_scored.sort(key=lambda x: x[1].score, reverse=True)
         return local_scored
 
     async def route(

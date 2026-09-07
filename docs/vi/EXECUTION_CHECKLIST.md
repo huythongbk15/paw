@@ -31,10 +31,13 @@ Làm theo thứ tự; mỗi ô cần bằng chứng lệnh hiện tại:
   runner-script `TokenEstimator` JSON-serializability bug fixed (loại khỏi
   `asdict(ContextBudget(...))`); ruff import order đã fix. Runner tái lập được và
   từ chối overwrite báo cáo cũ (mở file với `mode='x'` exclusive-create).
-- [ ] P1 Router: ModelRouter._filter_for_availability tại core/model_router.py:
-  lọc role phù hợp, sắp điểm giảm dần qua registry/scorer canonical. Test sai role,
-  đăng ký ngược điểm, không local phù hợp, remote không khả dụng. Assert selection
-  thực. Không mở provider/discovery.
+- [x] P1 Router: đã GIẢI QUYẾT (commit mới). `ModelRouter._filter_for_availability` ở `src/paw/core/model_router.py`:
+  - Local-fallback branch giờ lọc bằng `m.supports_role(role)` (không leak model không hỗ trợ role);
+  - Re-score bằng `ModelRouter.score_model_for_task` (canonical entry point);
+  - Sort `local_scored` theo `score` desc — registration order không còn ảnh hưởng chọn;
+  - Return `[]` khi không có local model hỗ trợ role (không silent substitute).
+  9 contract test mới trong `tests/test_p1_router_filter_availability.py` pin: wrong-role excluded, disabled excluded, higher-score-first (reverse registration order), score khớp canonical scorer, no eligible local → `[]`, no local models → `[]`, unavailable remote falls back to local, available remote passes through (upstream order preserved), no provider registry returns input unchanged.
+  — RESOLVED.
 - [x] P2 Provenance: đã GIẢI QUYẾT (commit `08a8806`). Báo cáo pin HEAD `263c075`
   (own `src/paw/bench/integration.py`); baseline lấy từ
   `TokenEstimator.estimate(content)` của fixture thật (179 / 103 — verify qua

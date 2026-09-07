@@ -41,11 +41,14 @@ Execute in order; every checkbox requires current command evidence:
   runner-script `TokenEstimator` JSON-serializability bug fixed (excluded
   from `asdict(ContextBudget(...))`); ruff import order fixed. The runner
   is reproducible and refuses to overwrite an existing report.
-- [ ] P1 Router: ModelRouter._filter_for_availability in core/model_router.py:
-  restore supported-role filtering and descending score via canonical registry/
-  scorer. Test wrong role, reverse registration/score order, no eligible local,
-  remote unavailable. Assert actual selection. No provider/discovery expansion.
-  — STILL OPEN: see `P1 Router` section below.
+- [x] P1 Router: đã GIẢI QUYẾT (commit mới). `ModelRouter._filter_for_availability` ở `src/paw/core/model_router.py`:
+  - Local-fallback branch giờ filter bằng `m.supports_role(role)` (không leak model không hỗ trợ role);
+  - Re-score bằng `ModelRouter.score_model_for_task` (canonical entry point);
+  - Sort `local_scored` theo `score` desc — registration order không còn ảnh hưởng chọn;
+  - Return `[]` khi không có local model hỗ trợ role (không silent substitute).
+  9 contract test mới trong `tests/test_p1_router_filter_availability.py` pin: wrong-role excluded, disabled excluded, higher-score-first (reverse registration order), score khớp canonical scorer, no eligible local → `[]`, no local models → `[]`, unavailable remote falls back to local, available remote passes through (upstream order preserved), no provider registry returns input unchanged.
+  Full test suite: 56 + 79 + 138 + 18 = 291+ tests pass trong Phase 11/12/13/14/15/16/19/20 + P1 Router, ruff sạch.
+  — RESOLVED.
 - [x] P2 Provenance: runner and benchmarks/e1/e1_real_measurement_report.md.
   Separate within-run stability from cross-run comparison; defer or explicitly
   justify the latter. Mid-run input/revision changes must invalidate evidence
