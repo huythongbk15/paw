@@ -1,0 +1,29 @@
+schema_version: "1.0.0"
+case_id: cross_module_change_constant
+category: cross_module_change
+privacy_class: workspace
+goal: |
+  Change the value of CONSTANT in file_a and verify that
+  file_b's `derived` reflects the new value. The expected
+  outcome is recorded as two pieces of evidence: both
+  files exist and import the dependency correctly.
+fixtures:
+  - path: benchmarks/e0/fixtures/cross_module_change.txt
+    revision: f3ad4ef
+    purpose: |
+      Two files in one fixture (file_a.txt + file_b.txt)
+      that depend on each other; a cross-module change
+      must keep both files in sync.
+expected_evidence:
+  - kind: file_contains
+    target: benchmarks/e0/fixtures/cross_module_change.txt
+    value: "CONSTANT = 42"
+    reviewer: alice@example.com
+  - kind: file_contains
+    target: benchmarks/e0/fixtures/cross_module_change.txt
+    value: "from file_a import get_constant"
+    reviewer: alice@example.com
+timeout_seconds: 120
+max_iterations: 8
+tags:
+  - registry
