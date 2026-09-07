@@ -804,6 +804,27 @@ _更新此文件时告知用户 — 这是项目画像，随 Phase 推进而演�
 | Regression tests | ✅ 新增 | `tests/test_phase21_bugfixes.py` — 4 test classes, 11 tests |
 | Canonical docs | ✅ Updated | IMPLEMENTATION_MAP.md and ROADMAP.md synced |
 
+## Phase 22 — Runtime Privacy Proof (2026-09-07)
+
+Handoff spec: SECRET/stale context + fake remote → zero provider calls + zero downstream executor calls, terminal non-success, safe reopen/resume, allowed/local controls. Exception-construction tests alone are insufficient. Fix only reproduced failures.
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| `_execute_unit` hard-gate handler | ✅ Fixed | Persists `OperationRecord` with `status="failed"`, `metadata={"reason": "remote_disclosure_refused", "provider_kind": ...}` BEFORE returning. Previously: early return without op-record = silent resume = provider re-call. |
+| `tests/test_runtime_privacy_proof.py` | ✅ 新增 | 7 end-to-end regression tests in 5 classes. Real `PawRuntime` + real `PolicyGuard` + real `AutonomyController` + real `Ledger` + real `CheckpointManager` + real `OperationRecordStore`; only the remote provider + counting executor are test doubles. |
+| Privacy proof test classes | ✅ PASS | TestSecretPlusRemoteBlocksProviderAndExecutor (0 provider + 0 executor + terminal non-success), TestResumeDoesNotRetryPrivacyFailure (OpRecord 'failed'), TestPrivacyRequiredBlocksLocalProvider (WORKSPACE blocks, INTERNAL allowed), TestStaleManifestBlocksRemote (source_stale blocks non-SECRET), TestAllowedLocalControl (disclosure_override is informational). |
+| Canonical docs | ✅ Updated | IMPLEMENTATION_MAP.md (Runtime section: privacy proof note), EXECUTION_CHECKLIST.md (Runtime privacy proof → RESOLVED), vi mirror. |
+
+## P1 Router Fix (2026-09-07)
+
+Handoff spec: `_filter_for_availability` restore supported-role filtering + descending score via canonical registry/scorer. Test wrong role, reverse registration/score order, no eligible local, remote unavailable. No provider/discovery expansion.
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| `_filter_for_availability` local-fallback | ✅ Fixed | Filter by `m.supports_role(role)` (no leak); re-score via canonical `score_model_for_task`; sort by `score` desc; return `[]` when no local match. |
+| `tests/test_p1_router_filter_availability.py` | ✅ 新增 | 9 contract tests in 5 classes: TestFilterForAvailabilityRoleFiltering (wrong-role excluded, disabled excluded), TestFilterForAvailabilityScoreOrder (higher-score-first, score matches canonical scorer), TestFilterForAvailabilityNoEligibleLocal (no role match → `[]`, no local → `[]`), TestFilterForAvailabilityRemoteUnavailable (unavailable remote falls back to local, available remote passes through), TestFilterForAvailabilityBackwardCompat (no provider registry returns input unchanged). |
+| Canonical docs | ✅ Updated | IMPLEMENTATION_MAP.md (Model Router section: P1 fix), EXECUTION_CHECKLIST.md (P1 Router → RESOLVED), vi mirror. |
+
 ### Test Composition Audit (post-E1-36)
 
 | Category | Count | % |

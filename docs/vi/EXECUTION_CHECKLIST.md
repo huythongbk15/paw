@@ -56,8 +56,21 @@ Làm theo thứ tự; mỗi ô cần bằng chứng lệnh hiện tại:
   chẩn đoán thật; E0-17..22 đã đánh dấu DEFERRED/PASS với lý do. Bản
   `docs/IMPLEMENTATION_MAP.md` có execution record dưới "Measurement provenance
   repair". Không còn mâu thuẫn E2/E1 `VERIFIED` đang hoạt động.
-- [ ] Bàn giao: revision/cây, lệnh/kết quả, điều kiện còn mở, bước tiếp; rà diff
-  tránh owner trùng, nới recall, lệch scope.
+- [x] Bàn giao: đã GIẢI QUYẾT (commit `621cc59`).
+  - Revision / tree: HEAD = `621cc59b3f7c6b28ff48dab308b3d623deeb7cb4` (clean working tree).
+  - Lệnh / kết quả:
+    - `python3 -m pytest tests/test_runtime_privacy_proof.py` → 7/7 PASS
+    - `python3 -m pytest tests/test_p1_router_filter_availability.py tests/test_phase15_model_router_v2.py tests/test_phase21_bugfixes.py tests/test_phase19_runtime_hardening.py tests/test_phase19_runtime_loop.py tests/test_phase20_agent_runtime_loop.py tests/test_phase16_integration.py` → 63/63 PASS
+    - `python3 -m pytest tests/test_e1_21_remote_disclosure_runtime.py tests/test_e1_21_remote_disclosure_contract.py tests/test_e1_03_privacy_contract.py` → 53/53 PASS
+    - `python3 -m ruff check src/paw/core/runtime.py tests/test_runtime_privacy_proof.py` → All checks passed!
+    - `bash skills/bootstrap-canonical-docs/scripts/contract-checks.sh` → CONTRACT PASSED
+  - Điều kiện còn mở:
+    - E1-27 measurement gate PARTIAL (recall=1.00 OK; reduction=-0.13/-0.23 < 0.0 floor).
+    - E0-20/21 cloud baseline BLOCKED-BY-CHARTER.
+    - E2/E3/BETA/E4 BLOCKED-on-E1.
+  - Bước tiếp: đợi Đại ca chọn hướng E2 hoặc sửa measurement E1 thêm.
+  - Rà diff: không owner trùng, không nới recall, không lệch scope.
+  — RESOLVED.
 
 Kiểm chứng: uv sync --locked --extra dev; test runner/router/disclosure,
 integration liên quan, Ruff, git diff --check. 39 test qua trước chỉ là lịch sử.

@@ -84,9 +84,21 @@ Execute in order; every checkbox requires current command evidence:
   marked DEFERRED/PASS with rationale. `docs/IMPLEMENTATION_MAP.md` has
   the execution record under "Measurement provenance repair". No
   contradictory active E2/E1 `VERIFIED` claims remain.
-- [ ] Handoff: exact revision/tree, commands/results, remaining conditions and
-  next step; inspect diff for duplicate owners, weakened recall and scope drift.
-  — STILL OPEN: see the progress snapshot table at the bottom of this file.
+- [x] Handoff: đã GIẢI QUYẾT (commit `621cc59`).
+  - Revision / tree: HEAD = `621cc59b3f7c6b28ff48dab308b3d623deeb7cb4` (clean working tree).
+  - Commands / results:
+    - `python3 -m pytest tests/test_runtime_privacy_proof.py` → 7/7 PASS
+    - `python3 -m pytest tests/test_p1_router_filter_availability.py tests/test_phase15_model_router_v2.py tests/test_phase21_bugfixes.py tests/test_phase19_runtime_hardening.py tests/test_phase19_runtime_loop.py tests/test_phase20_agent_runtime_loop.py tests/test_phase16_integration.py` → 63/63 PASS
+    - `python3 -m pytest tests/test_e1_21_remote_disclosure_runtime.py tests/test_e1_21_remote_disclosure_contract.py tests/test_e1_03_privacy_contract.py` → 53/53 PASS
+    - `python3 -m ruff check src/paw/core/runtime.py tests/test_runtime_privacy_proof.py` → All checks passed!
+    - `bash skills/bootstrap-canonical-docs/scripts/contract-checks.sh` → CONTRACT PASSED
+  - Remaining conditions:
+    - E1-27 measurement gate PARTIAL (recall=1.00 OK; reduction=-0.13/-0.23 < 0.0 floor).
+    - E0-20/21 cloud baseline BLOCKED-BY-CHARTER.
+    - E2/E3/BETA/E4 BLOCKED-on-E1.
+  - Next step: wait for Đại ca to choose E2 scope or further E1 measurement fix.
+  - Diff scan: no duplicate owners, no weakened recall, no scope drift.
+  — RESOLVED.
 
 Verification: uv sync --locked --extra dev; focused runner/router/disclosure,
 affected integration tests, Ruff, git diff --check. Prior 39 passing tests are
