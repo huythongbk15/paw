@@ -108,24 +108,20 @@ async def _compile_cold(
     case: CaseManifest,
     repo_root: Path,
 ) -> object:
-    """Compile a manifest in cold mode (empty cache)."""
-    context, _ = await compiler.compile(
+    """Compile a manifest in cold mode (empty cache).
+
+    Uses ``compile_manifest`` (the E1-20 entry point) so the
+    returned ``ContextManifest`` carries the real
+    ``final_tokens`` from the per-item E1-17 records. The
+    compiler's DEFAULT budget is applied so the measurement
+    reflects the real token budget behavior; the baseline
+    is the frozen E0 total (all candidates, no budget)
+    injected via ``set_baseline_tokens``.
+    """
+    return await compiler.compile_manifest(
         task_id=case.case_id,
-        query=case.description,
+        query=case.goal,
         session_id=None,
-    )
-    from paw.core.context_compiler import ContextManifest
-    if isinstance(context, ContextManifest):
-        return context
-    manifest = getattr(context, "manifest", None)
-    if manifest is not None:
-        return manifest
-    return ContextManifest(
-        task_id=case.case_id,
-        budget=compiler.budget,
-        included=tuple(getattr(context, "items", [])),
-        excluded=(),
-        final_tokens=getattr(context, "token_count", 0),
     )
 
 

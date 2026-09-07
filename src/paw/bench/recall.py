@@ -68,37 +68,46 @@ async def measure_recall(
     else:
         manifest = await _compile_warm(compiler, case, repo_root)
 
-    # Determine which expected-evidence targets were recalled.
-    # An evidence target is "recalled" if its ``target`` string
-    # appears in the content of any included candidate.
-    recalled_targets: set[str] = set()
+    # Determine which expected-evidence items were recalled.
+    # An evidence item is "recalled" if its ``value`` string
+    # (the matched string \u2014 e.g. a path fragment inside a
+    # file_contains fixture) appears in the content of any
+    # included candidate. When ``value`` is empty, fall back
+    # to ``target`` (e.g. a ledger_event whose target is the
+    # event identifier).
+    def _evidence_key(ev):
+        if ev.value:
+            return ev.value
+        return ev.target
+
+    recalled_keys = set()
     for cand in manifest.included:
         for ev in expected_evidence:
-            target = ev.target
-            if target == "" or target is None:
+            key = _evidence_key(ev)
+            if key == "" or key is None:
                 continue
-            if (target in cand.source_id
-                    or target in cand.content
-                    or (cand.reference and target in cand.reference)):
-                recalled_targets.add(target)
+            if (key in cand.source_id
+                    or key in cand.content
+                    or (cand.reference and key in cand.reference)):
+                recalled_keys.add(key)
 
-    total_targets = {
-        ev.target for ev in expected_evidence
-        if ev.target and ev.target != ""
+    total_keys = {
+        _evidence_key(ev) for ev in expected_evidence
+        if _evidence_key(ev) and _evidence_key(ev) != ""
     }
-    missing_targets = total_targets - recalled_targets
-    recalled_count = len(total_targets - missing_targets)
+    missing_keys = total_keys - recalled_keys
+    recalled_count = len(total_keys - missing_keys)
 
     duration_ms = int((time.perf_counter() - start) * 1000)
 
+    total = len(total_keys)
     return RecallResult(
         case_id=case.case_id,
         mode=mode,
-        total_evidence=len(total_targets),
+        total_evidence=total,
         recalled=recalled_count,
-        missed=tuple(sorted(missing_targets)),
-        recall=(recalled_count / len(total_targets)
-                if total_targets else 1.0),
+        missed=tuple(sorted(missing_keys)),
+        recall=(recalled_count / total if total else 1.0),
         duration_ms=duration_ms,
     )
 
@@ -108,25 +117,45 @@ async def _compile_cold(
     case: CaseManifest,
     repo_root: Path,
 ) -> object:
-    """Compile a manifest in cold mode (empty cache)."""
-    context, _ = await compiler.compile(
-        task_id=case.case_id,
-        query=case.description,
-        session_id=None,
-    )
-    from paw.core.context_compiler import ContextManifest
-    if isinstance(context, ContextManifest):
-        return context
-    manifest = getattr(context, "manifest", None)
-    if manifest is not None:
-        return manifest
-    return ContextManifest(
-        task_id=case.case_id,
-        budget=compiler.budget,
-        included=tuple(getattr(context, "items", [])),
-        excluded=(),
-        final_tokens=getattr(context, "token_count", 0),
-    )
+    """Compile a manifest in cold mode (empty cache).
+
+    Uses ``compile_manifest`` (the E1-20 entry point) so the
+    returned ``ContextManifest`` carries the per-item E1-17
+    record and the E1-18 exclusion reasons. A high token
+    budget is applied so ``BudgetExceededError`` does not
+    truncate the recall measurement \u2014 recall is about
+    *coverage* of expected evidence, not budget adherence.
+    """
+    from paw.core.context_compiler import ContextBudget
+    high_budget = ContextBudget(max_tokens=1_000_000, max_fragments=2000)
+    try:
+        return await compiler.compile_manifest(
+            task_id=case.case_id,
+            query=case.goal,
+            session_id=None,
+            budget=high_budget,
+        )
+    except Exception:
+        # BudgetExceededError or other runtime error: fall back
+        # to the raw compile() pipeline and reconstruct a minimal
+        # manifest so recall is still measurable.
+        context, candidates = await compiler.compile(
+            task_id=case.case_id,
+            query=case.goal,
+            session_id=None,
+            budget=high_budget,
+        )
+        from paw.core.context_compiler import ContextManifest
+        included = [c for c in candidates if c.metadata.get("included")]
+        excluded = [c for c in candidates if "excluded_reason" in c.metadata]
+        return ContextManifest(
+            task_id=case.case_id,
+            budget=high_budget,
+            included=tuple(included),
+            excluded=tuple(excluded),
+            final_tokens=getattr(context, "token_count",
+                                 sum(c.token_estimate for c in included)),
+        )
 
 
 async def _compile_warm(
