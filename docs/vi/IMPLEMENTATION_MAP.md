@@ -6,6 +6,28 @@ cập nhật tài liệu này.
 
 ## Baseline audit
 
+### Rà soát 2026-09-07 tại f625fcb
+
+Kết quả hiện tại: `PARTIAL`. Mở lại qualification E1; E2 phải chờ bằng chứng
+đo lường đủ tin cậy. Các số hoàn thành lịch sử bên dưới không phải proof gate
+hiện tại.
+
+- `bench/integration.py` từng trả VERIFIED khi không có case. Đã sửa thành
+  BLOCKED kèm report cho thư mục rỗng hoặc không tồn tại; 8 test liên quan pass.
+- Ngưỡng token hiện là 0%, khác mục tiêu giảm median 30% sau warm-up của
+  Roadmap. Runner chỉ yêu cầu cold measurement, chưa kiểm đủ privacy/quality.
+- `knowledge/history.py` coi revision khác nhưng còn trong lịch sử là fresh;
+  quan hệ tổ tiên không chứng minh input quyết định không thay đổi.
+- README, Roadmap, checklist lệch trạng thái E1; quy tắc precedence trong
+  Architecture mâu thuẫn authority source/test của docs/README.
+
+Quyết định STANDARD, READY cho repair input rỗng: chọn trả BLOCKED và giữ
+report; phương án raise exception khả thi nhưng mất workflow report hiện tại.
+Giữ success vi phạm invariant kiểm chứng. Scope gồm runner, regression test,
+contract benchmark và audit docs; không đổi schema/runtime loop. Nghiên cứu
+dừng sau khi xác định owner/caller và tái hiện lỗi. Acceptance: thiếu case không
+chứng nhận thành công, scoring nonempty cũ vẫn qua; kiểm chứng D1.
+
 | Mục | Giá trị quan sát được |
 |---|---|
 | Revision | `c48a22e` trên `main` + working tree Core Stabilization |
@@ -269,3 +291,38 @@ Stabilization `PASS`.
    migrate Plan row legacy trước repair mà không dùng destructive initialization.
 3. Đóng băng một revision sạch và chạy SX-12 tới SX-14; chỉ exit decision pass
    mới unblock E0.
+## Sửa phép đo E1 — 2026-09-07
+
+Quyết định STANDARD / READY: dùng cùng manifest đúng budget cho recall và token,
+baseline dương được cung cấp rõ ràng, giữ số giảm âm; chỉ revision trùng khớp và
+không rỗng mới fresh. Phương án khác là tăng budget và suy freshness từ tổ tiên Git;
+loại vì che mất lỗi budget và không chứng minh nội dung còn đúng. Đánh đổi: một số
+case trước đây được coi đạt nay báo lỗi hoặc thiếu bằng chứng. Không đổi schema,
+provider hay luồng thực thi. Kiểm tra D2, không chạy toàn bộ test.
+
+Đã sửa: đối chiếu đúng nguồn (external_id/reference) và nội dung, không gộp các
+bằng chứng khác nguồn có cùng giá trị; không nuốt lỗi compile; cold/warm mỗi mẫu
+dùng một manifest chung. Gate đo yêu cầu recall >= 95% và median giảm token warm
+>= 30%; tập case rỗng BLOCKED. Token là ước lượng context, không phải hóa đơn cloud.
+
+59 kiểm tra tập trung đã qua: regression phép đo, E1-23/24/27/33/35 và project lock.
+Đây là bằng chứng trên cây đang sửa, không phải exit gate của revision sạch.
+Trạng thái dự án vẫn PARTIAL. Còn thiếu baseline/corpus có provenance được duyệt,
+chạy đo cold/warm có kiểm soát, bằng chứng privacy/chất lượng và revision sạch.
+
+```mermaid
+flowchart LR
+  A[Corpus chuẩn bị + baseline duyệt] --> B[Manifest cold]
+  B --> C[Recall + token]
+  B --> D[Manifest warm lặp lại]
+  D --> E[Recall + token]
+  C --> F[Gate phép đo]
+  E --> F
+  F --> G[Gate riêng: privacy, chất lượng, revision sạch]
+```
+
+Cold chỉ là lần compile đầu trên trạng thái do bên gọi chuẩn bị; warm là lần lặp
+lại. Công cụ không tự nạp cache hay cô lập corpus. Revision tổ tiên vẫn stale;
+helper không kiểm tra cây Git bẩn hoặc hash nội dung. Hợp đồng chi tiết ở
+../../benchmarks/e1/recall_measurement.md, token_measurement.md,
+integration_pack.md và revision_invalidation.md.

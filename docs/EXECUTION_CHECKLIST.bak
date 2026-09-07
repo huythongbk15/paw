@@ -1,10 +1,5 @@
 # PAW execution checklist
 
-Review correction — 2026-09-07: E1 is **PARTIAL**; E2 is **BLOCKED**.
-Reopen E1-23/24/25/27 and E1-33 regardless of historical checkmarks below.
-Empty/missing-input repair for E1-27 passes 8 focused tests; its full acceptance
-remains open. Next: measurement fidelity and revision-freshness repair.
-
 This is the atomic execution tracker derived from `ROADMAP.md`. The Roadmap
 remains the sole authority for scope, ordering and acceptance gates. This file
 may split an approved item, estimate it and record current-revision evidence;

@@ -1,5 +1,10 @@
 # Lộ trình Core Stabilization của PAW
 
+Review 2026-09-07: **PARTIAL**, mở lại qualification E1 tại `f625fcb`.
+Snapshot E1 VERIFIED/E2-active cũ bên dưới được thay thế. Tiếp theo: sửa
+measurement E1 (case có review, cold/warm, giảm median 30%, privacy/quality),
+sửa freshness revision, rồi nghiệm thu E1 trước khi triển khai E2.
+
 Đây là work sequence duy nhất đang hoạt động. Các phase được đánh số trong lịch
 sử mô tả cách repository phình lên; chúng không quyết định việc phải xây tiếp.
 

@@ -6,6 +6,49 @@ changes.
 
 ## Audit baseline
 
+### Review 2026-09-07 at f625fcb
+
+Follow-up decision: STANDARD / READY for measurement and freshness repair.
+Invariants: explainable bounded context, evidence before acceptance, stale
+decisions cannot authorize implementation. Source shows unbounded recall,
+swallowed compiler/cache errors, self-baselines and clamped token regressions.
+Select budget-preserving shared manifests, explicit positive baselines, signed
+reduction and exact revision comparison. Alternative: keep diagnostic unlimited
+recall and ancestry heuristics, but they cannot answer runtime quality/freshness.
+Deferring is viable only while E1 stays PARTIAL. Trade-off: previously accepted
+cases without retrievable file evidence/baselines now fail visibly; unrelated
+commits conservatively invalidate decisions. No automatic corpus ingestion or
+new runtime/schema owner. Budget: local owner/caller/test inspection, stop at
+falsifiable regressions. Scope: bench recall/tokens/integration, knowledge history,
+focused tests and EN/VI documentation. D2 measurement integration proof; full
+release qualification remains separate. Acceptance: one manifest per case/mode,
+cold then repeated warm calls, 95% recall and 30% median warm reduction, invalid
+baselines/modes rejected, compiler failures propagated, changed revision stale.
+
+Current handoff: `PARTIAL`. E1 qualification is reopened; later E2 work must
+wait for reliable measurement. Historical completion counts below are not
+current gate proof.
+
+Source findings:
+- `bench/integration.py` accepts an empty case directory as `VERIFIED`.
+- Its token floor is 0%, whereas Roadmap requires 30% median warm reduction;
+  it requests only cold measurements and does not enforce all privacy/quality
+  acceptance conditions. Fixing empty input alone cannot qualify E1.
+- `knowledge/history.py` treats a differing reachable revision as fresh;
+  commit ancestry is not evidence that decision inputs are unchanged.
+- README, Roadmap and checklist disagree on E1 completion. The Architecture
+  document precedence also conflicts with docs/README source/test authority.
+
+Decision: `STANDARD`, `READY` for empty-input repair. Options: return BLOCKED
+with an inspectable report (selected), or raise an input exception (viable but
+loses the existing report workflow); leaving success unchanged violates the
+verification invariant. Keep the current result shape and nonempty behavior.
+Acceptance: empty and missing directories cannot certify success; existing
+nonempty scoring tests still pass. Budget: inspect runner, callers and tests,
+stop after reproducing the false-positive. Owner/files: bench/integration.py,
+its focused regression test, benchmark contract and synchronized audit docs.
+This is a D1 repair without schema or runtime-loop changes.
+
 | Item | Observed value |
 |---|---|
 | Revision | `f21a508` on `main` + Core Stabilization working tree |
@@ -959,3 +1002,15 @@ them up before the first E1 deliverable. They are also tracked as
   so the next session reads an accurate memory.
 
 The ordered acceptance plan is in `ROADMAP.md`.
+## E1 measurement repair — 2026-09-07
+
+Implementation is PARTIAL at the project level. Focused regression checks cover
+budget-preserving source-bound recall, signed token reduction, explicit baselines,
+shared cold/warm manifests and exact revision freshness. The measurement gate
+returns PASS/PARTIAL/FAIL/BLOCKED, never a full-E1 VERIFIED declaration.
+See benchmarks/e1/{recall_measurement,token_measurement,integration_pack,revision_invalidation}.md.
+
+Verification: 59 focused tests passed (measurement regressions, E1-23/24/27/33/35
+and project lock). This is dirty-tree evidence, not a clean-revision exit gate.
+Remaining: reviewed corpus/baseline provenance, controlled cold/warm dataset run,
+privacy and engineering-quality acceptance, and clean-revision evidence.

@@ -1,24 +1,4 @@
-"""E1-23 contract test: cold + warm recall measurement.
-
-The contract is documented in
-``docs/benchmarks/e1/recall_measurement.md``.
-The test pins:
-
-- ``RecallResult`` has the documented shape
-  (case_id, mode, total_evidence, recalled, missed,
-  recall, duration_ms);
-- a case with 0 expected evidence has recall = 1.0
-  (vacuous);
-- a case where all evidence is recalled has recall = 1.0;
-- a case where some evidence is missed computes
-  ``recall = recalled / total`` and lists the
-  missed targets;
-- warm >= cold for the same case (the warm cache
-  can only add or preserve recalled items, never
-  remove them);
-- the result is deterministic (two calls give the
-  same numbers).
-"""
+"""Result shapes and API compatibility; behavioral gates are tested separately."""
 
 from __future__ import annotations
 
@@ -80,18 +60,6 @@ def test_recall_result_is_frozen() -> None:
 # --- 2. Zero-evidence case (vacuous recall = 1.0) --------------------
 
 
-def test_recall_result_zero_evidence_defaults() -> None:
-    """The RecallResult shape is constructible with
-    zero-evidence defaults."""
-    r = RecallResult(
-        case_id="c0", mode="cold", total_evidence=0,
-        recalled=0, missed=(), recall=1.0, duration_ms=0,
-    )
-    assert r.recall == 1.0
-    assert r.total_evidence == 0
-    assert r.recalled == 0
-    assert r.missed == ()
-
 
 # --- 3. Full recall --------------------------------------------------
 
@@ -111,13 +79,6 @@ def test_recall_partial_recall_fraction() -> None:
     assert recalled + missed == total
     assert recalled / total == pytest.approx(2 / 3)
 
-
-def test_recall_zero_division_safe() -> None:
-    """When total_evidence is 0, the recall formula must
-    not divide by zero; the result is 1.0 (vacuous)."""
-    total = 0
-    recall = 1.0 if total == 0 else 0 / total
-    assert recall == 1.0
 
 
 # --- 4. measure_recall signature --------------------------------------

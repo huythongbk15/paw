@@ -1,3 +1,4 @@
+"""Source-bound recall in the actual budgeted context."""
 from __future__ import annotations
 
 import time
@@ -7,175 +8,61 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from paw.bench import CaseManifest
-    from paw.core.context_compiler import ContextCompiler
+    from paw.core.context_compiler import ContextCompiler, ContextManifest
 
 
 @dataclass(frozen=True)
 class RecallResult:
-    """The recall measurement for a single E0 case in one mode.
-
-    ``missed`` is the change-control surface: a reviewer
-    who sees a miss can decide whether the heuristic is
-    the cause or the manifest is the cause.
-    """
-
     case_id: str
-    mode: str  # "cold" | "warm"
+    mode: str
     total_evidence: int
     recalled: int
     missed: tuple[str, ...]
-    recall: float  # recalled / total_evidence
+    recall: float
     duration_ms: int
 
 
 async def measure_recall(
-    case: CaseManifest,
-    *,
-    compiler: ContextCompiler,
-    repo_root: Path,
-    mode: str,
+    case: CaseManifest, *, compiler: ContextCompiler, repo_root: Path,
+    mode: str, manifest: ContextManifest | None = None,
 ) -> RecallResult:
-    """Measure the recall of a single E0 case.
+    """Score file evidence; the caller prepares the corpus and cache state.
 
-    Recall is the fraction of expected-evidence items the
-    compiler's manifest can recall. A case with 3 expected
-    evidence items where the manifest includes 2 has
-    recall = 2/3 = 0.667.
-
-    ``mode`` is ``"cold"`` (no cache) or ``"warm"`` (the
-    E1-14 derived records are pre-loaded).
+    Warm means repeated compilation, not automatic cache hydration. Unsupported
+    runtime evidence requires a dedicated evaluator, never a text-match proxy.
     """
+    if mode not in {"cold", "warm"}:
+        raise ValueError("mode must be cold or warm")
+    if not case.expected_evidence:
+        raise ValueError("recall requires expected evidence")
+    for ev in case.expected_evidence:
+        if ev.kind not in {"file_contains", "file_exists"}:
+            raise ValueError(f"unsupported context recall evidence: {ev.kind}")
+        if not ev.target or (ev.kind == "file_contains" and not ev.value):
+            raise ValueError("file evidence requires a target and matching value")
     start = time.perf_counter()
-
-    expected_evidence = case.expected_evidence
-    total = len(expected_evidence)
-
-    if total == 0:
-        duration_ms = int((time.perf_counter() - start) * 1000)
-        return RecallResult(
-            case_id=case.case_id,
-            mode=mode,
-            total_evidence=0,
-            recalled=0,
-            missed=(),
-            recall=1.0,  # vacuous: nothing was expected, nothing was missed
-            duration_ms=duration_ms,
+    if manifest is None:
+        manifest = await compiler.compile_manifest(
+            task_id=case.case_id, query=case.goal, session_id=None,
         )
-
-    # Run the compiler to get the manifest.
-    if mode == "cold":
-        manifest = await _compile_cold(compiler, case, repo_root)
-    else:
-        manifest = await _compile_warm(compiler, case, repo_root)
-
-    # Determine which expected-evidence items were recalled.
-    # An evidence item is "recalled" if its ``value`` string
-    # (the matched string \u2014 e.g. a path fragment inside a
-    # file_contains fixture) appears in the content of any
-    # included candidate. When ``value`` is empty, fall back
-    # to ``target`` (e.g. a ledger_event whose target is the
-    # event identifier).
-    def _evidence_key(ev):
-        if ev.value:
-            return ev.value
-        return ev.target
-
-    recalled_keys = set()
-    for cand in manifest.included:
-        for ev in expected_evidence:
-            key = _evidence_key(ev)
-            if key == "" or key is None:
-                continue
-            if (key in cand.source_id
-                    or key in cand.content
-                    or (cand.reference and key in cand.reference)):
-                recalled_keys.add(key)
-
-    total_keys = {
-        _evidence_key(ev) for ev in expected_evidence
-        if _evidence_key(ev) and _evidence_key(ev) != ""
-    }
-    missing_keys = total_keys - recalled_keys
-    recalled_count = len(total_keys - missing_keys)
-
-    duration_ms = int((time.perf_counter() - start) * 1000)
-
-    total = len(total_keys)
+    root = repo_root.resolve()
+    missed = []
+    for ev in case.expected_evidence:
+        target = (root / ev.target).resolve()
+        if not target.is_relative_to(root):
+            raise ValueError("evidence target is outside repo_root")
+        found = any(
+            (getattr(cand, "external_id", "") or cand.reference)
+            and (root / (getattr(cand, "external_id", "") or cand.reference)).resolve() == target
+            and (ev.kind == "file_exists" or ev.value in cand.content)
+            for cand in manifest.included
+        )
+        if not found:
+            missed.append(f"{ev.kind}:{ev.target}:{ev.value}")
+    total = len(case.expected_evidence)
     return RecallResult(
-        case_id=case.case_id,
-        mode=mode,
-        total_evidence=total,
-        recalled=recalled_count,
-        missed=tuple(sorted(missing_keys)),
-        recall=(recalled_count / total if total else 1.0),
-        duration_ms=duration_ms,
+        case_id=case.case_id, mode=mode, total_evidence=total,
+        recalled=total - len(missed), missed=tuple(missed),
+        recall=(total - len(missed)) / total,
+        duration_ms=int((time.perf_counter() - start) * 1000),
     )
-
-
-async def _compile_cold(
-    compiler: ContextCompiler,
-    case: CaseManifest,
-    repo_root: Path,
-) -> object:
-    """Compile a manifest in cold mode (empty cache).
-
-    Uses ``compile_manifest`` (the E1-20 entry point) so the
-    returned ``ContextManifest`` carries the per-item E1-17
-    record and the E1-18 exclusion reasons. A high token
-    budget is applied so ``BudgetExceededError`` does not
-    truncate the recall measurement \u2014 recall is about
-    *coverage* of expected evidence, not budget adherence.
-    """
-    from paw.core.context_compiler import ContextBudget
-    high_budget = ContextBudget(max_tokens=1_000_000, max_fragments=2000)
-    try:
-        return await compiler.compile_manifest(
-            task_id=case.case_id,
-            query=case.goal,
-            session_id=None,
-            budget=high_budget,
-        )
-    except Exception:
-        # BudgetExceededError or other runtime error: fall back
-        # to the raw compile() pipeline and reconstruct a minimal
-        # manifest so recall is still measurable.
-        context, candidates = await compiler.compile(
-            task_id=case.case_id,
-            query=case.goal,
-            session_id=None,
-            budget=high_budget,
-        )
-        from paw.core.context_compiler import ContextManifest
-        included = [c for c in candidates if c.metadata.get("included")]
-        excluded = [c for c in candidates if "excluded_reason" in c.metadata]
-        return ContextManifest(
-            task_id=case.case_id,
-            budget=high_budget,
-            included=tuple(included),
-            excluded=tuple(excluded),
-            final_tokens=getattr(context, "token_count",
-                                 sum(c.token_estimate for c in included)),
-        )
-
-
-async def _compile_warm(
-    compiler: ContextCompiler,
-    case: CaseManifest,
-    repo_root: Path,
-) -> object:
-    """Compile a manifest in warm mode (cache pre-loaded).
-
-    In warm mode the compiler's derived-record cache
-    (E1-14) is populated before compilation, so the
-    source-level data (knowledge chunks, symbols,
-    test associations) is reused rather than re-derived
-    from the repository files.
-    """
-    try:
-        from paw.knowledge.index import get_knowledge_index
-        idx = get_knowledge_index()
-        await idx.load_derived_views()
-    except Exception:
-        pass  # graceful degradation: warm == cold if cache unavailable
-
-    return await _compile_cold(compiler, case, repo_root)

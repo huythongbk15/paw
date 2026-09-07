@@ -1,67 +1,37 @@
-# E1-27 E1 Integration Pack + Gate Decision
+# E1-27 Context measurement gate
 
-This document is the **E1-27 deliverable**. It records
-the integration pack that runs every E0 case through
-the E1 compiler pipeline (recall + token measurement
-+ gate) and produces a gate decision.
+Current contract, 2026-09-07.
+Owner: `paw.bench.integration.run_integration_pack`.
 
-## Why this contract exists
+This is a measurement-only gate, not full E1 acceptance. A PASS does not certify
+engineering verification, privacy safety, actual cloud savings or revision freeze.
 
-The E1 acceptance target lists several measurable
-properties (≥95% recall, ≥30% token reduction, no
-unauthorized actions, every byte attributable to a
-manifest). The E1-27 contract is the *integration*:
-a single invocation that runs the recall + token
-measurement + gate pipeline against every E0 case and
-records a `VERIFIED` / `PARTIAL` / `FAIL` gate
-decision.
+For each unique YAML case, require an explicit positive baseline and a
+caller-prepared corpus. Compile cold then warm with the same configured compiler.
+Each compilation yields one manifest shared by recall and token scoring.
+case_count counts cases, not samples. Duplicate IDs and invalid measurements
+raise errors; compilation errors are not converted to successful evidence.
 
-The decision is the change-control surface: a reviewer
-who sees `VERIFIED` knows the E1 work is done; a
-reviewer who sees `PARTIAL` knows which contracts
-fell short and which case the runtime failed on.
-
-## Canonical location
-
-`run_integration_pack` is a new function in
-`paw.bench.integration` (a new module under
-`paw/bench/`). The function takes the E0 case
-directory + a `ContextCompiler` and returns an
-`IntegrationResult` record + a markdown report.
-
-## `IntegrationResult` shape
-
-```python
-@dataclass(frozen=True)
-class IntegrationResult:
-    case_count: int
-    recall_results: tuple[RecallResult, ...]
-    token_results: tuple[TokenResult, ...]
-    gate_decision: str  # "VERIFIED" | "PARTIAL" | "FAIL"
-    gate_reasons: tuple[str, ...]
-    report_path: Path  # the markdown report on disk
+```mermaid
+flowchart LR
+  A[Prepared corpus + reviewed baseline] --> B[Cold manifest]
+  B --> C[Recall + token estimate]
+  B --> D[Repeated warm manifest]
+  D --> E[Recall + token estimate]
+  C --> F[Measurement gate]
+  E --> F
+  F --> G[Separate privacy, quality and clean-revision gates]
 ```
 
-The ``gate_decision`` is:
+- No cases: BLOCKED.
+- Any sample recall below 0.5: FAIL.
+- Otherwise any sample recall below 0.95: PARTIAL.
+- Otherwise median warm token reduction below 0.30: PARTIAL.
+- Otherwise: PASS for this measurement gate only.
+- Negative per-case reductions remain visible in the report.
+- Failed runs raise; callers must not reuse an older report as current evidence.
 
-- ``"VERIFIED"`` when every E0 case has
-  ``recall >= 0.95`` and ``reduction >= 0.0`` (the
-  warm measurement is not worse than the baseline)
-  and every manifest passes the E1-21 gate (no
-  refused items on a `cloud_unapproved` provider).
-- ``"PARTIAL"`` when at least one contract is met but
-  not all.
-- ``"FAIL"`` when at least one E0 case has
-  ``recall < 0.5`` (the runtime is regressing vs the
-  E0 frozen baseline).
-
-The contract test pins the gate thresholds; the
-*actual* numbers are recorded in
-`docs/benchmarks/e1/integration_pack_run.md`.
-
-## Phase 4 sync contract
-
-This document is the **source of truth** for E1-27.
-The companion contract test
-`tests/test_e1_27_integration_pack_contract.py`
-enforces the gate decision rules.
+E1 overall remains PARTIAL until reviewed, revision-bound corpus/baseline
+measurements and the remaining acceptance evidence exist. Synthetic compiler
+tests prove gate logic, not real-world savings. Cold/warm labels alone do not
+prove cache isolation or useful cache hits.

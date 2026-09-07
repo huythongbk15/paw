@@ -1,5 +1,10 @@
 # PAW system documents
 
+Current audit (2026-09-07, f625fcb): **PARTIAL**. E1 qualification is reopened;
+E2 remains blocked pending measurement repair. The earlier status snapshot
+below is historical and does not authorize progression. See the dated review
+in IMPLEMENTATION_MAP.md.
+
 This directory is the canonical documentation set for PAW. It exists to keep
 the product boundary, architecture, implementation reality and work sequence
 separate but consistent.

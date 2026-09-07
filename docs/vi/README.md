@@ -1,5 +1,9 @@
 # Tài liệu hệ thống PAW — tiếng Việt
 
+Audit hiện tại (2026-09-07, f625fcb): **PARTIAL**. Mở lại qualification E1;
+E2 bị chặn tới khi sửa measurement. Snapshot trạng thái cũ bên dưới là lịch sử,
+không cho phép chuyển track. Xem mục audit mới trong IMPLEMENTATION_MAP.md.
+
 Đây là bộ tài liệu tiếng Việt tương ứng với bộ tài liệu hệ thống PAW hiện tại.
 Mỗi tài liệu trong thư mục này bám theo tài liệu tiếng Anh cùng tên ở thư mục
 `docs/`. Tài liệu tiếng Anh là bản canonical về cấu trúc; mã nguồn và test hiện

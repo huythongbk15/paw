@@ -1,20 +1,4 @@
-"""E1-24 contract test: cold + warm cloud input token measurement.
-
-The contract is documented in
-``docs/benchmarks/e1/token_measurement.md``.
-The test pins:
-
-- ``TokenResult`` has the documented shape
-  (case_id, mode, baseline_tokens, measured_tokens,
-  reduction, duration_ms);
-- the reduction formula: (baseline - measured) / baseline,
-  clamped to [0.0, 1.0];
-- explicit ``baseline_tokens`` override works;
-- when no baseline is known, measured is used as its
-  own baseline (reduction = 0.0);
-- ``set_baseline_tokens`` registers a frozen baseline;
-- the result is deterministic.
-"""
+"""Result shapes and API compatibility; behavioral gates are tested separately."""
 
 from __future__ import annotations
 
@@ -65,31 +49,7 @@ def test_reduction_formula_positive() -> None:
     assert reduction == pytest.approx(0.3)
 
 
-def test_reduction_clamped_to_zero_when_measured_exceeds_baseline() -> None:
-    """If measured > baseline (regression), reduction
-    must clamp to 0.0, not go negative."""
-    baseline = 100
-    measured = 200
-    reduction = (baseline - measured) / baseline
-    clamped = max(0.0, min(1.0, reduction))
-    assert clamped == 0.0
 
-
-def test_reduction_clamped_to_one_when_measured_zero() -> None:
-    baseline = 1000
-    measured = 0
-    reduction = (baseline - measured) / baseline
-    clamped = max(0.0, min(1.0, reduction))
-    assert clamped == 1.0
-
-
-def test_reduction_zero_baseline_safe() -> None:
-    """When baseline is 0, reduction must be 0.0 (no
-    division by zero)."""
-    baseline = 0
-    measured = 0
-    reduction = (baseline - measured) / baseline if baseline > 0 else 0.0
-    assert reduction == 0.0
 
 
 # --- 3. Baseline lookup ------------------------------------------------
@@ -100,18 +60,6 @@ def test_set_baseline_tokens_registers_value() -> None:
     from paw.bench.tokens import _E0_FROZEN_BASELINE
     assert _E0_FROZEN_BASELINE.get("test_case_e1_24_a") == 5000
 
-
-def test_unknown_case_uses_measured_as_baseline() -> None:
-    """When a case is not in the frozen baseline, the
-    measured tokens serve as its own baseline (reduction
-    = 0.0)."""
-    from paw.bench.tokens import _E0_FROZEN_BASELINE
-    case_id = "nonexistent_case_e1_24_b"
-    measured = 300
-    baseline = _E0_FROZEN_BASELINE.get(case_id, measured)
-    reduction = (baseline - measured) / baseline if baseline > 0 else 0.0
-    clamped = max(0.0, min(1.0, reduction))
-    assert clamped == pytest.approx(0.0)
 
 
 def test_explicit_baseline_override() -> None:

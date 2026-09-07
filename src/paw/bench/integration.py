@@ -9,22 +9,19 @@ is documented in
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from statistics import median
 
 from .recall import RecallResult, measure_recall
 from .tokens import TokenResult, measure_tokens
-
-if TYPE_CHECKING:
-    pass
-
 
 # Gate thresholds. The contract test pins these; a
 # change to the numbers is a change-control surface.
 GATE_RECALL_THRESHOLD = 0.95
 GATE_REGRESSION_THRESHOLD = 0.5
-GATE_REDUCTION_FLOOR = 0.0
+GATE_REDUCTION_FLOOR = 0.30
 
 
 @dataclass(frozen=True)
@@ -43,6 +40,7 @@ async def run_integration_pack(
     compiler,  # ContextCompiler (avoid import cycle)
     repo_root: Path,
     report_path: Path,
+    baseline_tokens: Mapping[str, int] | None = None,
 ) -> IntegrationResult:
     """Run every case in ``case_dir`` through the
     E1 compiler pipeline (cold + warm), aggregate the
@@ -55,13 +53,11 @@ async def run_integration_pack(
     # Discover case files.
     case_files = sorted(case_dir.glob("*.yaml"))
     if not case_files:
-        # The empty-directory case still writes a
-        # report (the contract test asserts the file
-        # exists on disk).
+        # Missing evidence cannot establish a successful gate.
         report_path.parent.mkdir(parents=True, exist_ok=True)
         report_path.write_text(
             "# E1 Integration Pack Report\n\n"
-            "Cases: 0\nGate: **VERIFIED**\n\n"
+            "Cases: 0\nGate: **BLOCKED**\n\n"
             "## Gate reasons\n- no cases in directory\n",
             encoding="utf-8",
         )
@@ -69,13 +65,14 @@ async def run_integration_pack(
             case_count=0,
             recall_results=(),
             token_results=(),
-            gate_decision="VERIFIED",
+            gate_decision="BLOCKED",
             gate_reasons=("no cases in directory",),
             report_path=report_path,
         )
 
     recall_results: list[RecallResult] = []
     token_results: list[TokenResult] = []
+    seen: set[str] = set()
     for case_file in case_files:
         data = case_manifest_from_dict(
             # The YAML loader is in
@@ -86,21 +83,29 @@ async def run_integration_pack(
                 case_file.read_text(encoding="utf-8")
             )
         )
-        # The contract: the runtime is called twice,
-        # once for cold + once for warm. The two
-        # numbers are the cold + warm measurements.
-        r_cold = await measure_recall(
-            data, compiler=compiler, repo_root=repo_root, mode="cold"
-        )
-        t_cold = await measure_tokens(
-            data, compiler=compiler, repo_root=repo_root, mode="cold"
-        )
-        recall_results.append(r_cold)
-        token_results.append(t_cold)
+        if data.case_id in seen:
+            raise ValueError(f"duplicate case id: {data.case_id}")
+        seen.add(data.case_id)
+        baseline = (baseline_tokens or {}).get(data.case_id)
+        if type(baseline) is not int or baseline <= 0:
+            raise ValueError(f"missing or invalid baseline for {data.case_id}")
+        for mode in ("cold", "warm"):
+            manifest = await compiler.compile_manifest(
+                task_id=data.case_id, query=data.goal, session_id=None,
+            )
+            recall_results.append(await measure_recall(
+                data, compiler=compiler, repo_root=repo_root,
+                mode=mode, manifest=manifest,
+            ))
+            token_results.append(await measure_tokens(
+                data, compiler=compiler, repo_root=repo_root,
+                mode=mode, manifest=manifest,
+                baseline_tokens=baseline,
+            ))
 
     # Gate decision.
     reasons: list[str] = []
-    decision = "VERIFIED"
+    decision = "PASS"
     for r in recall_results:
         if r.recall < GATE_REGRESSION_THRESHOLD:
             decision = "FAIL"
@@ -115,22 +120,22 @@ async def run_integration_pack(
                 f"case {r.case_id!r} partial: recall {r.recall:.2f} "
                 f"< {GATE_RECALL_THRESHOLD}"
             )
-    for t in token_results:
-        if t.reduction < GATE_REDUCTION_FLOOR:
-            if decision == "VERIFIED":
-                decision = "PARTIAL"
-            reasons.append(
-                f"case {t.case_id!r} token regression: reduction "
-                f"{t.reduction:.2f} < {GATE_REDUCTION_FLOOR}"
-            )
+    warm_reduction = median(t.reduction for t in token_results if t.mode == "warm")
+    if warm_reduction < GATE_REDUCTION_FLOOR:
+        if decision == "PASS":
+            decision = "PARTIAL"
+        reasons.append(
+            f"median warm token reduction {warm_reduction:.2f} < {GATE_REDUCTION_FLOOR}"
+        )
     if not reasons:
-        reasons = ("all E0 cases meet the E1 acceptance targets",)
+        reasons.append("measurement targets met; full E1 acceptance is not established")
 
     # Markdown report.
     lines: list[str] = []
     lines.append("# E1 Integration Pack Report")
     lines.append("")
-    lines.append(f"Cases: {len(recall_results)}")
+    lines.append("Scope: budgeted context measurement only, not full E1 qualification.")
+    lines.append(f"Cases: {len(case_files)}")
     lines.append(f"Gate: **{decision}**")
     lines.append("")
     lines.append("## Recall")
@@ -157,7 +162,7 @@ async def run_integration_pack(
     report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     return IntegrationResult(
-        case_count=len(recall_results),
+        case_count=len(case_files),
         recall_results=tuple(recall_results),
         token_results=tuple(token_results),
         gate_decision=decision,

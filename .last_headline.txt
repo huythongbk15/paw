@@ -1,0 +1,1 @@
+﻿⟦ E1-36 adversarial runtime + E1-26 retrofit DONE｜Status: 26 tests pass (12 E1-36 + 14 E1-26), ruff clean, committed `04252fe`｜Next: E2 track per Đại ca direction ⟧

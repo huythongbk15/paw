@@ -1,5 +1,10 @@
 # Checklist thực thi PAW
 
+Điều chỉnh review 2026-09-07: E1 **PARTIAL**, E2 **BLOCKED**.
+Mở lại E1-23/24/25/27 và E1-33 bất kể checkbox lịch sử bên dưới.
+Repair input rỗng/thiếu E1-27 qua 8 test tập trung; acceptance đầy đủ còn mở.
+Tiếp theo: sửa độ tin cậy measurement và freshness revision.
+
 Đây là tracker thực thi nguyên tử được dẫn xuất từ `ROADMAP.md`. Roadmap vẫn là
 authority duy nhất về scope, thứ tự và acceptance gate. File này chỉ được chia
 nhỏ item đã duyệt, ước lượng và ghi evidence của revision hiện tại; không được

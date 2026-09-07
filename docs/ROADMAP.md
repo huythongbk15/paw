@@ -1,5 +1,16 @@
 # PAW Core Stabilization roadmap
 
+Current review — 2026-09-07: **PARTIAL**, E1 qualification reopened at
+`f625fcb`. The earlier E1 VERIFIED/E2-active snapshot below is superseded.
+Next work: repair E1 measurement (nonempty reviewed cases, cold/warm evidence,
+30% median reduction and privacy/quality checks), repair revision freshness,
+then qualify the integrated E1 result before starting E2 implementation.
+
+| Current qualification | Result |
+|---|---|
+| E1 measurement | `PARTIAL` |
+| E2–E3 and BETA | `BLOCKED` |
+
 This is the only active work sequence. Historical numbered phases describe how
 the repository grew; they do not determine what should be built next.
 

@@ -1,24 +1,4 @@
-"""E1-33 contract test: invalidate or re-evaluate decision on revision change.
-
-The contract is documented in
-``docs/benchmarks/e1/revision_invalidation.md``.
-The test pins:
-
-- the closed set of reason codes
-  (``revision_match``, ``revision_mismatch``,
-  ``pinned_revision_not_found``);
-- the happy path: matching revisions are not stale;
-- the revision-mismatch path: when the pinned
-  revision does not appear in the recent-changes
-  SHA list, the decision is stale;
-- the pinned-revision-not-found path: when the
-  pinned revision *does* appear in the recent-changes
-  SHA list, the decision is reachable and not
-  stale;
-- empty inputs are handled as a revision
-  mismatch (stale);
-- determinism: two calls produce the same result.
-"""
+"""Revision freshness requires exact identity, independently of ancestry."""
 
 from __future__ import annotations
 
@@ -75,20 +55,19 @@ async def test_revision_mismatch_when_pinned_not_in_changes() -> None:
     assert r.reason == "revision_mismatch"
 
 
-# --- 4. Revision mismatch + pinned in SHAs -> not stale -
+# --- 4. Revision mismatch + pinned in SHAs -> stale -
 
 
 async def test_pinned_revision_still_reachable() -> None:
     """When ``pinned_revision`` is in the recent-changes
-    SHA list, the decision is reachable and not
-    stale (the pinned revision is in the chain)."""
+    SHA list, ancestry does not make the decision fresh."""
     r = await re_evaluate_on_revision(
         pinned_revision="pinned",
         current_revision="head",
         recent_changes=[_ch("pinned"), _ch("intermediate"), _ch("head")],
     )
-    assert r.stale is False
-    assert r.reason == "pinned_revision_not_found"
+    assert r.stale is True
+    assert r.reason == "revision_mismatch"
 
 
 # --- 5. Empty inputs: stale ----------------------------

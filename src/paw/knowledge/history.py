@@ -47,8 +47,7 @@ class ReEvaluationResult:
     ``stale`` is True when the ``pinned_revision`` no
     longer matches ``current_revision`` (the decision
     should be re-evaluated). ``reason`` is one of
-    ``"revision_match"`` / ``"revision_mismatch"`` /
-    ``"pinned_revision_not_found"``.
+    ``"revision_match"`` / ``"revision_mismatch"``.
     """
 
     pinned_revision: str
@@ -63,25 +62,11 @@ async def re_evaluate_on_revision(
     current_revision: str,
     recent_changes: Iterable[RecentChange],
 ) -> ReEvaluationResult:
-    """Flag a decision as stale when ``pinned_revision``
-    is no longer reachable from ``current_revision``.
+    """Require exact nonempty revision equality for freshness.
 
-    The heuristic:
-    - ``revision_match``: the two revisions are equal.
-    - ``revision_mismatch``: the two revisions are
-      different AND ``pinned_revision`` does not appear
-      in the recent-changes' SHA list.
-    - ``pinned_revision_not_found``: the two revisions
-      are different AND ``pinned_revision`` does appear
-      in the recent-changes' SHA list (so the
-      pinned revision is still reachable; the decision
-      is not stale).
-
-    The function is async to align with the rest of
-    the knowledge API; it has no I/O today (a future
-    item can use ``git merge-base --is-ancestor`` to
-    check the actual ancestry; the current heuristic
-    is the recent-changes intersection).
+    recent_changes remains accepted for compatibility, but ancestry is not
+    evidence that a prior decision still applies. This helper does not certify
+    clean working-tree state or content hashes.
     """
     if not pinned_revision or not current_revision:
         return ReEvaluationResult(
@@ -97,20 +82,7 @@ async def re_evaluate_on_revision(
             stale=False,
             reason="revision_match",
         )
-    # Different revisions. Check the recent-changes
-    # SHA list; if ``pinned_revision`` is in the list,
-    # the pinned revision is reachable from HEAD (the
-    # runtime walked past it). Otherwise, the pinned
-    # revision is no longer reachable: the decision is
-    # stale.
-    shas = {ch.sha for ch in recent_changes}
-    if pinned_revision in shas:
-        return ReEvaluationResult(
-            pinned_revision=pinned_revision,
-            current_revision=current_revision,
-            stale=False,
-            reason="pinned_revision_not_found",
-        )
+    # Reachability is not freshness: an ancestor can describe obsolete inputs.
     return ReEvaluationResult(
         pinned_revision=pinned_revision,
         current_revision=current_revision,
