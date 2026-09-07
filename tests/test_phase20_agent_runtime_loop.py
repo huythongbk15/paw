@@ -89,7 +89,7 @@ class _MockProvider:
 def _mock_llama_manifest() -> ModelManifest:
     return ModelManifest(
         name="mock-llama",
-        provider="mockp",
+        provider="local",
         roles=["fast", "tools"],
         model_capabilities={"tool_calling": 9.0, "structured_output": 9.0},
         cost={"compute": "low", "monetary": "free"},

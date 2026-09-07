@@ -47,6 +47,7 @@ def test_disclosure_refused_reasons_is_closed_set() -> None:
             "class_internal_unapproved_cloud",
             "class_none_unapproved_cloud",
             "unknown_provider_kind",
+            "source_stale",
         }
     ) == DISCLOSURE_REFUSED_REASONS
 

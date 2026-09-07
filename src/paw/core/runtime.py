@@ -84,6 +84,7 @@ from .models import (
     TaskStatus,
 )
 from .policy import RequestVerdict
+from .privacy import RemoteDisclosureRefusedError
 from .runtime_persistence import RuntimePersistence
 from .task import TaskManager
 from .task_scheduler import TaskScheduleStatus
@@ -1121,7 +1122,25 @@ class PawRuntime:
         if result.gate is not None:
             return result
 
-        observation = await step_fn(task_id, proposed)
+        try:
+            observation = await step_fn(task_id, proposed)
+        except RemoteDisclosureRefusedError as exc:
+            # Hard gate: disclosure refused, operation not completed.
+            logger.error("remote_disclosure_refused_hard", provider_kind=exc.provider_kind, reasons=exc.refused)
+            await TaskLedger.record(
+                task_id,
+                TaskEventType.EXECUTION_COMPLETED,
+                {"step_id": step_id, "action_id": proposed.operation_id, "executed": False, "error": str(exc)},
+            )
+            return _UnitExecutionResult(
+                observation=ExecutionObservation(
+                    step_id=step_id,
+                    action_id=proposed.operation_id,
+                    result={"done": False, "progress": 0.0, "error": str(exc)},
+                    success=False,
+                    error=str(exc),
+                ),
+            )
         observation.action_id = proposed.operation_id
         observation.step_id = step_id
         result.observation = observation
@@ -1619,7 +1638,9 @@ class PawRuntime:
                     if self.model_executor is not None:
                         # E1-21: gate remote disclosure before model invocation.
                         # SECRET and WORKSPACE-class context must never reach
-                        # a non-local provider kind.
+                        # a non-local provider kind. Hard gate: refused
+                        # disclosure raises RemoteDisclosureRefused to stop
+                        # the loop, not just skip the current call.
                         manifest = getattr(self, "_current_manifest", None)
                         if manifest is not None:
                             from .privacy import PROVIDER_LOCAL, gate_remote_disclosure
@@ -1634,17 +1655,23 @@ class PawRuntime:
                                         provider_kind=provider_kind,
                                         reasons=[r for _, r in disclosure.refused],
                                     )
-                                    model_result = {}
-                                else:
-                                    messages = proposed.metadata.get("messages") or [
-                                        {"role": "user", "content": proposed.goal},
-                                    ]
-                                    model_result = await self.model_executor.complete(selection, messages) or {}
+                                    raise RemoteDisclosureRefusedError(
+                                        provider_kind=provider_kind,
+                                        refused=disclosure.refused,
+                                    )
+                                messages = proposed.metadata.get("messages") or [
+                                    {"role": "user", "content": proposed.goal},
+                                ]
+                                model_result = await self.model_executor.complete(selection, messages) or {}
                         else:
                             messages = proposed.metadata.get("messages") or [
                                 {"role": "user", "content": proposed.goal},
                             ]
                             model_result = await self.model_executor.complete(selection, messages) or {}
+            except RemoteDisclosureRefusedError:
+                # Propagate to _execute_unit which handles it as a
+                # hard stop — the operation is NOT completed.
+                raise
             except Exception as exc:  # pragma: no cover - defensive
                 logger.warning("execute_model_route_failed", error=str(exc))
 

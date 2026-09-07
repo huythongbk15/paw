@@ -531,6 +531,23 @@ class ModelRouter:
         """Public accessor used by the routing paths."""
         return self._scorer
 
+    def score_model_for_task(
+        self,
+        manifest: ModelManifest,
+        role: str = "fast",
+        context_size: int = 0,
+        complexity: str = "medium",
+        privacy_required: bool = False,
+        prefer_cheap: bool = True,
+    ) -> ModelScore:
+        """Score a model for a specific task. Delegates to
+        ``self._scorer.score_model_for_task()`` for consistency
+        across all routing paths."""
+        return self._scorer.score_model_for_task(
+            manifest, role, context_size, complexity,
+            privacy_required, prefer_cheap,
+        )
+
     async def ensure_providers_ready(self) -> None:
         """Initialize providers once so availability is known."""
         if self._provider_registry is not None and not self._providers_ready:
@@ -572,11 +589,14 @@ class ModelRouter:
         filtered = [(m, s) for (m, s) in scored if m.provider in available]
         if filtered:
             return filtered
+        # Re-score local models using the canonical entry point
+        # (ModelRouter.score_model_for_task) for consistency with
+        # the preferred-model branch of route().
         local_scored = [
-            (m, s)
-            for (m, s) in self.registry.find_best_for_task(
-                role, context_size, complexity, privacy_required, prefer_cheap
-            )
+            (m, self.score_model_for_task(
+                m, role, context_size, complexity, privacy_required, prefer_cheap
+            ))
+            for m in self.registry.list_enabled()
             if m.provider == "local"
         ]
         return local_scored

@@ -718,16 +718,19 @@ class ContextCompiler:
             if current_fragments >= self.budget.max_fragments:
                 excluded.append(cand)
                 cand.metadata["excluded_reason"] = "max_fragments_exceeded"
+                cand.metadata["included"] = False
                 continue
 
             if len(current_sources) >= self.budget.max_sources and cand.source not in current_sources:
                 excluded.append(cand)
                 cand.metadata["excluded_reason"] = "max_sources_exceeded"
+                cand.metadata["included"] = False
                 continue
 
             if current_tokens + cand.token_estimate > self.budget.max_tokens:
                 excluded.append(cand)
                 cand.metadata["excluded_reason"] = "token_budget_exceeded"
+                cand.metadata["included"] = False
                 continue
 
             if cand.token_estimate > self.budget.max_content_length:
@@ -739,6 +742,7 @@ class ContextCompiler:
                 else:
                     excluded.append(cand)
                     cand.metadata["excluded_reason"] = "content_too_large"
+                    cand.metadata["included"] = False
                     continue
 
             # Add to selected
@@ -794,7 +798,7 @@ class ContextCompiler:
         #    included and excluded.
         selected, newly_excluded = self._allocate_budget(selected)
         for cand in newly_excluded:
-            cand.metadata.pop("included", None)
+            cand.metadata["included"] = False
         excluded.extend(newly_excluded)
 
         # 3. Build fragments from the final (post-re-budget) selected set.
@@ -1020,11 +1024,10 @@ async def _compile_manifest(
     # Recompute the final token count and the
     # included/excluded partition from the candidates
     # that survived ``_build_context``'s second
-    # ``_allocate_budget`` call. Clear stale flags to
-    # prevent the same candidate appearing in both
-    # included and excluded (corruption bug).
-    included = [c for c in candidates if c.metadata.get("included") and "excluded_reason" not in c.metadata]
-    excluded = [c for c in candidates if "excluded_reason" in c.metadata and not c.metadata.get("included")]
+    # ``_allocate_budget`` call. Use explicit
+    # included=False flag to determine exclusion.
+    included = [c for c in candidates if c.metadata.get("included") is True]
+    excluded = [c for c in candidates if c.metadata.get("included") is False]
     final_tokens = sum(c.token_estimate for c in included)
 
     if final_tokens > effective_budget.max_tokens:

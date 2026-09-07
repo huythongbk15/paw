@@ -1,0 +1,22 @@
+{
+  "scope": "diagnostic fixture retrieval; not E1 qualification",
+  "revision": "bfd1fbeec5b7fc0d194d26cbf357ba95ee05b90e",
+  "dirty": true,
+  "created_at": "2026-09-07T05:47:03.527595+00:00",
+  "baseline_method": "sum TokenEstimator estimates of all fixture contents per case",
+  "baseline_status": "diagnostic full-fixture reference, not reviewed E0/cloud baseline",
+  "configuration": {
+    "max_tokens": 8000,
+    "max_fragments": 50,
+    "max_sources": 10,
+    "max_content_length": 50000,
+    "dedup_threshold": 0.85,
+    "dedup_enabled": true,
+    "priority_weights": {
+      "ledger": 0.3,
+      "memory": 0.25,
+      "session": 0.2,
+      "skill": 0.15,
+      "knowledge": 0.1
+    },
+    "token_estimator": 

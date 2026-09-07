@@ -6,6 +6,23 @@ changes.
 
 ## Audit baseline
 
+### Measurement provenance repair — STANDARD / READY (2026-09-07)
+
+Problem: the new report pins a revision without the E1 runner, uses unexplained
+4000/3000 baselines and recommends substituting skills for file evidence.
+Invariant: source-bound evidence and quality-preserving optimization.
+Options: restore the old script (small, but retains global DB/config ambiguity),
+or add a standalone offline diagnostic runner with isolated per-case SQLite,
+actual fixture ingestion, input hashes and machine-readable results (selected).
+Contrary evidence: a full-fixture baseline is not a reviewed E0/cloud baseline;
+the result must remain diagnostic, not E1 qualification. No embedding/provider
+expansion, runtime changes or weakened recall. Budget: local code/test review
+and one two-case run; stop after provenance and negative controls are proven.
+Files: scripts/run_e1_measurement.py, focused runner test, report and EN/VI map.
+Acceptance: record HEAD plus dirty state and hashes, ingest actual case fixtures,
+derive baseline with the compiler estimator, preserve errors and raw metrics,
+never overwrite an existing report; no privacy/cache/quality claims from emptiness.
+
 ### Review 2026-09-07 at f625fcb
 
 Follow-up decision: STANDARD / READY for measurement and freshness repair.
@@ -850,18 +867,19 @@ does not establish `VERIFIED` status for a frozen clean candidate:
 | Plan | `core/planner.py`: canonical `Plan`, `TaskNode`, `Planner`; pure strategy in `core/decomposition.py` | Explicit application/library planning before `run_graph` | `PASS` for current Task/Plan identity, sole ownership and atomic new writes: Planner requires a durable Task and keeps Plan ID distinct. Legacy-row disposition is pending SX-10; project revision, purpose and readiness remain post-gate work. |
 | Task Graph | `core/planner.py`: `TaskNode`; `core/task_scheduler.py`: `TaskGraph`, `TaskScheduler` | `PawRuntime.run_graph` | `PASS` for DAG validation, stable node operation IDs, failure propagation and checkpoint resume. |
 | Skill Fabric | `core/skills.py`: `SkillFabric`; layered selectors in `selector.py`/`semantic.py` | Compiler retrieves skills; agent proposer selects them; executor performs the action | `PASS` for the current runtime registry/selection path; post-gate lifecycle states, immutable versions and reviewed activation are absent. |
-| Context | `core/context.py`: types plus compatibility `ContextBuilder`; `core/context_compiler.py`: `ContextCompiler` | Compiler is used by agent/graph paths | `PASS`; `ContextBuilder` is now a thin facade and contains no second assembly algorithm. |
+| Context | `core/context.py`: types plus compatibility `ContextBuilder`; `core/context_compiler.py`: `ContextCompiler` | Compiler is used by agent/graph paths | `PASS`; `ContextBuilder` is now a thin facade and contains no second assembly algorithm. `ContextManifest` included/excluded truth fixed: `_allocate_budget` now sets `metadata['included']=False` for excluded candidates, preventing manifest corruption where candidates excluded by `max_fragments_exceeded` appeared in neither list. |
 | Memory | `core/memory.py`, `core/embeddings.py` | `ContextCompiler` uses `AdvancedMemoryRetriever` | `PASS` for the product slice: deterministic lexical fallback, controlled hybrid ranking, persisted embeddings, compiler integration and the real-SQLite 100-memory stress gate are tested. |
 | Knowledge | persisted records in `knowledge/source.py`, `chunk.py`, `evidence.py`, `citation.py`, `index.py`; result boundary in `knowledge/normalization.py` | Compiler retrieves candidates; callers normalize selected records to `TaskResult` explicitly | `PASS` for contract ownership: stored records remain persistence types and one strict normalizer preserves result provenance. |
 | Policy | `core/policy.py`: `PolicyGuard`; exact approval in `core/approval.py` | `PawRuntime._gate_action` then `AutonomyController.decide(policy_verdict=...)` | `PASS` for gate ordering and durable ASK: one verdict is reused, DENY never executes, and only an approved exact proposal resumes. |
+| Privacy | `core/privacy.py`: `PrivacyClass`, `gate_remote_disclosure`, `RemoteDisclosureRefused` | Runtime-side helper; context compiler and policy gate consult it | `PASS` for E1-03 privacy classes; E1-21 hard gate now raises `RemoteDisclosureRefused` to stop execution instead of silently skipping model invocation. |
 | Autonomy | `core/autonomy.py`; detectors in `core/detectors.py`; profiles in `core/execution_profile.py` | All runtime paths | `PASS` for current budget/continue/stop accounting. Post-gate `ESCALATE` assessment/reroute protocol is absent and current runtime treats that enum as a stopped outcome. |
 | Capability Router | `core/executor.py`: `CapabilityRouter`, `ExecutorRegistry` | `PawRuntime._execute_action` | `PASS`; every agent/graph action selects a compatible executor before invocation. |
 | Executor | Port/registry and `EffectIntent` in `core/executor.py`; local adapter in `executors/filesystem.py`; model providers in `core/model_executor.py` | `PawRuntime._execute_action` invokes or reconciles the capability-selected executor | `PASS` for the built-in adapter: skill body is context only, filesystem writes prepare a durable intent and restart never repeats a prepared effect blindly. |
-| Model Router | `core/model_router.py`: registry/router/provider registry; `core/model_executor.py` | Execution stage routes after the proposal gate | `PASS` for current gate ordering. Post-gate escalation needs a side-effect-free cached selection path; live initialization/discovery cannot hide before the new proposal gate. |
+| Model Router | `core/model_router.py`: registry/router/provider registry; `core/model_executor.py` | Execution stage routes after the proposal gate | `PASS` for current gate ordering. `ModelRouter.score_model_for_task()` added as the canonical scoring entry point; `_filter_for_availability` now uses it in the local fallback instead of `registry.find_best_for_task()` for consistency. Post-gate escalation needs a side-effect-free cached selection path; live initialization/discovery cannot hide before the new proposal gate. |
 | Ledger | `core/ledger.py`; transaction coordinator in `core/runtime_persistence.py` | Used throughout runtime | `PASS` for local atomic evidence: observation/artifact/execution events and operation record commit together; terminal task/checkpoint/events roll back together under injected failures. |
 | Checkpoint/Resume | `core/checkpoint.py`: checkpoint, prepared/completed operation record, resume services | `run`/`run_agent`/`run_graph` restore durable state; executor restart consults prepared effects | `PASS` for committed stores, atomic checkpoint events, restored autonomy/context, stable idempotency IDs and filesystem reconciliation after close/reopen. |
 | Storage | `core/storage.py`: global database proxy and schema; runtime transaction grouping in `core/runtime_persistence.py` | Shared by nearly every service | `PASS` for centralized DDL, non-destructive migration, autocommit-safe legacy writes and explicit multi-record commit boundaries. |
-| Runtime | `core/runtime.py`: `PawRuntime.run`, `run_agent`, `run_graph`, `_execute_unit` | Integration authority | `PASS` for the current executable proposal pipeline. Post-gate decision admission, non-terminal escalation and engineering `VerificationRecord` derivation are absent. |
+| Runtime | `core/runtime.py`: `PawRuntime.run`, `run_agent`, `run_graph`, `_execute_unit` | Integration authority | `PASS` for the current executable proposal pipeline. Remote-disclosure gate is now HARD: `RemoteDisclosureRefused` exception stops the loop instead of silently setting `model_result={}`. Post-gate decision admission, non-terminal escalation and engineering `VerificationRecord` derivation are absent. |
 | CLI | `cli/__init__.py`: setup/inspection plus `chat`; `application/chat.py`: orchestration; `application/chat_intents.py` and `chat_inspection.py`: deterministic projections | Invokes the same canonical agent runtime used by the library | `PASS` for durable history, approval/resume/cancel, one-shot JSON and plan/why/ledger/checkpoint/policy/skills/artifact inspection. |
 | Local filesystem adapter | `executors/filesystem.py`: `LocalFilesystemExecutor` | Composed by `ChatService` through a private `ExecutorRegistry` | `PASS` for scoped read/list/write, exact approval, containment, atomic replacement, effect-intent hashing, restart reconciliation and ambiguous-state blocking. |
 
@@ -893,6 +911,11 @@ owning modules; a contract test fixes this surface.
    `AutonomyController.decide(policy_verdict=...)`; the proposal is not checked
    twice.
 3. `ExecutorPolicyEnforcer.enforce()` treats ASK as a non-executing decision.
+4. Remote-disclosure gate is HARD: when `gate_remote_disclosure` refuses,
+   `RemoteDisclosureRefused` exception propagates from `_execute_action`
+   through `_execute_unit` to stop the loop. Previously it silently set
+   `model_result={}` which allowed execution to continue with remote
+   SECRET/WORKSPACE context — a critical privacy violation.
 
 ### Durability and resume (repaired)
 

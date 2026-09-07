@@ -24,6 +24,20 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
+
+class RemoteDisclosureRefusedError(Exception):
+    """Raised when gate_remote_disclosure refuses to send context
+    to a remote provider. This is a hard runtime gate: the
+    exception propagates up to stop the execution loop.
+    """
+    def __init__(self, provider_kind: str, refused: tuple) -> None:
+        self.provider_kind = provider_kind
+        self.refused = refused
+        reasons = ", ".join(r for _, r in refused) if refused else "unknown"
+        super().__init__(
+            f"Remote disclosure refused for provider '{provider_kind}': {reasons}"
+        )
+
 if TYPE_CHECKING:
     from .context_compiler import ContextManifest
 
@@ -120,6 +134,7 @@ __all__ = [
     "REMOTE_DISCLOSURE_DEFAULTS",
     "DisclosureResult",
     "PrivacyClass",
+    "RemoteDisclosureRefusedError",
     "can_disclose_to_provider",
     "gate_remote_disclosure",
 ]

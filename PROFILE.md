@@ -793,6 +793,17 @@ _更新此文件时告知用户 — 这是项目画像，随 Phase 推进而演�
 
 **Total E1-26: 14 tests (5 contract + 9 adversarial), all PASS**
 
+### Phase 21 Bug Fix Patch (2026-09-07)
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| `ModelRouter.score_model_for_task` | ✅ 新增 | Added as canonical entry point on `ModelRouter`; `_filter_for_availability` now uses it in local fallback for consistency |
+| `ContextManifest` included/excluded truth | ✅ Fixed | `_allocate_budget` now sets `metadata["included"]=False` for excluded candidates; `_compile_manifest` recomputation uses `included is False` instead of `included and not excluded_reason` |
+| `max_fragments_exceeded` tracking | ✅ Fixed | Excluded candidates now properly tracked in manifest.excluded |
+| Remote-disclosure hard gate | ✅ Fixed | `RemoteDisclosureRefused` exception in `core/privacy.py`; `_execute_action` raises it instead of setting `model_result={}`; `_execute_unit` catches it and returns failure observation |
+| Regression tests | ✅ 新增 | `tests/test_phase21_bugfixes.py` — 4 test classes, 11 tests |
+| Canonical docs | ✅ Updated | IMPLEMENTATION_MAP.md and ROADMAP.md synced |
+
 ### Test Composition Audit (post-E1-36)
 
 | Category | Count | % |
