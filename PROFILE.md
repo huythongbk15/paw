@@ -804,3 +804,32 @@ _更新此文件时告知用户 — 这是项目画像，随 Phase 推进而演�
 | Other | ~150 | ~60% |
 
 **Target:** Contract ~20%, Adversarial/Runtime ~10% — moving toward the correct ratio.
+
+## E1 Audit + Adversarial Retrofit (2026-09-07)
+
+**Status**: COMMITTED (396e501)
+
+### Security Fix
+- `gate_remote_disclosure` now checks `is_stale` on `ContextCandidate`
+- Added `is_stale: bool = False` to `ContextCandidate` dataclass
+- Added `"source_stale"` to `DISCLOSURE_REFUSED_REASONS` closed set
+- **Bug found**: Privacy gate was leaking stale SECRET data when `privacy_class=INTERNAL` — fixed
+
+### Adversarial Tests Added
+- **E1-02**: `test_adv_source_identity_rejects_unknown_reason` — `mark_invalid` rejects invalid reasons
+- **E1-03**: 3 new adversarial tests — unknown provider blocked, stale blocks remote, stale allows local
+- **E1-04**: 3 new adversarial tests — absolute pattern rejected, `..` rejected, empty pattern rejected
+- **E1-05**: 2 new adversarial tests — symlink path traversal blocked, null byte rejected
+- **E1-07**: 2 new adversarial tests — cascade idempotent, stale blocks remote disclosure
+- **E1-08**: 2 new adversarial tests — symlink dir skipped, path traversal blocked
+- **E1-10**: 3 new adversarial tests — malicious code handled, empty file produces module symbol, non-UTF8 skipped
+- **E1-11**: 2 new adversarial tests — no silent drops, deterministic order
+- **E1-12**: 3 new adversarial tests — malformed since returns [], non-git returns [], read-only verified
+
+### Source Code Changes
+- `src/paw/core/context_compiler.py`: Added `is_stale: bool = False` to `ContextCandidate`
+- `src/paw/core/privacy.py`: Added `is_stale` check in `gate_remote_disclosure`, added `"source_stale"` to `DISCLOSURE_REFUSED_REASONS`
+
+### Test Results
+- All E1 tests pass (200+ tests)
+- ruff clean on all modified files
