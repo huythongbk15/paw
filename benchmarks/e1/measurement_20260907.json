@@ -1,8 +1,8 @@
 {
   "scope": "diagnostic fixture retrieval; not E1 qualification",
-  "revision": "bfd1fbeec5b7fc0d194d26cbf357ba95ee05b90e",
+  "revision": "263c075b3efe979e983566ab383b75ff36c4fd82",
   "dirty": true,
-  "created_at": "2026-09-07T05:47:03.527595+00:00",
+  "created_at": "2026-09-07T08:27:37.966133+00:00",
   "baseline_method": "sum TokenEstimator estimates of all fixture contents per case",
   "baseline_status": "diagnostic full-fixture reference, not reviewed E0/cloud baseline",
   "configuration": {
@@ -18,5 +18,172 @@
       "session": 0.2,
       "skill": 0.15,
       "knowledge": 0.1
+    }
+  },
+  "embeddings": "disabled",
+  "cold_warm": "fresh per-case DB/compiler then repeated compile; no cache benefit claim",
+  "unverified": [
+    "privacy",
+    "answer quality",
+    "cache benefit",
+    "cloud savings"
+  ],
+  "hashes": {
+    "scripts/run_e1_measurement.py": "6f295e95a7b8536deccd209cb73411a0dbd9243d32781209a132dffa1167e5a8",
+    "uv.lock": "f68e5cf15ce563ceb2f7128c5ee288d853650140eb08be0b110079991c878085",
+    "src/paw/__init__.py": "27e0c07ffb3843e28b42b82a82a0ce7f355382f39bb34ac6dcfc540a739815ab",
+    "src/paw/__main__.py": "d98d946759521069fb80776f2b852a91c9cd27376f639612ca6d94b21676cd39",
+    "src/paw/application/__init__.py": "159824d6543e2c3211d7c0fffafc7f8db98f3a5d519b51c854993d621d160826",
+    "src/paw/application/chat.py": "5c258a43ae23bb60ae36f3eb2bb068c93bc60cd81d48f2aea5d23dab72b319c7",
+    "src/paw/application/chat_inspection.py": "ad9eac8b0d16785f58d1d121a11577cbbe101cce575ed22f67db3f8a1a248f04",
+    "src/paw/application/chat_intents.py": "a1dbc2f1e3c67d6dde3701f3aecee1c1d9b4a1636dfb843221e9e370152d15ce",
+    "src/paw/bench/__init__.py": "ecb659ea4d06ae1dbb0bed2a91daca958906bd359af9db0803953e85481c145f",
+    "src/paw/bench/integration.py": "1f9842971f90a169e49ae70c607e9c1c513dec351e3160166cb83c813c1010ab",
+    "src/paw/bench/recall.py": "6af74e6431b0e102ca6367d92079b18a1379f3abd741f987ed33744b02308a8d",
+    "src/paw/bench/runner.py": "fa94f13412fe386950f01ef15d7b42ad42f42e9ad6a7160ace8d0ab36013f02b",
+    "src/paw/bench/tokens.py": "b04b370fe8073d4f1c54a260c006c2f466cf4126ca245c3ad0b2b8d8294baded",
+    "src/paw/bench/verification.py": "57c260c04ba92b1964479ab03c7b95c8d54eace633600a06652fde7d5cc24243",
+    "src/paw/cli/__init__.py": "16626751d835c4dac176b29f5c5ae9eb03234b7249a5ba49860de40a2c34d0fe",
+    "src/paw/core/__init__.py": "199abb32ed4aaa2d27c838bc0a46d18da85ae30704605bf6eba00883b6b692e0",
+    "src/paw/core/approval.py": "6c93562815182ccf5ebb8e056270b654bc221fb80d4c9b3996d261eeceb8cd86",
+    "src/paw/core/autonomy.py": "a96926aa34763a539236a56c48de52acad2f3cc9188ae34b707d2f1343ac680c",
+    "src/paw/core/budget.py": "23dd8120b9f33bdeb10da221a93a9a97f310a6770c8193936a5a55a7d8d4cfa1",
+    "src/paw/core/checkpoint.py": "e3984b31301e5860be2615fa7c230bffe4d270bf8a43a397b5e6df8643964486",
+    "src/paw/core/config.py": "de6168828f1244a4bcc5ed906b0608068498b96f57326b03000e102bf71e3f13",
+    "src/paw/core/context.py": "16ba332f9cd9bb6d29cd09b7fc0a8c8d24617d65c94f643471c7933cc152a58e",
+    "src/paw/core/context_compiler.py": "b09156d29ef7779c4f901581002873ac81a22b1b64aa92a964ca32ba4bf35d47",
+    "src/paw/core/decomposition.py": "65ff305cbccb985aabf2d35db4b354c721eba38a07bc11c5d31be0e343e0c8fb",
+    "src/paw/core/detectors.py": "9b3235b4cdf2acee1722d4d1240c7f3762cfe3befbcb2827e8717776ccf68b34",
+    "src/paw/core/embeddings.py": "9d059d4589bbbb26e2529c9678f2c46d456df72f56e420c9ad38f2063ce004fd",
+    "src/paw/core/execution_profile.py": "f93cb54a5f82fad5d7df050826cbc140f170c1989ffddd92f25833ec169d951b",
+    "src/paw/core/executor.py": "dac8394fb6be3048923052d56d1668262adfcaf79d03617f4aa597f85d3018ee",
+    "src/paw/core/executor_policy.py": "247550db48ddef4f1f4f1d740e53e309c1fb9f55c9ac4ac143c0aad1f88aa784",
+    "src/paw/core/identity/__init__.py": "c9debb2c81e8ce47ff03860ce4d30cc4399ed26b824533768166445b09e26324",
+    "src/paw/core/ledger.py": "9a5556d2869b020d7ab61ac34984ce3feef21963d9378e396b71f0d69f700abd",
+    "src/paw/core/logging.py": "586908ca681ed8f31aa3082e2aa237e68a7c7b387144a37ecb3d58c5f46d7751",
+    "src/paw/core/memory.py": "e72bbf5cdb708301fec963403258308f9250c47ff47247c9c75d05571d915351",
+    "src/paw/core/model_executor.py": "445c17279d66a12eca9c157ae2b692f85f988b23f83fbc0ecb455963e00791fe",
+    "src/paw/core/model_router.py": "f16ab14e6aa473458b7bf836f70dac8eb42ad5cfda4c1ea26abcc8b9b0a89539",
+    "src/paw/core/models.py": "314720829b583f5b5e170df1dd0dce871512b1dc27aced83aba8821263d66330",
+    "src/paw/core/planner.py": "ccd0d52beaf5c05aa81de817d0fc68e8ee78e6c3f75d0a38421e5ce961d9ef11",
+    "src/paw/core/policy.py": "4ecbdc9474583e3da49e5be735fa260c007f10371a271f4141f88b6bc7714fe2",
+    "src/paw/core/privacy.py": "63f5f737fc412aa0e0d1bcde452c73e89a4f8885e7832ccd6b92cc459018e2ad",
+    "src/paw/core/repo_filter.py": "0d8957ec8a90026f25d671fe733e61a605f429c8e4953aeba973e3247068e454",
+    "src/paw/core/repo_scanner.py": "5bf7b3983c591db2bbdc34d5d8e9e2897c07c9c2b4425dc9f57d27b04bfa4c76",
+    "src/paw/core/runtime.py": "174e5372c445855a07e414cc46d808859a7e48c8e3a5698a374b5ea6b08d66d0",
+    "src/paw/core/runtime_persistence.py": "b30a81ec285fb29534c0d9e09931025b0c929efc7c9ddda26a39c6acdb766435",
+    "src/paw/core/selector.py": "bba73cfa50cfecdb5a1c3cd84a57fa5a5178f2e5004f5a82c973e37972d0e699",
+    "src/paw/core/semantic.py": "50b9016a704fa1c1d6d22643368e361a0c8f67b62a74e9979cd293ea6b649613",
+    "src/paw/core/session.py": "8667576c391d9767952ebb57e5bbe19690d8aaaaed20c8d9e5b49433b1bda6ad",
+    "src/paw/core/skills.py": "cd3777e70440706c993eb1512c852f0e488d530683351b941b20bea4088e7b2f",
+    "src/paw/core/storage.py": "b090ebcabad8752836c8b18adfd040656aeceb85becd50da8e05318d4fc1833b",
+    "src/paw/core/task.py": "1c5a48ebc75ca82f06386d77e35d04c29ea49bbdb77b75ebac7f72db08ef5dd7",
+    "src/paw/core/task_scheduler.py": "84091ba0fa73286fba8d4b95fad1adef0bf710e3bd7f98b19e4c4c82eccc8f8a",
+    "src/paw/executors/__init__.py": "97f2988dd691de1f8911b3aab0c2699feb4f3aec709ca7030a9d7efa745e29f7",
+    "src/paw/executors/filesystem.py": "ea6c83a030d934c3e5ad79beb2e29d5414d812faeab3c7cff8994dcfd7ab8eff",
+    "src/paw/knowledge/__init__.py": "29d74bc6167ed5bb34252ba206504434874c14c1d3864e6b3ebbb4f6104f2adb",
+    "src/paw/knowledge/changes.py": "514e00f0b4316235c3d30ca121c858d53c6660d8c979276019c2b84536d6648e",
+    "src/paw/knowledge/checksum.py": "bceb04803552a0d70d990481954a4a1d53aca6fe545e490b078e726a5f533e1b",
+    "src/paw/knowledge/chunk.py": "8fa5c81d433063681e874a08496dcb3800c24e9456c490cb3625f6057bb570d9",
+    "src/paw/knowledge/citation.py": "8733231c038a97070a3e7c05e0f39c96006ec8df7e2f7df359451a78d6e206ee",
+    "src/paw/knowledge/constraints.py": "9b6b0a3df12873c716999dc98dd4777053776247255aee59c6586e5f94fdefd2",
+    "src/paw/knowledge/dependencies.py": "e933df66d92951f28ecedd8c48276be1215f893dd658bc815b61743863a3abfa",
+    "src/paw/knowledge/evidence.py": "bdc405c39076a55533e74c5cd2d60cc4acfdfa92409daf752035bffa5e8f0b97",
+    "src/paw/knowledge/external.py": "cbbfc0ea69492dcdc7e96968b42070b6f881bce423c349c7939c3388449d4441",
+    "src/paw/knowledge/history.py": "b352dc0eaf791eeac419cbb4cdcc7db9f47deb05cef7444637f1734a852d6bb6",
+    "src/paw/knowledge/index.py": "25f7b50fd490a0bf274364ea950bc2e4c0afc1d3baf07096976f1ab248b4de48",
+    "src/paw/knowledge/normalization.py": "9054f5d592378eb42a4fec2d8d0e4b481fa801f34593f496dfbbd3980cb2140f",
+    "src/paw/knowledge/observations.py": "db65931e02f322801524c140e096a48ff35cb33560833f99526010ab2bf433eb",
+    "src/paw/knowledge/source.py": "de3e80d9b3dda715b256ddceb1ceecbe6d41bd3c0112c2f0d8ef12ddbf6620dd",
+    "src/paw/knowledge/symbols.py": "7c6f70f3b109a2c6f4c903dd2c4f7b87cb227df83f37d3a211fde1d3fc4a5e4d",
+    "src/paw/knowledge/test_associations.py": "8df4caedd49a8fad9f471eb12fc5b5d222e685b0c3873a43e0c79a5e92eb679d",
+    "src/paw/providers/__init__.py": "92359a6a834ecb9f4bfcfda43402aab8967ddc3dc24aa97e8dc769724e95d95e",
+    "src/paw/providers/ollama/__init__.py": "ef54f20e08b5ae67cf282ac58d1867876304327eaf744cb4f9a102874bde3f36",
+    "src/paw/providers/ollama/provider.py": "c141af293212858c219fca07d9e0c6951b733d9074b5339bac3dd16ad6a96598",
+    "benchmarks/e0/cases/architecture_decision_cache.yaml": "39a8f41ad3d48b1ee1a2f4eed5e1593a173886bad07faafd71285b3091014766",
+    "benchmarks/e0/fixtures/architecture_decision.txt": "6d483755a18b3bd843797aedd0eb6b3fe20191c6d8d28e7769baedd8f802d7c9",
+    "benchmarks/e0/cases/cross_module_change_constant.yaml": "42f17f8f98a41a8e9e509a0eb74a4917e2f5a57cdf96c0fa70cfde2db155b5fc",
+    "benchmarks/e0/fixtures/cross_module_change.txt": "286f674c2f3cbf020a7248bfc2e6bb7da315ba22c0f5cbd59e9e85c5c1f0c1fd"
+  },
+  "cases": [
+    {
+      "recall": {
+        "case_id": "architecture_decision_cache",
+        "mode": "cold",
+        "total_evidence": 2,
+        "recalled": 2,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "architecture_decision_cache",
+        "mode": "cold",
+        "baseline_tokens": 179,
+        "measured_tokens": 203,
+        "reduction": -0.1340782122905028,
+        "duration_ms": 0
+      }
     },
-    "token_estimator": 
+    {
+      "recall": {
+        "case_id": "architecture_decision_cache",
+        "mode": "warm",
+        "total_evidence": 2,
+        "recalled": 2,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "architecture_decision_cache",
+        "mode": "warm",
+        "baseline_tokens": 179,
+        "measured_tokens": 203,
+        "reduction": -0.1340782122905028,
+        "duration_ms": 0
+      }
+    },
+    {
+      "recall": {
+        "case_id": "cross_module_change_constant",
+        "mode": "cold",
+        "total_evidence": 2,
+        "recalled": 2,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "cross_module_change_constant",
+        "mode": "cold",
+        "baseline_tokens": 103,
+        "measured_tokens": 127,
+        "reduction": -0.23300970873786409,
+        "duration_ms": 0
+      }
+    },
+    {
+      "recall": {
+        "case_id": "cross_module_change_constant",
+        "mode": "warm",
+        "total_evidence": 2,
+        "recalled": 2,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "cross_module_change_constant",
+        "mode": "warm",
+        "baseline_tokens": 103,
+        "measured_tokens": 127,
+        "reduction": -0.23300970873786409,
+        "duration_ms": 0
+      }
+    }
+  ],
+  "revision_unchanged": true,
+  "inputs_unchanged": true,
+  "qualification": "PARTIAL"
+}

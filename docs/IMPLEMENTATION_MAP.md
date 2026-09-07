@@ -6,7 +6,7 @@ changes.
 
 ## Audit baseline
 
-### Measurement provenance repair — STANDARD / READY (2026-09-07)
+### Measurement provenance repair — STANDARD / READY (2026-09-07) [EXECUTED 2026-09-07 08:24 UTC]
 
 Problem: the new report pins a revision without the E1 runner, uses unexplained
 4000/3000 baselines and recommends substituting skills for file evidence.
@@ -22,6 +22,22 @@ Files: scripts/run_e1_measurement.py, focused runner test, report and EN/VI map.
 Acceptance: record HEAD plus dirty state and hashes, ingest actual case fixtures,
 derive baseline with the compiler estimator, preserve errors and raw metrics,
 never overwrite an existing report; no privacy/cache/quality claims from emptiness.
+
+**Execution record (2026-09-07 08:24 UTC, HEAD = `263c075`):** the script was re-run
+against the current working tree. The four issues raised on the prior draft are
+resolved; the new JSON + the report at `benchmarks/e1/e1_real_measurement_report.md`
+are the canonical evidence:
+
+| # | Issue | Resolution evidence |
+|---|-------|---------------------|
+| 1 | P1: prior report pinned `f3ad4ef`, a revision without `src/paw/bench/integration.py` (added at `cf37681`) | New JSON `revision = 263c075` (current HEAD; own the E1-23/24/25 modules). The runner script + the case YAML are both in the recorded input-hash list. |
+| 2 | P1: prior baselines of 4000/3000 with no source; "99% reduction" was an artifact of an empty manifest | New `baseline_tokens` is `TokenEstimator.estimate(content)` summed over each case's actual fixture files. Values: 179 and 103 (matches on-disk fixture size). The reduction is correctly negative (-0.13, -0.23) and no longer falsely "99%". |
+| 3 | P1: prior fix proposed substituting skills for file evidence, which would weaken the case contract | `run_e1_measurement.py` ingests the case's fixture corpus via `KnowledgeSourceManager.create` + `KnowledgeChunkStore.add_chunk` BEFORE compile, and `measure_recall` matches the case's `expected_evidence` directly. PAW source-tree ingestion was the wrong corpus for these two cases; the fixtures ARE the evidence targets. |
+| 4 | P2: empty knowledge base was used to claim the system "needs embeddings" and the privacy gate "has nothing to gate" | With fixtures ingested, recall is 1.00 for both cases in cold and warm modes. The privacy-gate claim is isolated to `tests/test_e1_21_remote_disclosure_contract.py` and is no longer conflated with the retrieval gap. The script does NOT issue a provider invocation, so privacy on this exact corpus is `OBSERVED` (covered by the contract test), not `VERIFIED` by this run. |
+
+Reproduction command: `uv run python scripts/run_e1_measurement.py --output benchmarks/e1/measurement_20260907.json`
+(The output path opens with `mode='x'`, so re-running on a non-empty target raises
+`FileExistsError` and the prior report is never silently overwritten.)
 
 ### Review 2026-09-07 at f625fcb
 
