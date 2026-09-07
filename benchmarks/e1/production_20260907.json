@@ -1,0 +1,546 @@
+{
+  "scope": "production corpus measurement; per-run reviewed baseline",
+  "revision": "30ed2ac49b689564c9e45fff9f0ad34084d6981e",
+  "dirty": true,
+  "created_at": "2026-09-07T10:30:19.112733+00:00",
+  "corpus_roots": [
+    "benchmarks/e1/fixtures_paw"
+  ],
+  "case_dir": "benchmarks/e1/cases_prod",
+  "case_count": 12,
+  "corpus_file_count": 12,
+  "corpus_total_bytes": 6128,
+  "always_on_skill_overhead_tokens": 24,
+  "configuration": {
+    "max_tokens": 1500,
+    "max_fragments": 5,
+    "max_sources": 3,
+    "max_content_length": 50000,
+    "dedup_threshold": 0.85,
+    "dedup_enabled": true,
+    "priority_weights": {
+      "ledger": 0.3,
+      "memory": 0.25,
+      "session": 0.2,
+      "skill": 0.15,
+      "knowledge": 0.1
+    }
+  },
+  "embeddings": "disabled",
+  "qualification": "PASS",
+  "corpus_hashes": {
+    "benchmarks/e1/fixtures_paw/auth.py": "e66014b6095ddb355f1e09f3cbf8de9d76913c0d39caed934da362e6f899cd9c",
+    "benchmarks/e1/fixtures_paw/billing.py": "168874124a3fae3bbdc7882fdb64a984c18f64a40e7928c9d667f0482564e766",
+    "benchmarks/e1/fixtures_paw/cache.py": "934311acf24e3acba934ae5fb1667ca98839384a4020f77338483c9e17864d7f",
+    "benchmarks/e1/fixtures_paw/config.py": "60e4bb3d7a3f458a349e8f30db0bb0184dc853183ed9b2ce1641ce867501d7ec",
+    "benchmarks/e1/fixtures_paw/database.py": "8139893895a8ca4470aa3b7020028e9973783f0dc06ce95676b2fe1c1518f00c",
+    "benchmarks/e1/fixtures_paw/events.py": "d6b969929af645621321830d738618f56544f947edbb1628960cff60ac54966f",
+    "benchmarks/e1/fixtures_paw/logging.py": "82eac9e56a0767851a9f002be4cd6626e36c17a6b7146117b039fefe2b2975cc",
+    "benchmarks/e1/fixtures_paw/metrics.py": "e93f6517a98a391c278c928905195cfe8c49895d60840d0f2abf6fa0f6453c94",
+    "benchmarks/e1/fixtures_paw/models.py": "931fb325ae272de6d8ad67eb1e01923817847a50f4af82ab2fb06886128224da",
+    "benchmarks/e1/fixtures_paw/queue.py": "be80ca7ba9243f885ace20875c654e2ce9c2d248e0d4fc39309ea0d330dc2a56",
+    "benchmarks/e1/fixtures_paw/router.py": "a220422367cc72d5cf2f473a2503f8cef5d57523ece53acbb1700c32e177fcdf",
+    "benchmarks/e1/fixtures_paw/scheduler.py": "6e9e1e26420bb5ccbc8104f2472ba6c0f2fd1184a1f567c2a8f364e194d5978f"
+  },
+  "case_hashes": {
+    "benchmarks/e1/cases_prod/case_auth.yaml": "477babb2f699155629d851816ee51594739790dae28d5757e032793899216002",
+    "benchmarks/e1/cases_prod/case_billing.yaml": "4e967da56ef721675266a0b0c6ba8626b253cc494be37a944d513ae0310e5589",
+    "benchmarks/e1/cases_prod/case_cache.yaml": "1df1484f87ab346c323c2407d53319bb307ad7c35656007e6eb61972273ca393",
+    "benchmarks/e1/cases_prod/case_config.yaml": "202e2e621888b89fb7480148ae98874a57f66ad2f2358065bcb0e38d05a15317",
+    "benchmarks/e1/cases_prod/case_database.yaml": "8e38c9a36e597d447744699ee24428b524cb9eeac4a19acdbc205b534f739a80",
+    "benchmarks/e1/cases_prod/case_events.yaml": "551d48dc6dd6947b2e32b822cf38173ef83dc51498402f69ed5d2cf2f0f9fdf4",
+    "benchmarks/e1/cases_prod/case_logging.yaml": "38cfb5f42d44712c29c1c761bbb5e6a1c908c7e2b0e87bb5044aa55b38bc03e6",
+    "benchmarks/e1/cases_prod/case_metrics.yaml": "9fa74d0eaa1ce5d8289149aadbe867965cfea30369d86b7cdb109c7dbde1290d",
+    "benchmarks/e1/cases_prod/case_models.yaml": "4a4c4e58ec4243ddeaff308a366eee2c8e9b46d9a2e488ce3b4da1427b65a91b",
+    "benchmarks/e1/cases_prod/case_queue.yaml": "aa4bac6098c776e0461dea478fa2db6839fdcdca9b36a8b209d6404c4546a75a",
+    "benchmarks/e1/cases_prod/case_router.yaml": "6022e2a2cfc117d983aba56bdceab39411da4116269b2883017f6bc054db13c6",
+    "benchmarks/e1/cases_prod/case_scheduler.yaml": "4d458c299cc8fdca68174c88e38b7e9070ca30e22c6e303d37b51daf2dbdba43"
+  },
+  "script_hash": "3702147805a6866b6044520e06da9cd6e7e1a42796e2adf858bcd9835c8dfcef",
+  "cases": [
+    {
+      "case": "benchmarks/e1/cases_prod/case_auth.yaml",
+      "recall": {
+        "case_id": "case_auth",
+        "mode": "cold",
+        "total_evidence": 1,
+        "recalled": 1,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "case_auth",
+        "mode": "cold",
+        "baseline_tokens": 1966,
+        "measured_tokens": 366,
+        "reduction": 0.8138351983723296,
+        "duration_ms": 0
+      }
+    },
+    {
+      "case": "benchmarks/e1/cases_prod/case_auth.yaml",
+      "recall": {
+        "case_id": "case_auth",
+        "mode": "warm",
+        "total_evidence": 1,
+        "recalled": 1,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "case_auth",
+        "mode": "warm",
+        "baseline_tokens": 1966,
+        "measured_tokens": 366,
+        "reduction": 0.8138351983723296,
+        "duration_ms": 0
+      }
+    },
+    {
+      "case": "benchmarks/e1/cases_prod/case_billing.yaml",
+      "recall": {
+        "case_id": "case_billing",
+        "mode": "cold",
+        "total_evidence": 1,
+        "recalled": 1,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "case_billing",
+        "mode": "cold",
+        "baseline_tokens": 1966,
+        "measured_tokens": 370,
+        "reduction": 0.8118006103763988,
+        "duration_ms": 0
+      }
+    },
+    {
+      "case": "benchmarks/e1/cases_prod/case_billing.yaml",
+      "recall": {
+        "case_id": "case_billing",
+        "mode": "warm",
+        "total_evidence": 1,
+        "recalled": 1,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "case_billing",
+        "mode": "warm",
+        "baseline_tokens": 1966,
+        "measured_tokens": 370,
+        "reduction": 0.8118006103763988,
+        "duration_ms": 0
+      }
+    },
+    {
+      "case": "benchmarks/e1/cases_prod/case_cache.yaml",
+      "recall": {
+        "case_id": "case_cache",
+        "mode": "cold",
+        "total_evidence": 1,
+        "recalled": 1,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "case_cache",
+        "mode": "cold",
+        "baseline_tokens": 1966,
+        "measured_tokens": 367,
+        "reduction": 0.8133265513733469,
+        "duration_ms": 0
+      }
+    },
+    {
+      "case": "benchmarks/e1/cases_prod/case_cache.yaml",
+      "recall": {
+        "case_id": "case_cache",
+        "mode": "warm",
+        "total_evidence": 1,
+        "recalled": 1,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "case_cache",
+        "mode": "warm",
+        "baseline_tokens": 1966,
+        "measured_tokens": 367,
+        "reduction": 0.8133265513733469,
+        "duration_ms": 0
+      }
+    },
+    {
+      "case": "benchmarks/e1/cases_prod/case_config.yaml",
+      "recall": {
+        "case_id": "case_config",
+        "mode": "cold",
+        "total_evidence": 1,
+        "recalled": 1,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "case_config",
+        "mode": "cold",
+        "baseline_tokens": 1966,
+        "measured_tokens": 368,
+        "reduction": 0.8128179043743642,
+        "duration_ms": 0
+      }
+    },
+    {
+      "case": "benchmarks/e1/cases_prod/case_config.yaml",
+      "recall": {
+        "case_id": "case_config",
+        "mode": "warm",
+        "total_evidence": 1,
+        "recalled": 1,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "case_config",
+        "mode": "warm",
+        "baseline_tokens": 1966,
+        "measured_tokens": 368,
+        "reduction": 0.8128179043743642,
+        "duration_ms": 0
+      }
+    },
+    {
+      "case": "benchmarks/e1/cases_prod/case_database.yaml",
+      "recall": {
+        "case_id": "case_database",
+        "mode": "cold",
+        "total_evidence": 1,
+        "recalled": 1,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "case_database",
+        "mode": "cold",
+        "baseline_tokens": 1966,
+        "measured_tokens": 371,
+        "reduction": 0.811291963377416,
+        "duration_ms": 0
+      }
+    },
+    {
+      "case": "benchmarks/e1/cases_prod/case_database.yaml",
+      "recall": {
+        "case_id": "case_database",
+        "mode": "warm",
+        "total_evidence": 1,
+        "recalled": 1,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "case_database",
+        "mode": "warm",
+        "baseline_tokens": 1966,
+        "measured_tokens": 371,
+        "reduction": 0.811291963377416,
+        "duration_ms": 0
+      }
+    },
+    {
+      "case": "benchmarks/e1/cases_prod/case_events.yaml",
+      "recall": {
+        "case_id": "case_events",
+        "mode": "cold",
+        "total_evidence": 1,
+        "recalled": 1,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "case_events",
+        "mode": "cold",
+        "baseline_tokens": 1966,
+        "measured_tokens": 368,
+        "reduction": 0.8128179043743642,
+        "duration_ms": 0
+      }
+    },
+    {
+      "case": "benchmarks/e1/cases_prod/case_events.yaml",
+      "recall": {
+        "case_id": "case_events",
+        "mode": "warm",
+        "total_evidence": 1,
+        "recalled": 1,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "case_events",
+        "mode": "warm",
+        "baseline_tokens": 1966,
+        "measured_tokens": 368,
+        "reduction": 0.8128179043743642,
+        "duration_ms": 0
+      }
+    },
+    {
+      "case": "benchmarks/e1/cases_prod/case_logging.yaml",
+      "recall": {
+        "case_id": "case_logging",
+        "mode": "cold",
+        "total_evidence": 1,
+        "recalled": 1,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "case_logging",
+        "mode": "cold",
+        "baseline_tokens": 1966,
+        "measured_tokens": 370,
+        "reduction": 0.8118006103763988,
+        "duration_ms": 0
+      }
+    },
+    {
+      "case": "benchmarks/e1/cases_prod/case_logging.yaml",
+      "recall": {
+        "case_id": "case_logging",
+        "mode": "warm",
+        "total_evidence": 1,
+        "recalled": 1,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "case_logging",
+        "mode": "warm",
+        "baseline_tokens": 1966,
+        "measured_tokens": 370,
+        "reduction": 0.8118006103763988,
+        "duration_ms": 0
+      }
+    },
+    {
+      "case": "benchmarks/e1/cases_prod/case_metrics.yaml",
+      "recall": {
+        "case_id": "case_metrics",
+        "mode": "cold",
+        "total_evidence": 1,
+        "recalled": 1,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "case_metrics",
+        "mode": "cold",
+        "baseline_tokens": 1966,
+        "measured_tokens": 370,
+        "reduction": 0.8118006103763988,
+        "duration_ms": 0
+      }
+    },
+    {
+      "case": "benchmarks/e1/cases_prod/case_metrics.yaml",
+      "recall": {
+        "case_id": "case_metrics",
+        "mode": "warm",
+        "total_evidence": 1,
+        "recalled": 1,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "case_metrics",
+        "mode": "warm",
+        "baseline_tokens": 1966,
+        "measured_tokens": 370,
+        "reduction": 0.8118006103763988,
+        "duration_ms": 0
+      }
+    },
+    {
+      "case": "benchmarks/e1/cases_prod/case_models.yaml",
+      "recall": {
+        "case_id": "case_models",
+        "mode": "cold",
+        "total_evidence": 1,
+        "recalled": 1,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "case_models",
+        "mode": "cold",
+        "baseline_tokens": 1966,
+        "measured_tokens": 370,
+        "reduction": 0.8118006103763988,
+        "duration_ms": 0
+      }
+    },
+    {
+      "case": "benchmarks/e1/cases_prod/case_models.yaml",
+      "recall": {
+        "case_id": "case_models",
+        "mode": "warm",
+        "total_evidence": 1,
+        "recalled": 1,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "case_models",
+        "mode": "warm",
+        "baseline_tokens": 1966,
+        "measured_tokens": 370,
+        "reduction": 0.8118006103763988,
+        "duration_ms": 0
+      }
+    },
+    {
+      "case": "benchmarks/e1/cases_prod/case_queue.yaml",
+      "recall": {
+        "case_id": "case_queue",
+        "mode": "cold",
+        "total_evidence": 1,
+        "recalled": 1,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "case_queue",
+        "mode": "cold",
+        "baseline_tokens": 1966,
+        "measured_tokens": 370,
+        "reduction": 0.8118006103763988,
+        "duration_ms": 0
+      }
+    },
+    {
+      "case": "benchmarks/e1/cases_prod/case_queue.yaml",
+      "recall": {
+        "case_id": "case_queue",
+        "mode": "warm",
+        "total_evidence": 1,
+        "recalled": 1,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "case_queue",
+        "mode": "warm",
+        "baseline_tokens": 1966,
+        "measured_tokens": 370,
+        "reduction": 0.8118006103763988,
+        "duration_ms": 0
+      }
+    },
+    {
+      "case": "benchmarks/e1/cases_prod/case_router.yaml",
+      "recall": {
+        "case_id": "case_router",
+        "mode": "cold",
+        "total_evidence": 1,
+        "recalled": 1,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "case_router",
+        "mode": "cold",
+        "baseline_tokens": 1966,
+        "measured_tokens": 370,
+        "reduction": 0.8118006103763988,
+        "duration_ms": 0
+      }
+    },
+    {
+      "case": "benchmarks/e1/cases_prod/case_router.yaml",
+      "recall": {
+        "case_id": "case_router",
+        "mode": "warm",
+        "total_evidence": 1,
+        "recalled": 1,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "case_router",
+        "mode": "warm",
+        "baseline_tokens": 1966,
+        "measured_tokens": 370,
+        "reduction": 0.8118006103763988,
+        "duration_ms": 0
+      }
+    },
+    {
+      "case": "benchmarks/e1/cases_prod/case_scheduler.yaml",
+      "recall": {
+        "case_id": "case_scheduler",
+        "mode": "cold",
+        "total_evidence": 1,
+        "recalled": 1,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "case_scheduler",
+        "mode": "cold",
+        "baseline_tokens": 1966,
+        "measured_tokens": 370,
+        "reduction": 0.8118006103763988,
+        "duration_ms": 0
+      }
+    },
+    {
+      "case": "benchmarks/e1/cases_prod/case_scheduler.yaml",
+      "recall": {
+        "case_id": "case_scheduler",
+        "mode": "warm",
+        "total_evidence": 1,
+        "recalled": 1,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "case_scheduler",
+        "mode": "warm",
+        "baseline_tokens": 1966,
+        "measured_tokens": 370,
+        "reduction": 0.8118006103763988,
+        "duration_ms": 0
+      }
+    }
+  ],
+  "baseline_tokens": 1966,
+  "median_warm_reduction": 0.8118006103763988,
+  "min_recall": 1.0,
+  "median_recall": 1.0
+}

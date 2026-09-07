@@ -1,0 +1,32 @@
+schema_version: "1.0.0"
+case_id: paw_models_status
+decision_artifact_version: "1.0.0"
+project_revision: "30ed2ac"
+category: repo_understanding
+privacy_class: internal
+goal: |
+  Find the file that defines TaskStatus and PolicyDecision enums and
+  identify what other enums are in the same file. The expected outcome
+  is recorded as evidence: the file is found and the enums are present
+  at the expected source locations.
+fixtures:
+  - path: src/paw/core/models.py
+    revision: 30ed2ac
+    purpose: |
+      Reviewed PAW module definitions. TaskStatus + PolicyDecision
+      are co-located with Capability, ChatRole, ChatSessionStatus
+      and TaskEventType.
+expected_evidence:
+  - kind: file_contains
+    target: src/paw/core/models.py
+    value: "class TaskStatus(StrEnum):"
+    reviewer: huythong@local
+  - kind: file_contains
+    target: src/paw/core/models.py
+    value: "class PolicyDecision(StrEnum):"
+    reviewer: huythong@local
+timeout_seconds: 120
+max_iterations: 10
+tags:
+  - production-corpus
+  - paw-source

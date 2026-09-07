@@ -117,8 +117,18 @@ class ContextCandidate:
     skill_level: int = 0             # 0=metadata only, 1=body, 2=resources
 
     def __lt__(self, other: ContextCandidate) -> bool:
-        """For sorting: higher relevance * priority first."""
-        return (self.relevance_score * self.priority) > (other.relevance_score * other.priority)
+        """For sorting: higher relevance * priority first.
+
+        Note: ``sorted(candidates)`` (default, ascending) puts the
+        *lowest* score first because ``sorted`` orders by ``__lt__``.
+        Callers that want descending order must use
+        ``sorted(candidates, key=lambda c: c.rank, reverse=True)`` or
+        pass ``reverse=True`` to a ``sort`` that uses this ``__lt__``
+        with a properly inverted comparator. The runtime uses
+        ``sorted(candidates, key=lambda c: (c.relevance_score * c.priority), reverse=True)``
+        to get descending order.
+        """
+        return (self.relevance_score * self.priority) < (other.relevance_score * other.priority)
 
 
 # --- E1-16: ContextManifest --------------------------------------------

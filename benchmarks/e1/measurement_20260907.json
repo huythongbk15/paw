@@ -1,8 +1,8 @@
 {
   "scope": "diagnostic fixture retrieval; not E1 qualification",
-  "revision": "208783c97698024184323b1043fe77715cbfd5b8",
+  "revision": "30ed2ac49b689564c9e45fff9f0ad34084d6981e",
   "dirty": true,
-  "created_at": "2026-09-07T09:59:49.854719+00:00",
+  "created_at": "2026-09-07T10:29:01.797513+00:00",
   "baseline_method": "sum TokenEstimator estimates of all fixture contents + always-on skill overhead per case",
   "baseline_status": "diagnostic full-fixture reference, not reviewed E0/cloud baseline",
   "configuration": {
@@ -54,7 +54,7 @@
     "src/paw/core/checkpoint.py": "e3984b31301e5860be2615fa7c230bffe4d270bf8a43a397b5e6df8643964486",
     "src/paw/core/config.py": "de6168828f1244a4bcc5ed906b0608068498b96f57326b03000e102bf71e3f13",
     "src/paw/core/context.py": "16ba332f9cd9bb6d29cd09b7fc0a8c8d24617d65c94f643471c7933cc152a58e",
-    "src/paw/core/context_compiler.py": "b09156d29ef7779c4f901581002873ac81a22b1b64aa92a964ca32ba4bf35d47",
+    "src/paw/core/context_compiler.py": "a705f4028bea749e7934dce5d911f59c9c3f8779539e8047463ac071ed5b0d12",
     "src/paw/core/decomposition.py": "65ff305cbccb985aabf2d35db4b354c721eba38a07bc11c5d31be0e343e0c8fb",
     "src/paw/core/detectors.py": "9b3235b4cdf2acee1722d4d1240c7f3762cfe3befbcb2827e8717776ccf68b34",
     "src/paw/core/embeddings.py": "9d059d4589bbbb26e2529c9678f2c46d456df72f56e420c9ad38f2063ce004fd",

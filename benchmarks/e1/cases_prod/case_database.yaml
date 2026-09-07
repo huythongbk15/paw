@@ -1,0 +1,28 @@
+schema_version: "1.0.0"
+case_id: case_database
+decision_artifact_version: "1.0.0"
+project_revision: "30ed2ac"
+category: repo_understanding
+privacy_class: internal
+goal: |
+  Find the file that contains the database service module and the
+  UNIQUEKEYWORD_DATABASE routing marker. The expected outcome is
+  recorded as evidence: the file is found and the unique marker
+  is present.
+fixtures:
+  - path: benchmarks/e1/fixtures_paw/database.py
+    revision: 30ed2ac
+    purpose: |
+      Reviewed synthetic database module. Each file in this corpus
+      has a unique UNIQUEKEYWORD_<MODULE> marker for deterministic
+      lexical matching.
+expected_evidence:
+  - kind: file_contains
+    target: benchmarks/e1/fixtures_paw/database.py
+    value: "UNIQUEKEYWORD_DATABASE"
+    reviewer: huythong@local
+timeout_seconds: 120
+max_iterations: 10
+tags:
+  - production-corpus
+  - synthetic

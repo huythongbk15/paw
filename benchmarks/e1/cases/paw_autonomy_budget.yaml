@@ -1,0 +1,30 @@
+schema_version: "1.0.0"
+case_id: paw_autonomy_budget
+decision_artifact_version: "1.0.0"
+project_revision: "30ed2ac"
+category: repo_understanding
+privacy_class: internal
+goal: |
+  Find the file that defines AutonomyBudget and AutonomyController.
+  The expected outcome is recorded as evidence: the file is found
+  and the budget/controller classes are present.
+fixtures:
+  - path: src/paw/core/autonomy.py
+    revision: 30ed2ac
+    purpose: |
+      Reviewed PAW autonomy module. AutonomyBudget tracks per-resource
+      usage; AutonomyController decides CONTINUE/STOP/ASK/PAUSE.
+expected_evidence:
+  - kind: file_contains
+    target: src/paw/core/autonomy.py
+    value: "class AutonomyBudget:"
+    reviewer: huythong@local
+  - kind: file_contains
+    target: src/paw/core/autonomy.py
+    value: "class AutonomyController:"
+    reviewer: huythong@local
+timeout_seconds: 120
+max_iterations: 10
+tags:
+  - production-corpus
+  - paw-source

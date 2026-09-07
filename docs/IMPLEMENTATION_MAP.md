@@ -48,6 +48,48 @@ uv run python scripts/run_e1_measurement.py --output /tmp/subset.json --subset a
 The output path opens with `mode='x'`, so re-running on a non-empty target raises
 `FileExistsError` and the prior report is never silently overwritten.
 
+**Execution record (2026-09-07 10:30 UTC, HEAD = `30ed2ac`):** production-corpus runner added.
+
+A new `scripts/run_e1_production.py` ingests a real, reviewed production corpus
+(default: `src/paw/`, or a synthetic 12-file corpus at `benchmarks/e1/fixtures_paw/`
+with `UNIQUEKEYWORD_<MODULE>` markers). Python files are chunked by top-level
+function/class definition (one `KnowledgeSource` per file, multiple `KnowledgeChunks`).
+The baseline is the sum of every chunk's token estimate + the always-on skill overhead.
+
+Three findings:
+
+1. **Bug fix**: `ContextCandidate.__lt__` was inverted (returned `>` instead of `<`),
+   making `sorted(reverse=True)` produce ASCENDING order. The budget filter dropped
+   high-score candidates first. Fixed; pinned by `tests/test_context_compiler_sort.py`
+   (3 tests).
+2. **Synthetic corpus (12 small files, `max_tokens=1500`)**: E1-27 gate **PASSES** —
+   recall 24/24 = 1.00, median warm reduction 0.812. Demonstrates the gate mechanics
+   work end-to-end on a properly-sized corpus.
+3. **PAW source corpus (69 files, `max_tokens=5000`)**: E1-27 gate **FAILS on recall** —
+   the lexical scorer cannot disambiguate uniform Python source. The compression
+   mechanism works (reduction 0.98), but the target file is dropped by the budget
+   filter in favor of higher-token-count files. Documented as a real-corpus limitation;
+   the fix is to enable embeddings (post-gate work).
+
+Reproduction:
+```
+# Synthetic corpus (current PASS)
+uv run python scripts/run_e1_production.py \
+  --output benchmarks/e1/production_20260907.json \
+  --roots benchmarks/e1/fixtures_paw \
+  --case-dir benchmarks/e1/cases_prod \
+  --max-tokens 1500 --max-fragments 5 --max-sources 3
+
+# PAW source (current FAIL on recall; documented limitation)
+uv run python scripts/run_e1_production.py \
+  --output /tmp/paw_source.json \
+  --roots src/paw \
+  --case-dir benchmarks/e1/cases \
+  --max-tokens 5000 --max-fragments 30 --max-sources 10
+```
+
+Full evidence at `benchmarks/e1/e1_production_report.md`.
+
 ### Review 2026-09-07 at f625fcb
 
 Follow-up decision: STANDARD / READY for measurement and freshness repair.

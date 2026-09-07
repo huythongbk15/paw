@@ -1,0 +1,31 @@
+schema_version: "1.0.0"
+case_id: paw_context_compiler
+decision_artifact_version: "1.0.0"
+project_revision: "30ed2ac"
+category: repo_understanding
+privacy_class: internal
+goal: |
+  Find the file that defines ContextCompiler and the budget allocation
+  logic. The expected outcome is recorded as evidence: the file is
+  found and the compile + budget primitives are present.
+fixtures:
+  - path: src/paw/core/context_compiler.py
+    revision: 30ed2ac
+    purpose: |
+      Reviewed PAW context module. ContextCompiler is the assembly
+      pipeline; _allocate_budget enforces the per-fragment/per-source
+      /per-token constraints.
+expected_evidence:
+  - kind: file_contains
+    target: src/paw/core/context_compiler.py
+    value: "class ContextCompiler:"
+    reviewer: huythong@local
+  - kind: file_contains
+    target: src/paw/core/context_compiler.py
+    value: "def _allocate_budget"
+    reviewer: huythong@local
+timeout_seconds: 120
+max_iterations: 10
+tags:
+  - production-corpus
+  - paw-source

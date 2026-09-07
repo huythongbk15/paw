@@ -1,0 +1,31 @@
+schema_version: "1.0.0"
+case_id: paw_privacy_gate
+decision_artifact_version: "1.0.0"
+project_revision: "30ed2ac"
+category: repo_understanding
+privacy_class: internal
+goal: |
+  Find the file that defines PrivacyClass and gate_remote_disclosure,
+  and identify the helper function for refusal reason. The expected
+  outcome is recorded as evidence: the file is found and the privacy
+  gate is present at the expected source location.
+fixtures:
+  - path: src/paw/core/privacy.py
+    revision: 30ed2ac
+    purpose: |
+      Reviewed PAW privacy module. The E1-21 hard gate (raise
+      RemoteDisclosureRefusedError on refusal) lives here.
+expected_evidence:
+  - kind: file_contains
+    target: src/paw/core/privacy.py
+    value: "class PrivacyClass(StrEnum):"
+    reviewer: huythong@local
+  - kind: file_contains
+    target: src/paw/core/privacy.py
+    value: "def gate_remote_disclosure("
+    reviewer: huythong@local
+timeout_seconds: 120
+max_iterations: 10
+tags:
+  - production-corpus
+  - paw-source
