@@ -185,6 +185,7 @@ async def test_adv_stale_source_cannot_bypass_privacy_gate(session_db) -> None:
         source="e1-26-adversarial", source_id=src.id,
         content="supersecret_api_key",
         privacy_class=PrivacyClass.SECRET, token_estimate=10,
+        is_stale=True,  # Source is stale — must be blocked
     )
     manifest = ContextManifest(
         task_id="t-adv", budget=ContextBudget(max_tokens=1000),
