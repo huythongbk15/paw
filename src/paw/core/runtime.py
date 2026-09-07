@@ -1126,20 +1126,40 @@ class PawRuntime:
             observation = await step_fn(task_id, proposed)
         except RemoteDisclosureRefusedError as exc:
             # Hard gate: disclosure refused, operation not completed.
+            # The OperationRecord is persisted as 'failed' so reopen/resume
+            # treats this op as terminal (no double-call of the provider
+            # on resume; the executor is never invoked).
             logger.error("remote_disclosure_refused_hard", provider_kind=exc.provider_kind, reasons=exc.refused)
+            fail_obs = ExecutionObservation(
+                step_id=step_id,
+                action_id=proposed.operation_id,
+                result={"done": False, "progress": 0.0, "error": str(exc)},
+                success=False,
+                error=str(exc),
+            )
+            try:
+                await RuntimePersistence.commit_operation(
+                    task_id=task_id,
+                    operation_id=proposed.operation_id,
+                    op_type=operation_type,
+                    status="failed",
+                    result_ref=f"observation:{step_id}",
+                    observation=fail_obs,
+                    done=False,
+                    progress=0.0,
+                    ledger_context=ledger_context,
+                    operation_metadata={"reason": "remote_disclosure_refused", "provider_kind": exc.provider_kind},
+                )
+            except Exception as commit_exc:  # pragma: no cover - defensive
+                logger.warning("privacy_refusal_op_record_failed", error=str(commit_exc))
             await TaskLedger.record(
                 task_id,
                 TaskEventType.EXECUTION_COMPLETED,
                 {"step_id": step_id, "action_id": proposed.operation_id, "executed": False, "error": str(exc)},
             )
             return _UnitExecutionResult(
-                observation=ExecutionObservation(
-                    step_id=step_id,
-                    action_id=proposed.operation_id,
-                    result={"done": False, "progress": 0.0, "error": str(exc)},
-                    success=False,
-                    error=str(exc),
-                ),
+                observation=fail_obs,
+                operation_completed=False,
             )
         observation.action_id = proposed.operation_id
         observation.step_id = step_id

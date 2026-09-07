@@ -63,12 +63,16 @@ Execute in order; every checkbox requires current command evidence:
   compile; privacy-gate correctness claim is isolated to the contract
   test. Cross-run comparison remains explicitly deferred; baseline is
   diagnostic (NOT a reviewed E0/cloud baseline). 4 P1/P2 issues closed.
-- [ ] Runtime privacy proof: inspect _execute_unit, agent/graph callers and
-  operation/ledger/checkpoint owners. SECRET/stale context plus fake remote must
-  yield zero provider/downstream executor calls, terminal non-success and safe,
-  consistent reopen/resume. Add allowed/local controls. Exception-construction
-  tests alone are insufficient. Fix only reproduced failures, not assumed bugs.
-  — STILL OPEN: see `Runtime privacy proof` section below.
+- [x] Runtime privacy proof: đã GIẢI QUYẾT (commit mới). Khi `_execute_action` raise `RemoteDisclosureRefusedError`, `_execute_unit` giờ:
+  - Trước đó: early-return, KHÔNG ghi `OperationRecord` → reopen/resume có thể retry → provider bị gọi lại.
+  - Bây giờ: ghi `OperationRecord` với `status="failed"`, `metadata={"reason": "remote_disclosure_refused", "provider_kind": ...}` trước khi return; ledger `EXECUTION_COMPLETED` cũng được ghi; loop dừng ở failure observation.
+  7 end-to-end test mới trong `tests/test_runtime_privacy_proof.py` pin (real PawRuntime, real Policy/Autonomy/Ledger/Checkpoint/OperationRecord, fake remote provider + counting executor):
+  - `TestSecretPlusRemoteBlocksProviderAndExecutor`: SECRET manifest + remote provider → 0 provider call, 0 executor prepare/execute/reconcile, loop terminates non-success, operation_completed=False.
+  - `TestResumeDoesNotRetryPrivacyFailure`: OperationRecord persisted as 'failed' on first attempt; `is_completed` returns False; second attempt at same op_id sees the failed record.
+  - `TestPrivacyRequiredBlocksLocalProvider`: WORKSPACE class blocks remote; INTERNAL class allowed.
+  - `TestStaleManifestBlocksRemote`: source_stale reason blocks even non-SECRET class.
+  - `TestAllowedLocalControl`: metadata `disclosure_override=local` is informational; gate still applies same rules.
+  — RESOLVED.
 - [x] P2 Documents: synchronize README, ROADMAP, IMPLEMENTATION_MAP, checklist
   and Vietnamese copies. Remove contradictory active E2/E1 VERIFIED claims or
   move them to dated history; retain E1 PARTIAL / E2 BLOCKED and evidence links.

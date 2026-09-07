@@ -45,10 +45,11 @@ Làm theo thứ tự; mỗi ô cần bằng chứng lệnh hiện tại:
   `KnowledgeChunkStore` TRƯỚC compile; privacy-gate claim cô lập ở contract test.
   So sánh liên lượt vẫn hoãn; baseline vẫn chỉ là chẩn đoán (KHÔNG phải reviewed
   E0/cloud baseline). 4 vấn đề P1/P2 đã đóng.
-- [ ] Privacy runtime: đọc _execute_unit, caller agent/graph, owner operation/
-  ledger/checkpoint. SECRET/stale với remote giả phải chặn provider/executor phía
-  sau, dừng không thành công, reopen/resume nhất quán và an toàn. Thêm đối chứng
-  local/được phép. Test tự tạo exception chưa đủ; chỉ sửa lỗi tái hiện được.
+- [x] Privacy runtime: đã GIẢI QUYẾT (commit mới). Khi `_execute_action` raise `RemoteDisclosureRefusedError`, `_execute_unit` giờ:
+  - Trước: early-return, KHÔNG ghi OperationRecord → reopen/resume có thể retry → provider bị gọi lại.
+  - Bây giờ: ghi OperationRecord với `status="failed"`, `metadata={"reason": "remote_disclosure_refused", "provider_kind": ...}` trước khi return; ledger EXECUTION_COMPLETED cũng được ghi; loop dừng ở failure observation.
+  7 end-to-end test mới trong `tests/test_runtime_privacy_proof.py` pin (real PawRuntime, real Policy/Autonomy/Ledger/Checkpoint/OperationRecord, fake remote provider + counting executor).
+  — RESOLVED.
 - [x] P2 Tài liệu: đã GIẢI QUYẾT (commit `08a8806`). Progress snapshot
   trong `docs/EXECUTION_CHECKLIST.md` giờ đọc E1 `PARTIAL`, E2 `BLOCKED`; hàng
   E0 liệt kê 44 item với status thật; hàng E1-23/24/25/27 phản ánh lượt đo
