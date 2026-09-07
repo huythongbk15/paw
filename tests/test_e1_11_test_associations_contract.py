@@ -273,3 +273,55 @@ def test_multiple_source_matches(tmp_path) -> None:
     assert len(method_hits) == 2
     matched_files = {a.source_file for a in method_hits}
     assert matched_files == {"src/foo.py", "src/baz.py"}
+
+
+# =========================================================================
+# ADVERSARIAL: Real attacks on test associations
+# =========================================================================
+
+
+def test_adv_associations_no_silent_drops(tmp_path) -> None:
+    """ADVERSARIAL: Every test function MUST produce an association.
+
+    An attacker could create a test function with a name
+    that doesn't match any source symbol. The system MUST
+    still produce an association with reason="no_clear_match"
+    — never silently drop a test.
+    """
+    from paw.knowledge.test_associations import associate_tests
+
+    # Create a test file with a test that doesn't match any source
+    test_file = tmp_path / "tests" / "test_unmatched.py"
+    test_file.parent.mkdir(parents=True)
+    test_file.write_text("async def test_xyz_unique_name(): pass\n")
+
+    # No source files — all tests should still produce associations
+    associations = associate_tests([str(test_file)], [], tmp_path)
+    assert len(associations) >= 1, "Every test must produce an association"
+    assert associations[0].reason == "no_clear_match", \
+        "Unmatched test must have explicit reason"
+
+
+def test_adv_associations_deterministic_order(tmp_path) -> None:
+    """ADVERSARIAL: Associations MUST be deterministic.
+
+    Calling associate_tests twice with the same inputs
+    must produce the same result — never in random order.
+    """
+    from paw.knowledge.test_associations import associate_tests
+
+    test_file = tmp_path / "tests" / "test_bar.py"
+    test_file.parent.mkdir(parents=True)
+    test_file.write_text("async def test_bar(): pass\n")
+
+    source_file = tmp_path / "src" / "foo.py"
+    source_file.parent.mkdir(parents=True)
+    source_file.write_text("def foo(): pass\n")
+
+    result1 = associate_tests([str(test_file)], [str(source_file)], tmp_path)
+    result2 = associate_tests([str(test_file)], [str(source_file)], tmp_path)
+
+    assert len(result1) == len(result2)
+    for a, b in zip(result1, result2, strict=True):
+        assert a.test_qualified_name == b.test_qualified_name
+        assert a.source_qualified_name == b.source_qualified_name

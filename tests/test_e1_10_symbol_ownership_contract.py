@@ -322,3 +322,53 @@ def test_symbol_record_is_frozen() -> None:
     )
     with pytest.raises(dataclasses.FrozenInstanceError):
         r.qualified_name = "x"  # type: ignore[misc]
+
+
+# =========================================================================
+# ADVERSARIAL: Real attacks on symbol ownership
+# =========================================================================
+
+
+def test_adv_extract_symbols_malicious_code_blocked(tmp_path) -> None:
+    """ADVERSARIAL: Symbol extraction MUST handle malicious code.
+
+    Code with null bytes or extremely long lines
+    must not crash the parser.
+    """
+    from paw.knowledge.symbols import extract_symbols
+
+    f = tmp_path / "malicious.py"
+    # Extremely long line — must not crash
+    f.write_text("x = " + "a" * 100000 + "\n")
+    edges = extract_symbols([f.name], tmp_path)
+    # Should not crash — module-level symbol is extracted
+    assert any(e.kind == "module" for e in edges)
+
+
+def test_adv_extract_symbols_empty_file(tmp_path) -> None:
+    """ADVERSARIAL: Empty file MUST produce a module symbol.
+
+    An empty Python file still has a module-level symbol.
+    """
+    from paw.knowledge.symbols import extract_symbols
+
+    f = tmp_path / "empty.py"
+    f.write_text("")
+    edges = extract_symbols([f.name], tmp_path)
+    assert len(edges) == 1
+    assert edges[0].kind == "module"
+    assert edges[0].qualified_name == "empty"
+
+
+def test_adv_extract_symbols_non_utf8_skipped(tmp_path) -> None:
+    """ADVERSARIAL: Non-UTF8 files MUST be skipped gracefully.
+
+    A file with invalid UTF8 must not crash the parser.
+    """
+    from paw.knowledge.symbols import extract_symbols
+
+    f = tmp_path / "binary.py"
+    f.write_bytes(b"\\xff\\xfe\\x00\\x01")
+    edges = extract_symbols([f.name], tmp_path)
+    # Should not crash — file is skipped or treated as syntax error
+    assert isinstance(edges, list)

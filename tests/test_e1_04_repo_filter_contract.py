@@ -347,3 +347,44 @@ def test_e1_04_spec_documents_safe_default() -> None:
         spec,
     )
     assert m is not None, "spec missing SAFE_DEFAULT_EXCLUDES literal"
+
+# =========================================================================
+# ADVERSARIAL: Real attacks on repo filter
+# =========================================================================
+
+
+def test_adv_repo_filter_rejects_absolute_pattern() -> None:
+    """ADVERSARIAL: Absolute patterns MUST be rejected.
+
+    An attacker could try to use an absolute path pattern
+    like "/etc/passwd" to bypass filtering. The system MUST
+    reject absolute patterns.
+    """
+    from paw.core.repo_filter import RepoFilter
+    
+    with pytest.raises(ValueError, match="unsafe"):
+        RepoFilter(exclude_patterns=("/etc/passwd",))
+
+
+def test_adv_repo_filter_rejects_dotdot_pattern() -> None:
+    """ADVERSARIAL: .. patterns MUST be rejected.
+
+    An attacker could try to use ".." segments to escape
+    the repository root. The system MUST reject them.
+    """
+    from paw.core.repo_filter import RepoFilter
+    
+    with pytest.raises(ValueError, match=r"\.\."):
+        RepoFilter(exclude_patterns=("../../etc",))
+
+
+def test_adv_repo_filter_empty_pattern_rejected() -> None:
+    """ADVERSARIAL: Empty patterns MUST be rejected.
+
+    An empty pattern could match everything or cause
+    unexpected behavior.
+    """
+    from paw.core.repo_filter import RepoFilter
+    
+    with pytest.raises(ValueError, match="empty"):
+        RepoFilter(exclude_patterns=("",))

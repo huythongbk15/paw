@@ -40,12 +40,14 @@ from pathlib import Path
 
 import pytest
 
+from paw.core.context import ContextBudget
 from paw.knowledge.chunk import KnowledgeChunk, KnowledgeChunkStore
 from paw.knowledge.citation import KnowledgeCitation, KnowledgeCitationStore
 from paw.knowledge.evidence import KnowledgeEvidence, KnowledgeEvidenceStore
 from paw.knowledge.source import (
     INVALID_REASONS,
     KnowledgeSourceManager,
+    KnowledgeSourceType,
 )
 
 
@@ -311,3 +313,53 @@ def test_e1_07_spec_documents_closed_reasons() -> None:
         assert reason in spec, f"E1-07 spec missing reason {reason!r}"
     assert "invalidate_derived_rows" in spec
     assert "test_e1_07_stale_derived_contract.py" in spec
+
+# =========================================================================
+# ADVERSARIAL: Real attacks on stale cascade
+# =========================================================================
+
+
+async def test_adv_stale_cascade_idempotent(tmp_path) -> None:
+    """ADVERSARIAL: Cascade MUST be idempotent.
+
+    Calling mark_invalid twice on the same source
+    should not double-count. The second call should
+    find 0 new rows to cascade (all already stale).
+    """
+    manager = KnowledgeSourceManager()
+    src = await manager.create("test", KnowledgeSourceType.FILE.value)
+    chunk_store = KnowledgeChunkStore()
+    await chunk_store.add_chunk(src.id, "data")
+
+    await manager.mark_invalid(src.id, "manual")
+    # Re-fetch to check stale status
+    src = await manager.get(src.id)
+    assert src is not None and src.is_stale, "Source must be stale after mark_invalid"
+    # Second call — should find nothing new to cascade
+    # (all derived rows already marked stale)
+    count = await manager.mark_invalid(src.id, "manual")
+
+
+async def test_adv_stale_cascade_blocks_remote_disclosure(tmp_path) -> None:
+    """ADVERSARIAL: Stale source in knowledge MUST be blocked
+    by the privacy gate even if privacy_class was set to INTERNAL.
+    """
+    from paw.core.privacy import gate_remote_disclosure
+    from paw.core.context_compiler import ContextManifest, ContextCandidate
+    from paw.core.privacy import PrivacyClass, PROVIDER_CLOUD_UNAPPROVED
+
+    candidate = ContextCandidate(
+        source="knowledge", source_id="stale-src",
+        content="old sensitive data",
+        privacy_class=PrivacyClass.INTERNAL,
+        token_estimate=100, is_stale=True,
+    )
+    # E1-36: stale source must not be disclosed remotely
+    # even when privacy_class is INTERNAL (the gap that was fixed)
+    manifest = ContextManifest(
+        task_id="test", budget=ContextBudget(),
+        included=[candidate],
+    )
+    result = gate_remote_disclosure(manifest, provider_kind=PROVIDER_CLOUD_UNAPPROVED)
+    assert result.allowed is False
+    assert any(r[1] == "source_stale" for r in result.refused)

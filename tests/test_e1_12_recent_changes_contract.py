@@ -350,3 +350,66 @@ def test_affected_area_is_frozen() -> None:
     )
     with pytest.raises(dataclasses.FrozenInstanceError):
         a.change = None  # type: ignore[misc]
+
+# =========================================================================
+# ADVERSARIAL: Real attacks on recent changes
+# =========================================================================
+
+
+def test_adv_recent_changes_malformed_since(tmp_path) -> None:
+    """ADVERSARIAL: Malformed since MUST return empty list.
+
+    An attacker could pass a malformed since ref
+    (e.g., a path traversal string). The system
+    MUST gracefully return an empty list, not crash.
+    """
+    from paw.knowledge.changes import recent_changes
+
+    # malformed since — should return empty list
+    result = recent_changes(tmp_path, since="malformed_ref/../../etc")
+    assert result == []
+
+
+def test_adv_recent_changes_non_git_path(tmp_path) -> None:
+    """ADVERSARIAL: Non-git path MUST return empty list.
+
+    A path that is not a git repository must not
+    crash the system — it must return an empty list.
+    """
+    from paw.knowledge.changes import recent_changes
+
+    result = recent_changes(tmp_path)
+    assert result == []
+
+
+def test_adv_recent_changes_read_only(tmp_path) -> None:
+    """ADVERSARIAL: recent_changes MUST be read-only.
+
+    The function must never modify the git repository.
+    It must only read git log output.
+    """
+    import subprocess
+    from paw.knowledge.changes import recent_changes
+
+    # Initialize a git repo
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, capture_output=True)
+
+    # Create a commit
+    f = tmp_path / "file.py"
+    f.write_text("x = 1\n")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "initial"], cwd=tmp_path, capture_output=True)
+
+    # Call recent_changes — should not modify the repo
+    before_count = subprocess.run(
+        ["git", "log", "--oneline"], cwd=tmp_path, capture_output=True
+    )
+    result = recent_changes(tmp_path)
+    after_count = subprocess.run(
+        ["git", "log", "--oneline"], cwd=tmp_path, capture_output=True
+    )
+    assert before_count.stdout == after_count.stdout, \
+        "recent_changes must not modify the git repo"
+    assert isinstance(result, list)

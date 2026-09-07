@@ -49,6 +49,7 @@ from paw.core.privacy import (
     PrivacyClass,
     can_disclose_to_provider,
 )
+from paw.core.context import ContextBudget
 from paw.core.storage import db
 from paw.knowledge.source import KnowledgeSource
 
@@ -276,3 +277,89 @@ def test_e1_03_spec_documents_table() -> None:
     # the contract test file and the ownership audit.
     assert "test_e1_03_privacy_contract.py" in spec
     assert "ownership_audit.md" in spec
+
+# =========================================================================
+# ADVERSARIAL: Real attacks on privacy gate
+# =========================================================================
+
+
+def test_adv_privacy_gate_blocks_unknown_provider() -> None:
+    """ADVERSARIAL: Unknown provider must be blocked.
+
+    An attacker could try to bypass the gate by passing
+    an unknown provider kind. The gate MUST refuse all
+    classes for unknown providers (fail-closed).
+    """
+    from paw.core.privacy import gate_remote_disclosure
+    from paw.core.context_compiler import ContextManifest, ContextCandidate
+    from paw.core.privacy import PrivacyClass, PROVIDER_LOCAL
+
+    manifest = ContextManifest(
+        task_id="test-task",
+        included=[
+            ContextCandidate(
+                source="test", source_id="s1",
+                content="data", privacy_class=PrivacyClass.PUBLIC,
+                token_estimate=10, is_stale=False,
+            ),
+        ],
+        budget=ContextBudget(),
+    )
+    # Unknown provider — should block everything
+    result = gate_remote_disclosure(manifest, provider_kind="unknown_evil_provider")
+    assert result.allowed is False, "Unknown provider must be blocked"
+    assert len(result.refused) == 1, "All candidates refused"
+    assert result.refused[0][1] == "unknown_provider_kind"
+
+
+def test_adv_privacy_gate_stale_blocks_all_remote() -> None:
+    """ADVERSARIAL: Stale source MUST NOT be disclosed remotely.
+
+    Even if the privacy_class is PUBLIC, a stale source
+    must not be disclosed to non-local providers.
+    """
+    from paw.core.privacy import gate_remote_disclosure
+    from paw.core.context_compiler import ContextManifest, ContextCandidate
+    from paw.core.privacy import PrivacyClass, PROVIDER_CLOUD_UNAPPROVED
+
+    manifest = ContextManifest(
+        task_id="test-task",
+        included=[
+            ContextCandidate(
+                source="test", source_id="s1",
+                content="old data", privacy_class=PrivacyClass.PUBLIC,
+                token_estimate=10, is_stale=True,  # Stale!
+            ),
+        ],
+        budget=ContextBudget(),
+    )
+    result = gate_remote_disclosure(manifest, provider_kind=PROVIDER_CLOUD_UNAPPROVED)
+    assert result.allowed is False, "Stale PUBLIC source must be blocked remotely"
+    assert any(r[1] == "source_stale" for r in result.refused), \
+        "Refusal reason must be source_stale"
+
+
+def test_adv_privacy_gate_stale_allows_local() -> None:
+    """ADVERSARIAL: Stale source CAN be disclosed locally.
+
+    Stale sources must not be disclosed remotely,
+    but LOCAL providers (on-box execution) may access them.
+    """
+    from paw.core.privacy import gate_remote_disclosure
+    from paw.core.context_compiler import ContextManifest, ContextCandidate
+    from paw.core.privacy import PrivacyClass, PROVIDER_LOCAL
+
+    manifest = ContextManifest(
+        task_id="test-task",
+        included=[
+            ContextCandidate(
+                source="test", source_id="s1",
+                content="old data", privacy_class=PrivacyClass.PUBLIC,
+                token_estimate=10, is_stale=True,
+            ),
+        ],
+        budget=ContextBudget(),
+    )
+    result = gate_remote_disclosure(manifest, provider_kind=PROVIDER_LOCAL)
+    # Local provider can access stale data
+    assert result.allowed is True, "Local provider can access stale data"
