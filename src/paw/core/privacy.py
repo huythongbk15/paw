@@ -139,6 +139,7 @@ DISCLOSURE_REFUSED_REASONS: frozenset[str] = frozenset(
         "class_internal_unapproved_cloud",
         "class_none_unapproved_cloud",
         "unknown_provider_kind",
+        "source_stale",
     }
 )
 
@@ -196,6 +197,10 @@ def gate_remote_disclosure(
     """
     refused: list = []
     for cand in manifest.included:
+        # Stale sources must not be disclosed to non-local providers
+        if getattr(cand, "is_stale", False) and provider_kind != PROVIDER_LOCAL:
+            refused.append((cand, "source_stale"))
+            continue
         reason = _refusal_reason(cand.privacy_class, provider_kind)
         if reason:
             refused.append((cand, reason))

@@ -111,6 +111,7 @@ class ContextCandidate:
     external_id: str = ""            # E1-02 stable project identity
     revision: str = ""               # E1-02 project revision
     privacy_class: PrivacyClass | None = None
+    is_stale: bool = False  # E1-36: source is stale/invalidated
 
     # Skill-specific
     skill_level: int = 0             # 0=metadata only, 1=body, 2=resources
