@@ -1,9 +1,9 @@
 {
   "scope": "diagnostic fixture retrieval; not E1 qualification",
-  "revision": "263c075b3efe979e983566ab383b75ff36c4fd82",
+  "revision": "208783c97698024184323b1043fe77715cbfd5b8",
   "dirty": true,
-  "created_at": "2026-09-07T08:27:37.966133+00:00",
-  "baseline_method": "sum TokenEstimator estimates of all fixture contents per case",
+  "created_at": "2026-09-07T09:59:49.854719+00:00",
+  "baseline_method": "sum TokenEstimator estimates of all fixture contents + always-on skill overhead per case",
   "baseline_status": "diagnostic full-fixture reference, not reviewed E0/cloud baseline",
   "configuration": {
     "max_tokens": 8000,
@@ -28,8 +28,11 @@
     "cache benefit",
     "cloud savings"
   ],
+  "always_on_skill_overhead_tokens": 24,
+  "cases_total": 14,
+  "cases_run": 14,
   "hashes": {
-    "scripts/run_e1_measurement.py": "6f295e95a7b8536deccd209cb73411a0dbd9243d32781209a132dffa1167e5a8",
+    "scripts/run_e1_measurement.py": "1d6e0e4b4bbc4b25b0195b02e6c8826a757a756530e0c408b4dfe85b8088e5bd",
     "uv.lock": "f68e5cf15ce563ceb2f7128c5ee288d853650140eb08be0b110079991c878085",
     "src/paw/__init__.py": "27e0c07ffb3843e28b42b82a82a0ce7f355382f39bb34ac6dcfc540a739815ab",
     "src/paw/__main__.py": "d98d946759521069fb80776f2b852a91c9cd27376f639612ca6d94b21676cd39",
@@ -63,14 +66,14 @@
     "src/paw/core/logging.py": "586908ca681ed8f31aa3082e2aa237e68a7c7b387144a37ecb3d58c5f46d7751",
     "src/paw/core/memory.py": "e72bbf5cdb708301fec963403258308f9250c47ff47247c9c75d05571d915351",
     "src/paw/core/model_executor.py": "445c17279d66a12eca9c157ae2b692f85f988b23f83fbc0ecb455963e00791fe",
-    "src/paw/core/model_router.py": "f16ab14e6aa473458b7bf836f70dac8eb42ad5cfda4c1ea26abcc8b9b0a89539",
+    "src/paw/core/model_router.py": "ae5bc8d26a450720e1e9793fc7521e1cad61ceac5e71de700d2a58fc0a583fb6",
     "src/paw/core/models.py": "314720829b583f5b5e170df1dd0dce871512b1dc27aced83aba8821263d66330",
     "src/paw/core/planner.py": "ccd0d52beaf5c05aa81de817d0fc68e8ee78e6c3f75d0a38421e5ce961d9ef11",
     "src/paw/core/policy.py": "4ecbdc9474583e3da49e5be735fa260c007f10371a271f4141f88b6bc7714fe2",
     "src/paw/core/privacy.py": "63f5f737fc412aa0e0d1bcde452c73e89a4f8885e7832ccd6b92cc459018e2ad",
     "src/paw/core/repo_filter.py": "0d8957ec8a90026f25d671fe733e61a605f429c8e4953aeba973e3247068e454",
     "src/paw/core/repo_scanner.py": "5bf7b3983c591db2bbdc34d5d8e9e2897c07c9c2b4425dc9f57d27b04bfa4c76",
-    "src/paw/core/runtime.py": "174e5372c445855a07e414cc46d808859a7e48c8e3a5698a374b5ea6b08d66d0",
+    "src/paw/core/runtime.py": "66615fcc974de9dd7e275f48d454e592609548d96badf33f983580c95a90745d",
     "src/paw/core/runtime_persistence.py": "b30a81ec285fb29534c0d9e09931025b0c929efc7c9ddda26a39c6acdb766435",
     "src/paw/core/selector.py": "bba73cfa50cfecdb5a1c3cd84a57fa5a5178f2e5004f5a82c973e37972d0e699",
     "src/paw/core/semantic.py": "50b9016a704fa1c1d6d22643368e361a0c8f67b62a74e9979cd293ea6b649613",
@@ -103,7 +106,31 @@
     "benchmarks/e0/cases/architecture_decision_cache.yaml": "39a8f41ad3d48b1ee1a2f4eed5e1593a173886bad07faafd71285b3091014766",
     "benchmarks/e0/fixtures/architecture_decision.txt": "6d483755a18b3bd843797aedd0eb6b3fe20191c6d8d28e7769baedd8f802d7c9",
     "benchmarks/e0/cases/cross_module_change_constant.yaml": "42f17f8f98a41a8e9e509a0eb74a4917e2f5a57cdf96c0fa70cfde2db155b5fc",
-    "benchmarks/e0/fixtures/cross_module_change.txt": "286f674c2f3cbf020a7248bfc2e6bb7da315ba22c0f5cbd59e9e85c5c1f0c1fd"
+    "benchmarks/e0/fixtures/cross_module_change.txt": "286f674c2f3cbf020a7248bfc2e6bb7da315ba22c0f5cbd59e9e85c5c1f0c1fd",
+    "benchmarks/e0/cases/decision_needs_clarification_auth.yaml": "0148e91b03d761a80f4e942af39b9bf61c4bb4b9cac467570e78faad12250d68",
+    "benchmarks/e0/fixtures/decision_needs_clarification.txt": "adcc42a1fd05e9144189e648506c7df33127a13f637fbd569bbc5c01b61c2e91",
+    "benchmarks/e0/cases/decision_needs_research_security.yaml": "668448c0597374162feef342e624bc33abac74ded7fc75bb50a4313e398753f6",
+    "benchmarks/e0/fixtures/decision_needs_research.txt": "c0194b914aa997b74544597247ebc5160638ff42638335614b94d00fd85b56f5",
+    "benchmarks/e0/cases/decision_ready_simple_module.yaml": "a34d9942be748871eda4da2ab5c1756c35776a0e1a5cdcaef060d802129759f1",
+    "benchmarks/e0/fixtures/decision_ready.txt": "85efa144f7f9c01a554bee2afe01e671db29a95d99caf3d8efb69a595d1267df",
+    "benchmarks/e0/cases/decision_rejected_duplicate_owner.yaml": "14add812c9906573e3c195a79b4366f6debc6262e9a9712a6e1170781b37a24b",
+    "benchmarks/e0/fixtures/decision_rejected.txt": "bc633240d742696c518a5ff92b188417c55b56a352b3396edffa714e43cdd5c1",
+    "benchmarks/e0/cases/decision_spike_exotic_locking.yaml": "c52a9f204d80428c64abbea65dda11de046d99e08ceb68437d619d5d88d5ebb2",
+    "benchmarks/e0/fixtures/decision_spike.txt": "506165da9d43b973bb9e083d7fc5dfbf8fed6dee817097491ec82981c8689be8",
+    "benchmarks/e0/cases/defect_localization_simple_math.yaml": "c4d0a1cdda7de6ac4296f1d8bf0214f688aab8198977cab07a714567f7454215",
+    "benchmarks/e0/fixtures/defect_localization.txt": "fe6539938c4b07d945765d9102cae72d660cb65367a10490704e457a21817082",
+    "benchmarks/e0/cases/insufficient_context_empty_goal.yaml": "12a99975e5a7495a1cafac26fe5e79677abadf4b63b84e0e628d17f765d783f4",
+    "benchmarks/e0/fixtures/insufficient_context.txt": "7d3d68f8bc9be086948f21669498c2e3659e8b55bba50cce9da828b9e79a66cb",
+    "benchmarks/e0/cases/interrupted_recovery_midway.yaml": "05427a4c19d21693204057975af7e670e87ad82bfee28ca52ddac17bb115a11b",
+    "benchmarks/e0/fixtures/interrupted_recovery.txt": "cc25e401dfb2d1b9c395285b8550057a22de6003ad672b09c6c6bd4915bbe5e7",
+    "benchmarks/e0/cases/privacy_negative_secret_marker.yaml": "3ab92b8ea4deebd914b97b9d68dfabd68d4f86f5807b51358050d4e849d909c1",
+    "benchmarks/e0/fixtures/privacy_marker.txt": "d474fa47542e1574df542c6b02a8cc22e6f898d4319bf3c38df7ff16d5468359",
+    "benchmarks/e0/cases/refactor_rename_function.yaml": "b4acde1e588c8c862cdf63036b3c14830c2e2dbde9981c57a5df9d7da09836ed",
+    "benchmarks/e0/fixtures/refactor_rename.txt": "a79d753905489823dfb7be6d98255927f74ef9bd621ab42f3dc10f8e74edeb68",
+    "benchmarks/e0/cases/repo_understand_empty_repo.yaml": "9041b0f54967b7a99e10b85ae9d576873b5736aeaabae192d7dbaa6ef69ca8f1",
+    "benchmarks/e0/fixtures/edge_case_empty_repo.txt": "b868dbe21f54213e5f8b6c52f8ae14cb34fdebaf3aa18ef868b1fee487853cf1",
+    "benchmarks/e0/cases/repo_understand_small_repo.yaml": "930462b72041535145412467b780c6823c0e59973bdf3c5a46d08c2091b9f4ea",
+    "benchmarks/e0/fixtures/small_repo_tree.txt": "272d7ad2d8e79fdcc24346f2f401ee2d8383b8c7e7ad0e96401904dd2985b77a"
   },
   "cases": [
     {
@@ -119,9 +146,9 @@
       "tokens": {
         "case_id": "architecture_decision_cache",
         "mode": "cold",
-        "baseline_tokens": 179,
+        "baseline_tokens": 203,
         "measured_tokens": 203,
-        "reduction": -0.1340782122905028,
+        "reduction": 0.0,
         "duration_ms": 0
       }
     },
@@ -138,9 +165,9 @@
       "tokens": {
         "case_id": "architecture_decision_cache",
         "mode": "warm",
-        "baseline_tokens": 179,
+        "baseline_tokens": 203,
         "measured_tokens": 203,
-        "reduction": -0.1340782122905028,
+        "reduction": 0.0,
         "duration_ms": 0
       }
     },
@@ -157,9 +184,9 @@
       "tokens": {
         "case_id": "cross_module_change_constant",
         "mode": "cold",
-        "baseline_tokens": 103,
+        "baseline_tokens": 127,
         "measured_tokens": 127,
-        "reduction": -0.23300970873786409,
+        "reduction": 0.0,
         "duration_ms": 0
       }
     },
@@ -176,9 +203,469 @@
       "tokens": {
         "case_id": "cross_module_change_constant",
         "mode": "warm",
-        "baseline_tokens": 103,
+        "baseline_tokens": 127,
         "measured_tokens": 127,
-        "reduction": -0.23300970873786409,
+        "reduction": 0.0,
+        "duration_ms": 0
+      }
+    },
+    {
+      "recall": {
+        "case_id": "decision_needs_clarification_auth",
+        "mode": "cold",
+        "total_evidence": 2,
+        "recalled": 2,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "decision_needs_clarification_auth",
+        "mode": "cold",
+        "baseline_tokens": 133,
+        "measured_tokens": 133,
+        "reduction": 0.0,
+        "duration_ms": 0
+      }
+    },
+    {
+      "recall": {
+        "case_id": "decision_needs_clarification_auth",
+        "mode": "warm",
+        "total_evidence": 2,
+        "recalled": 2,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "decision_needs_clarification_auth",
+        "mode": "warm",
+        "baseline_tokens": 133,
+        "measured_tokens": 133,
+        "reduction": 0.0,
+        "duration_ms": 0
+      }
+    },
+    {
+      "recall": {
+        "case_id": "decision_needs_research_security",
+        "mode": "cold",
+        "total_evidence": 2,
+        "recalled": 2,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "decision_needs_research_security",
+        "mode": "cold",
+        "baseline_tokens": 153,
+        "measured_tokens": 153,
+        "reduction": 0.0,
+        "duration_ms": 0
+      }
+    },
+    {
+      "recall": {
+        "case_id": "decision_needs_research_security",
+        "mode": "warm",
+        "total_evidence": 2,
+        "recalled": 2,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "decision_needs_research_security",
+        "mode": "warm",
+        "baseline_tokens": 153,
+        "measured_tokens": 153,
+        "reduction": 0.0,
+        "duration_ms": 0
+      }
+    },
+    {
+      "recall": {
+        "case_id": "decision_ready_simple_module",
+        "mode": "cold",
+        "total_evidence": 3,
+        "recalled": 3,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "decision_ready_simple_module",
+        "mode": "cold",
+        "baseline_tokens": 146,
+        "measured_tokens": 146,
+        "reduction": 0.0,
+        "duration_ms": 0
+      }
+    },
+    {
+      "recall": {
+        "case_id": "decision_ready_simple_module",
+        "mode": "warm",
+        "total_evidence": 3,
+        "recalled": 3,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "decision_ready_simple_module",
+        "mode": "warm",
+        "baseline_tokens": 146,
+        "measured_tokens": 146,
+        "reduction": 0.0,
+        "duration_ms": 0
+      }
+    },
+    {
+      "recall": {
+        "case_id": "decision_rejected_duplicate_owner",
+        "mode": "cold",
+        "total_evidence": 2,
+        "recalled": 2,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "decision_rejected_duplicate_owner",
+        "mode": "cold",
+        "baseline_tokens": 143,
+        "measured_tokens": 143,
+        "reduction": 0.0,
+        "duration_ms": 0
+      }
+    },
+    {
+      "recall": {
+        "case_id": "decision_rejected_duplicate_owner",
+        "mode": "warm",
+        "total_evidence": 2,
+        "recalled": 2,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "decision_rejected_duplicate_owner",
+        "mode": "warm",
+        "baseline_tokens": 143,
+        "measured_tokens": 143,
+        "reduction": 0.0,
+        "duration_ms": 0
+      }
+    },
+    {
+      "recall": {
+        "case_id": "decision_spike_exotic_locking",
+        "mode": "cold",
+        "total_evidence": 2,
+        "recalled": 2,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "decision_spike_exotic_locking",
+        "mode": "cold",
+        "baseline_tokens": 171,
+        "measured_tokens": 171,
+        "reduction": 0.0,
+        "duration_ms": 0
+      }
+    },
+    {
+      "recall": {
+        "case_id": "decision_spike_exotic_locking",
+        "mode": "warm",
+        "total_evidence": 2,
+        "recalled": 2,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "decision_spike_exotic_locking",
+        "mode": "warm",
+        "baseline_tokens": 171,
+        "measured_tokens": 171,
+        "reduction": 0.0,
+        "duration_ms": 0
+      }
+    },
+    {
+      "recall": {
+        "case_id": "defect_localization_simple_math",
+        "mode": "cold",
+        "total_evidence": 2,
+        "recalled": 2,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "defect_localization_simple_math",
+        "mode": "cold",
+        "baseline_tokens": 137,
+        "measured_tokens": 137,
+        "reduction": 0.0,
+        "duration_ms": 0
+      }
+    },
+    {
+      "recall": {
+        "case_id": "defect_localization_simple_math",
+        "mode": "warm",
+        "total_evidence": 2,
+        "recalled": 2,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "defect_localization_simple_math",
+        "mode": "warm",
+        "baseline_tokens": 137,
+        "measured_tokens": 137,
+        "reduction": 0.0,
+        "duration_ms": 0
+      }
+    },
+    {
+      "recall": {
+        "case_id": "insufficient_context_empty_goal",
+        "mode": "cold",
+        "total_evidence": 1,
+        "recalled": 1,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "insufficient_context_empty_goal",
+        "mode": "cold",
+        "baseline_tokens": 159,
+        "measured_tokens": 159,
+        "reduction": 0.0,
+        "duration_ms": 0
+      }
+    },
+    {
+      "recall": {
+        "case_id": "insufficient_context_empty_goal",
+        "mode": "warm",
+        "total_evidence": 1,
+        "recalled": 1,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "insufficient_context_empty_goal",
+        "mode": "warm",
+        "baseline_tokens": 159,
+        "measured_tokens": 159,
+        "reduction": 0.0,
+        "duration_ms": 0
+      }
+    },
+    {
+      "recall": {
+        "case_id": "interrupted_recovery_midway",
+        "mode": "cold",
+        "total_evidence": 2,
+        "recalled": 2,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "interrupted_recovery_midway",
+        "mode": "cold",
+        "baseline_tokens": 182,
+        "measured_tokens": 182,
+        "reduction": 0.0,
+        "duration_ms": 0
+      }
+    },
+    {
+      "recall": {
+        "case_id": "interrupted_recovery_midway",
+        "mode": "warm",
+        "total_evidence": 2,
+        "recalled": 2,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "interrupted_recovery_midway",
+        "mode": "warm",
+        "baseline_tokens": 182,
+        "measured_tokens": 182,
+        "reduction": 0.0,
+        "duration_ms": 0
+      }
+    },
+    {
+      "recall": {
+        "case_id": "privacy_negative_secret_marker",
+        "mode": "cold",
+        "total_evidence": 1,
+        "recalled": 1,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "privacy_negative_secret_marker",
+        "mode": "cold",
+        "baseline_tokens": 175,
+        "measured_tokens": 175,
+        "reduction": 0.0,
+        "duration_ms": 0
+      }
+    },
+    {
+      "recall": {
+        "case_id": "privacy_negative_secret_marker",
+        "mode": "warm",
+        "total_evidence": 1,
+        "recalled": 1,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "privacy_negative_secret_marker",
+        "mode": "warm",
+        "baseline_tokens": 175,
+        "measured_tokens": 175,
+        "reduction": 0.0,
+        "duration_ms": 0
+      }
+    },
+    {
+      "recall": {
+        "case_id": "refactor_rename_function",
+        "mode": "cold",
+        "total_evidence": 2,
+        "recalled": 2,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "refactor_rename_function",
+        "mode": "cold",
+        "baseline_tokens": 142,
+        "measured_tokens": 142,
+        "reduction": 0.0,
+        "duration_ms": 0
+      }
+    },
+    {
+      "recall": {
+        "case_id": "refactor_rename_function",
+        "mode": "warm",
+        "total_evidence": 2,
+        "recalled": 2,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "refactor_rename_function",
+        "mode": "warm",
+        "baseline_tokens": 142,
+        "measured_tokens": 142,
+        "reduction": 0.0,
+        "duration_ms": 0
+      }
+    },
+    {
+      "recall": {
+        "case_id": "repo_understand_empty_repo",
+        "mode": "cold",
+        "total_evidence": 2,
+        "recalled": 1,
+        "missed": [
+          "file_contains:benchmarks/e0/fixtures/edge_case_empty_repo.txt:deterministic result"
+        ],
+        "recall": 0.5,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "repo_understand_empty_repo",
+        "mode": "cold",
+        "baseline_tokens": 163,
+        "measured_tokens": 163,
+        "reduction": 0.0,
+        "duration_ms": 0
+      }
+    },
+    {
+      "recall": {
+        "case_id": "repo_understand_empty_repo",
+        "mode": "warm",
+        "total_evidence": 2,
+        "recalled": 1,
+        "missed": [
+          "file_contains:benchmarks/e0/fixtures/edge_case_empty_repo.txt:deterministic result"
+        ],
+        "recall": 0.5,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "repo_understand_empty_repo",
+        "mode": "warm",
+        "baseline_tokens": 163,
+        "measured_tokens": 163,
+        "reduction": 0.0,
+        "duration_ms": 0
+      }
+    },
+    {
+      "recall": {
+        "case_id": "repo_understand_small_repo",
+        "mode": "cold",
+        "total_evidence": 3,
+        "recalled": 3,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "repo_understand_small_repo",
+        "mode": "cold",
+        "baseline_tokens": 304,
+        "measured_tokens": 304,
+        "reduction": 0.0,
+        "duration_ms": 0
+      }
+    },
+    {
+      "recall": {
+        "case_id": "repo_understand_small_repo",
+        "mode": "warm",
+        "total_evidence": 3,
+        "recalled": 3,
+        "missed": [],
+        "recall": 1.0,
+        "duration_ms": 0
+      },
+      "tokens": {
+        "case_id": "repo_understand_small_repo",
+        "mode": "warm",
+        "baseline_tokens": 304,
+        "measured_tokens": 304,
+        "reduction": 0.0,
         "duration_ms": 0
       }
     }

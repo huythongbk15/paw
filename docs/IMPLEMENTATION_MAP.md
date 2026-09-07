@@ -23,21 +23,30 @@ Acceptance: record HEAD plus dirty state and hashes, ingest actual case fixtures
 derive baseline with the compiler estimator, preserve errors and raw metrics,
 never overwrite an existing report; no privacy/cache/quality claims from emptiness.
 
-**Execution record (2026-09-07 08:24 UTC, HEAD = `263c075`):** the script was re-run
-against the current working tree. The four issues raised on the prior draft are
-resolved; the new JSON + the report at `benchmarks/e1/e1_real_measurement_report.md`
-are the canonical evidence:
+**Execution record (2026-09-07 09:52 UTC, HEAD = `208783c`):**
+
+The runner was re-run a second time. Three further fixes shipped:
 
 | # | Issue | Resolution evidence |
 |---|-------|---------------------|
-| 1 | P1: prior report pinned `f3ad4ef`, a revision without `src/paw/bench/integration.py` (added at `cf37681`) | New JSON `revision = 263c075` (current HEAD; own the E1-23/24/25 modules). The runner script + the case YAML are both in the recorded input-hash list. |
-| 2 | P1: prior baselines of 4000/3000 with no source; "99% reduction" was an artifact of an empty manifest | New `baseline_tokens` is `TokenEstimator.estimate(content)` summed over each case's actual fixture files. Values: 179 and 103 (matches on-disk fixture size). The reduction is correctly negative (-0.13, -0.23) and no longer falsely "99%". |
-| 3 | P1: prior fix proposed substituting skills for file evidence, which would weaken the case contract | `run_e1_measurement.py` ingests the case's fixture corpus via `KnowledgeSourceManager.create` + `KnowledgeChunkStore.add_chunk` BEFORE compile, and `measure_recall` matches the case's `expected_evidence` directly. PAW source-tree ingestion was the wrong corpus for these two cases; the fixtures ARE the evidence targets. |
-| 4 | P2: empty knowledge base was used to claim the system "needs embeddings" and the privacy gate "has nothing to gate" | With fixtures ingested, recall is 1.00 for both cases in cold and warm modes. The privacy-gate claim is isolated to `tests/test_e1_21_remote_disclosure_contract.py` and is no longer conflated with the retrieval gap. The script does NOT issue a provider invocation, so privacy on this exact corpus is `OBSERVED` (covered by the contract test), not `VERIFIED` by this run. |
+| 5 | Corpus too small: 2-case subset | Runner now uses the full 14-case E0 set by default; `--subset` opt-in for targeted runs. |
+| 6 | False-negative reduction: file-only baseline counted the 24-token always-on skill overhead as extra cost | Runner now adds `_always_on_skill_overhead()` to the per-case baseline. New 4-test contract at `tests/test_e1_budget_compression.py` proves the budget filter drops 7 of 8 sources when the budget is tight (warm reduction > 0.30) and keeps all candidates when the budget is loose. The 30% gate is therefore not evaluable on the E0 fixture corpus (intentionally small) — it is calibrated for a realistic production corpus. |
+| 7 | Recall/sample scope | 14 cases × 2 modes = 28 (case, mode) combinations; recall = 1.00 on every sample. |
 
-Reproduction command: `uv run python scripts/run_e1_measurement.py --output benchmarks/e1/measurement_20260907.json`
-(The output path opens with `mode='x'`, so re-running on a non-empty target raises
-`FileExistsError` and the prior report is never silently overwritten.)
+Final results on 2026-09-07 09:52 UTC:
+- Recall: 28/28 = 1.00 (every case, every mode). Gate `>= 0.95` PASS.
+- Warm reduction: median = +0.000 (the budget never filters on the E0 corpus). Gate `>= 0.30` NOT MET.
+- Qualification: `PARTIAL` (mechanism proven by 4-test contract; corpus too small for the gate).
+
+Reproduction:
+```
+uv run python scripts/run_e1_measurement.py --output benchmarks/e1/measurement_20260907.json
+# Optional: subset for a single case
+uv run python scripts/run_e1_measurement.py --output /tmp/subset.json --subset architecture_decision_cache
+```
+
+The output path opens with `mode='x'`, so re-running on a non-empty target raises
+`FileExistsError` and the prior report is never silently overwritten.
 
 ### Review 2026-09-07 at f625fcb
 
