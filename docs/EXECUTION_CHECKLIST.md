@@ -330,7 +330,7 @@ baseline. Estimated 34–45 days.
 
 ### Roles and routing evidence
 
-- [ ] `E2-01` Inventory current Model Router inputs, outputs and all callers. `(2h, D0)`
+- [x] `E2-01` Inventory current Model Router inputs, outputs and all callers. `(2h, D0)` — READ-ONLY audit complete at `ba1a583`; `docs/benchmarks/e2/e2_01_audit.md`
 - [ ] `E2-02` Define the minimum cognitive roles needed by E0 cases. `(3h, D0)`
 - [ ] `E2-03` Define role-specific output, evidence and uncertainty contracts. `(0.5d, D1)`
 - [ ] `E2-04` Define novelty, impact, privacy, context-sufficiency and budget signals. `(0.5d, D1)`
@@ -502,8 +502,8 @@ gate-progress view, not permission to call observed implementation `DONE`.
 |---|---|---:|---|---|---|
 | SX | `VERIFIED` | 14/14 | none | `SX-14` closed | `f3ad4ef` (548 passed in 303.72s) |
 | E0 | `IN PROGRESS` | 44/44 items marked [x] or DEFERRED (deterministic baseline gate; E0-20/21 are charter-deferred for cloud baseline) | none (E0-20/21 deferred-by-charter; E0-17/18/19/22 covered by current run; E0-26..42 features dispositions done) | re-open any E0-17..42 if a follow-up review needs it | `f3ad4ef` (777 passed, ruff clean); re-verified at `08a8806` |
-| E1 | `PASS` | 37/37 core + 13/13 backlog PASS + E1-23/24/25/35/36 + E1-26 retrofit + 9 E1-27 tests; **E1-27 gate: PASS** (recall=1.00, reduction=0.981 on PAW source) | E1-23/24/25 diagnostic PARTIAL (reduction floor on E0 2-case subset); PAW-source metric gate PASS | `1747ea0` (10 + 9 tests pass; ruff clean) |
-| E2 | `BLOCKED` | 0/50 active implementation items | E1 = PASS but no E2 work started | wait for Đại ca direction (E2-01 audit or vendor provider) | — |
+| E1 | `VERIFIED` | 37/37 core + 13/13 backlog PASS + E1-23/24/25/35/36 + E1-26 retrofit + 9 E1-27 tests; **E1-27 gate: PASS/VERIFIED** (clean revision `c28d679`, dirty=false, recall=1.0, reduction=0.871) | E1-27 gate PASS; 2 pre-existing ruff errors remain in `src/paw/bench/__init__.py` and `tests/test_e1_bl2_bench_exports_contract.py` (not introduced by docs-only work) | `1747ea0` (19 E1-27 tests pass) |
+| E2 | `IN PROGRESS` | E2-01 audit complete (`ba1a583`); E2-02 spec scaffolded | E0+E1 VERIFIED gate satisfied | `ba1a583` |
 | E3 | `BLOCKED` | 0/25 | E2 gate | `E3-01` | — |
 | BETA | `BLOCKED` | 0/14 | E3 gate | `B-01` | — |
 | E4 | `BLOCKED` | 0/22 | E3 gate and verified dataset | `E4-01` | — |

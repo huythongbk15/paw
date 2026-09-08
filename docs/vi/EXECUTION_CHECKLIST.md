@@ -290,7 +290,7 @@ success tác động cao không thấp hơn cloud-only baseline. Ước lượng
 
 ### Role và evidence routing
 
-- [ ] `E2-01` Kiểm kê input/output/caller Model Router hiện tại. `(2h, D0)`
+- [x] `E2-01` Kiểm kê input/output/caller Model Router hiện tại. `(2h, D0)` — Hoàn thành tại `ba1a583`; `docs/benchmarks/e2/e2_01_audit.md`
 - [ ] `E2-02` Định nghĩa cognitive role tối thiểu cho case E0. `(3h, D0)`
 - [ ] `E2-03` Định nghĩa output/evidence/uncertainty contract theo role. `(0.5d, D1)`
 - [ ] `E2-04` Định nghĩa signal novelty, impact, privacy, context sufficiency, budget. `(0.5d, D1)`
@@ -462,8 +462,8 @@ thái tiến độ gate, không cho phép gọi implementation quan sát đượ
 |---|---|---:|---|---|---|
 | SX | `VERIFIED` | 14/14 | không | `SX-14` đã đóng | `f3ad4ef` (548 passed trong 303.72s) |
 | E0 | `IN PROGRESS` | 44/44 items marked [x] hoặc DEFERRED (deterministic baseline gate; E0-20/21 charter-deferred cho cloud baseline) | không (E0-20/21 deferred-by-charter; E0-17/18/19/22 covered bởi lượt chạy hiện tại; E0-26..42 features dispositions done) | re-open any E0-17..42 nếu cần follow-up review | `f3ad4ef` (777 passed, ruff clean); re-verified tại `08a8806` |
-| E1 | PASS tren 1747ea0 | 37/37 core + 13/13 backlog PASS + E1-23/24/25/35/36 + E1-26 retrofit + 9 E1-27 tests; E1-27 gate: PASS (recall=1.00, reduction=0.981 tren PAW source). Diagnostic E0 2-case subset van PARTIAL. | E1-27 metric gate PASS tren clean revision; clean D3 closed | 1747ea0 |
-| E2 | BLOCKED | 0/50 | E1 gate PASS nhung E2 chua bat dau | cho Dai ca quyet dinh | - |
+| E1 | VERIFIED tren `c28d679` | 37/37 + 3/3 backlog PASS; E1-27 gate PASS/VERIFIED (dirty=false, recall=1.0, reduction=0.871); 19 E1-27 tests pass | E1-27 gate VERIFIED | `c28d679` |
+| E2 | `IN PROGRESS` | E2-01 audit complete (`ba1a583`); E2-02 spec scaffolded | E0+E1 VERIFIED | `ba1a583` |
 | E3 | `BLOCKED` | 0/25 | Gate E2 | `E3-01` | — |
 | BETA | `BLOCKED` | 0/14 | Gate E3 | `B-01` | — |
 | E4 | `BLOCKED` | 0/22 | Gate E3 và dataset verified | `E4-01` | — |
