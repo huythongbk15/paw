@@ -355,8 +355,9 @@ The runner is a future consumer of the PAW runtime loop; it is NOT yet integrate
 5. ~~**Phase 19 Runtime Hardening**~~ ✅ DONE (2026-08-30, 501 tests)
 6. ~~**Phase 20 Agent Loop**~~ ✅ DONE (506 tests)
 7. ~~**E0 track**~~ ✅ VERIFIED on f3ad4ef (13/13 fixture-validation baseline; E0-23a paw.core surface; E0-27 gate verdict PASS)
-8. ~~**E1 track**~~ ✅ VERIFIED (37/37 + 3/3 backlog contract tests done; E1-27 measurement gate PASS on clean revision ae5344a)
+8. ~~**E1 track**~~ ✅ VERIFIED (37/37 + 3/3 backlog PASS; E1-27 measurement gate PASS/VERIFIED on clean revision `c28d679`; 19 E1-27 tests pass)
 9. ~~**E1-35 E2E recall contract**~~ ✅ VERIFIED (10 tests, real fixture repo, no monkeypatch)
+10. **E2** — IN PROGRESS (E2-01 audit complete at `ba1a583`; E2-02 readiness record scaffolded in docs; E0+E1 VERIFIED gate satisfied)
 
 ### E1 track finalization (2026-09-06)
 
