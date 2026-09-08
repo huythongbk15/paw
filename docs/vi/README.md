@@ -49,7 +49,7 @@ uv sync --locked --extra dev
 7. [Tham chiếu API](api.md) và [ví dụ](examples.md) — cách dùng thực tế của
    runtime và CLI chat.
 8. [Contract role/task-signal E2](benchmarks/e2/e2_02_implementation_readiness.md)
-   — bản dịch của contract pre-gate E2-02..04; chưa phải runtime đã kích hoạt.
+   — bản dịch của contract pre-gate E2-02..05; chưa phải runtime đã kích hoạt.
 
 ## Thứ tự ưu tiên khi tài liệu không khớp
 

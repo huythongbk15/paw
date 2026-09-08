@@ -354,11 +354,12 @@ registry.
 | Open risks | 1 latent (race on first call); rest fixed/pinned |
 
 The audited router/executor boundary is usable input to E2, but E2 is currently
-blocked because E1 is `PARTIAL`. Isolated E2-02..04 value-contract drafts exist
-and have focused tests; they do not make the router trajectory-aware and have no
+blocked because E1 is `PARTIAL`. Isolated E2-02..05 value-contract drafts
+(`RoleContract`, `TaskSignals`, `OODCondition`/`EligibilityRule`) exist and have
+focused tests; they do not make the router trajectory-aware and have no
 runtime/persistence/provider authority. After a real-source E1 freeze, the safe
-sequence is to re-ratify E2-02..04, define E2-05 eligibility/OOD conditions,
-then extend the existing router under E2-06 and add ledger evidence under E2-07.
+sequence is to re-ratify E2-02..05, then extend the existing router under E2-06
+and add ledger evidence under E2-07.
 
 ---
 

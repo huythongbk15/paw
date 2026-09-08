@@ -7,7 +7,7 @@ representative-project or overall E1 gate. A current dirty-tree run over 70 PAW
 source files observes recall 1.00 and median warm reduction 0.981, but has stale
 reviewed-fixture provenance and correctly returns `PARTIAL`/`OBSERVED`.
 Remaining gate work: reviewed real-source freeze and D3 quality, privacy, lint,
-build and isolated-install verification. The isolated E2-02..04 contracts are
+build and isolated-install verification. The isolated E2-02..05 contracts are
 pre-gate repair evidence only; they do not unblock E2 runtime work.
 
 This is the atomic execution tracker derived from `ROADMAP.md`. The Roadmap
@@ -335,9 +335,9 @@ baseline. Estimated 34–45 days.
 ### Roles and routing evidence
 
 - [x] `E2-01` Inventory current Model Router inputs, outputs and all callers. `(2h, D0)` — READ-ONLY audit complete at `ba1a583`; `docs/benchmarks/e2/e2_01_audit.md`
-- [ ] `E2-02` Define the minimum cognitive roles needed by E0 cases. `(3h, D0)` — PRE-GATE DRAFT: `core/reasoning_contracts.py` reuses the existing `ModelRole` vocabulary and identifies only FAST/REASONING/CODING/TOOLS as the minimum engineering cognitive roles. VISION/EMBEDDING remain modalities and FALLBACK remains a routing marker. The draft is immutable and does not expand `paw.core`; activation waits for E1 `VERIFIED`.
-- [ ] `E2-03` Define role-specific output, evidence and uncertainty contracts. `(0.5d, D1)` — PRE-GATE DRAFT: one frozen `RoleContract` registry defines typed output schema, evidence/citation requirements, confidence boundary and low-confidence disposition. It does not request or expose hidden chain-of-thought and has no runtime authority. Focused contract tests pass; activation waits for E1.
-- [ ] `E2-04` Define novelty, impact, privacy, context-sufficiency and budget signals. `(0.5d, D1)` — PRE-GATE DRAFT: `TaskSignals` reuses canonical `PrivacyClass`, defaults missing reconnaissance to explicit unknown values, validates uncertainty/token ranges and deliberately does not classify FAST/STANDARD/DEEP or trigger escalation (owned by E2-29/E2-11). Focused contract tests pass; activation waits for E1.
+- [x] `E2-02` Define the minimum cognitive roles needed by E0 cases. `(3h, D0)` — PRE-GATE DRAFT: `core/reasoning_contracts.py` reuses the existing `ModelRole` vocabulary and identifies only FAST/REASONING/CODING/TOOLS as the minimum engineering cognitive roles. VISION/EMBEDDING remain modalities and FALLBACK remains a routing marker. The draft is immutable and does not expand `paw.core`; activation waits for E1 `VERIFIED`. 9 tests pass.
+- [x] `E2-03` Define role-specific output, evidence and uncertainty contracts. `(0.5d, D1)` — PRE-GATE DRAFT: one frozen `RoleContract` registry defines typed output schema, evidence/citation requirements, confidence boundary and low-confidence disposition. It does not request or expose hidden chain-of-thought and has no runtime authority. 8 tests pass; activation waits for E1.
+- [x] `E2-04` Define novelty, impact, privacy, context-sufficiency and budget signals. `(0.5d, D1)` — PRE-GATE DRAFT: `TaskSignals` reuses canonical `PrivacyClass`, defaults missing reconnaissance to explicit unknown values, validates uncertainty/token ranges and deliberately does not classify FAST/STANDARD/DEEP or trigger escalation (owned by E2-29/E2-11). 18 tests pass; activation waits for E1.
 - [x] `E2-05` Define local eligibility and explicit out-of-distribution conditions per role. `(0.5d, D0)` — `core/reasoning_contracts.py`: `ProviderKind`, `OODCondition` (closed 9-value enum), `OOD_CONDITIONS`, `EligibilityRule`, `CANONICAL_ELIGIBILITY_RULES`, `EligibilityResult`, `evaluate_local_eligibility()`. 17 tests pass.
 - [ ] `E2-06` Extend the existing router decision; do not introduce a parallel router. `(1d, D2)`
 - [ ] `E2-07` Persist role, model, effort, budget, reason and fallback in the ledger. `(0.5d, D2)`
@@ -507,7 +507,7 @@ gate-progress view, not permission to call observed implementation `DONE`.
 | SX | `VERIFIED` | 14/14 | none | `SX-14` closed | `f3ad4ef` (548 passed in 303.72s) |
 | E0 | `IN PROGRESS` | 44/44 items marked [x] or DEFERRED (deterministic baseline gate; E0-20/21 are charter-deferred for cloud baseline) | none (E0-20/21 deferred-by-charter; E0-17/18/19/22 covered by current run; E0-26..42 features dispositions done) | re-open any E0-17..42 if a follow-up review needs it | `f3ad4ef` (777 passed, ruff clean); re-verified at `08a8806` |
 | E1 | `PARTIAL` | Earlier focused items pass; E1-27 representative clean-revision gate remains open. Current real-source metric observation: recall=1.0, reduction=0.981. | Dirty tree, stale reviewed-fixture provenance, and no same-revision quality/privacy D3 evidence. The clean `c28d679` report measured only the synthetic fixture corpus. | Review/freeze real-source fixtures, then E1-27 D3. | `2c4a81f` + working tree (`OBSERVED`) |
-| E2 | `BLOCKED` | E2-01 audit complete; E2-02..04 isolated contract drafts have focused tests but remain unchecked. | E1 is not `VERIFIED`; no E2 runtime/persistence/router wiring is authorized. | After E1 passes, ratify E2-02..04, then E2-05. | — |
+| E2 | `BLOCKED` | E2-01 audit complete; E2-02..05 isolated contract drafts have focused tests but remain unchecked (pre-gate value contracts only). | E1 is not `VERIFIED`; no E2 runtime/persistence/router wiring is authorized. | After E1 passes, ratify E2-02..05, then E2-06 (extend existing router). | — |
 | E3 | `BLOCKED` | 0/25 | E2 gate | `E3-01` | — |
 | BETA | `BLOCKED` | 0/14 | E3 gate | `B-01` | — |
 | E4 | `BLOCKED` | 0/22 | E3 gate and verified dataset | `E4-01` | — |

@@ -1,4 +1,4 @@
-# E2-02..04 — Cognitive roles and task-signal contracts
+# E2-02..05 — Cognitive roles, task-signal and local-eligibility contracts
 
 **Review date:** 2026-09-08  
 **Baseline:** `2c4a81f` plus the working tree  

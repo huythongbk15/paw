@@ -13,7 +13,7 @@ sử mô tả cách repository phình lên; chúng không quyết định việc
 
 Track hiện tại: **E1 — qualification trên revision sạch của source thật**.
 Core Stabilization và E0 đã `VERIFIED`; E1 vẫn `PARTIAL`. Audit E2-01 và các
-contract E2-02..04 độc lập chỉ là input trước gate, không kích hoạt E2.
+contract E2-02..05 độc lập chỉ là input trước gate, không kích hoạt E2.
 
 | Phạm vi | Kết quả hiện tại | Ý nghĩa |
 |---|---|---|
@@ -409,5 +409,5 @@ tài liệu, không được hạ để biến implementation kém thành hoàn 
    privacy/quality và gate D3 gồm test, lint, build, cài wheel cô lập. Giữ nguyên
    corpus, revision, dirty flag và fixture-review rows trong evidence.
 3. Chỉ ghi E1 `VERIFIED` nếu toàn bộ acceptance đạt trên cùng revision. Khi đó
-   mới ratify E2-02..04 và bắt đầu E2-05; nếu không, giữ E2 bị chặn và sửa failure
+   mới ratify E2-02..05 và tiếp tục E2-06; nếu không, giữ E2 bị chặn và sửa failure
    có tên.

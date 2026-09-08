@@ -1,4 +1,4 @@
-# E2-02..04 — Contract cognitive role và task signal
+# E2-02..05 — Contract cognitive role, task signal và local eligibility
 
 **Ngày review:** 2026-09-08  
 **Baseline:** `2c4a81f` cộng working tree  
@@ -67,7 +67,7 @@ task routine/public/low-impact. `TaskSignals.complete` chỉ báo input đã đ�
 không phân loại `FAST`/`STANDARD`/`DEEP`, yêu cầu escalation hoặc chọn model.
 Các hành vi đó lần lượt thuộc E2-29, E2-11 và E2-06.
 
-Focused contract test có thể pass cho repair value contract, nhưng E2-02..04 vẫn
+Focused contract test có thể pass cho repair value contract, nhưng E2-02..05 vẫn
 để unchecked cho tới khi E1 `VERIFIED` và contract được review lại trên revision
 đó.
 

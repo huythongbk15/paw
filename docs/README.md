@@ -28,7 +28,7 @@ Current gate result:
 | Core Stabilization | **`VERIFIED`** on `f3ad4ef` | S0–S6 acceptance passed the clean-revision D3 gate; the freeze commit is the canonical evidence. |
 | E0 (fixture-validation baseline) | **`VERIFIED`** for deterministic offline | The contract, 13 cases (8 minimum + 5 research-decision), the deterministic evidence runner, and the integration-pack record are in place. The 13/13 SUCCESS line is **fixture-validation**, not an agent-quality gate; the runtime-driven agent-quality tier is post-gate work (E0-40). |
 | E1 (Local project intelligence) | `PARTIAL`; real-source metric `PASS` is `OBSERVED` | The current 70-file `src/paw` run has cold/warm recall 1.00 and median warm context reduction 0.981. The clean 12-file synthetic-fixture report at `c28d679` is not representative-project evidence. A reviewed real-source freeze plus the remaining quality/privacy D3 gate is required. |
-| E2, E3, BETA | `BLOCKED` | E2 requires E0 + E1 `VERIFIED`. The E2-01 audit and isolated E2-02..04 value contracts are provisional and have no runtime authority. |
+| E2, E3, BETA | `BLOCKED` | E2 requires E0 + E1 `VERIFIED`. The E2-01 audit and isolated E2-02..05 value contracts (`RoleContract`, `TaskSignals`, `OODCondition`/`EligibilityRule`) are provisional and have no runtime authority. |
 | E4 (controlled adaptation) | `BLOCKED`, optional | Requires E0–E3 and a verified dataset; not required for BETA. |
 
 Audit baseline: Core Stabilization freeze `f3ad4ef`, current HEAD `2c4a81f`, and

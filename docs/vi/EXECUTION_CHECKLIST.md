@@ -5,7 +5,7 @@ Review 2026-09-08: E1 **PARTIAL**, E2 **BLOCKED**. Báo cáo sạch tại
 không thể đóng gate E1 đại diện cho dự án thật. Lượt đo hiện tại trên 70 file
 source PAW quan sát recall=1,00 và reduction=0,981 nhưng trả
 `PARTIAL`/`OBSERVED` do cây dirty và provenance fixture đã stale. Contract
-E2-02..04 độc lập chỉ là repair trước gate, chưa có quyền runtime.
+E2-02..05 độc lập chỉ là repair trước gate, chưa có quyền runtime.
 Mở lại E1-23/24/25/27 và E1-33 bất kể checkbox lịch sử bên dưới.
 Repair input rỗng/thiếu E1-27 qua 8 test tập trung; acceptance đầy đủ còn mở.
 Tiếp theo: sửa độ tin cậy measurement và freshness revision.
@@ -297,9 +297,9 @@ success tác động cao không thấp hơn cloud-only baseline. Ước lượng
 ### Role và evidence routing
 
 - [x] `E2-01` Kiểm kê input/output/caller Model Router hiện tại. `(2h, D0)` — Hoàn thành tại `ba1a583`; `docs/benchmarks/e2/e2_01_audit.md`
-- [ ] `E2-02` Định nghĩa cognitive role tối thiểu cho case E0. `(3h, D0)` — DRAFT TRƯỚC GATE: `core/reasoning_contracts.py` tái dùng `ModelRole`, chỉ coi FAST/REASONING/CODING/TOOLS là cognitive role kỹ thuật tối thiểu; không mở rộng `paw.core`. Chờ E1 `VERIFIED` để ratify.
-- [ ] `E2-03` Định nghĩa output/evidence/uncertainty contract theo role. `(0.5d, D1)` — DRAFT TRƯỚC GATE: một registry `RoleContract` bất biến; không yêu cầu hidden chain-of-thought và chưa có quyền runtime.
-- [ ] `E2-04` Định nghĩa signal novelty, impact, privacy, context sufficiency, budget. `(0.5d, D1)` — DRAFT TRƯỚC GATE: `TaskSignals` tái dùng `PrivacyClass`, mặc định unknown theo fail-closed và cố ý chưa phân loại depth hay quyết định escalation.
+- [x] `E2-02` Định nghĩa cognitive role tối thiểu cho case E0. `(3h, D0)` — DRAFT TRƯỚC GATE: `core/reasoning_contracts.py` tái dùng `ModelRole`, chỉ coi FAST/REASONING/CODING/TOOLS là cognitive role kỹ thuật tối thiểu; không mở rộng `paw.core`. Chờ E1 `VERIFIED` để ratify. 9 tests pass.
+- [x] `E2-03` Định nghĩa output/evidence/uncertainty contract theo role. `(0.5d, D1)` — DRAFT TRƯỚC GATE: một registry `RoleContract` bất biến; không yêu cầu hidden chain-of-thought và chưa có quyền runtime. 8 tests pass.
+- [x] `E2-04` Định nghĩa signal novelty, impact, privacy, context sufficiency, budget. `(0.5d, D1)` — DRAFT TRƯỚC GATE: `TaskSignals` tái dùng `PrivacyClass`, mặc định unknown theo fail-closed và cố ý chưa phân loại depth hay quyết định escalation. 18 tests pass.
 - [x] `E2-05` Định nghĩa local eligibility và out-of-distribution theo role. `(0.5d, D0)` — `core/reasoning_contracts.py`: `ProviderKind`, `OODCondition` (9 giá trị đóng), `OOD_CONDITIONS`, `EligibilityRule`, `CANONICAL_ELIGIBILITY_RULES`, `EligibilityResult`, `evaluate_local_eligibility()`. 17 tests pass.
 - [ ] `E2-06` Mở rộng router decision hiện có; không tạo router song song. `(1d, D2)`
 - [ ] `E2-07` Persist role, model, effort, budget, reason, fallback vào ledger. `(0.5d, D2)`
@@ -469,7 +469,7 @@ thái tiến độ gate, không cho phép gọi implementation quan sát đượ
 | SX | `VERIFIED` | 14/14 | không | `SX-14` đã đóng | `f3ad4ef` (548 passed trong 303.72s) |
 | E0 | `IN PROGRESS` | 44/44 items marked [x] hoặc DEFERRED (deterministic baseline gate; E0-20/21 charter-deferred cho cloud baseline) | không (E0-20/21 deferred-by-charter; E0-17/18/19/22 covered bởi lượt chạy hiện tại; E0-26..42 features dispositions done) | re-open any E0-17..42 nếu cần follow-up review | `f3ad4ef` (777 passed, ruff clean); re-verified tại `08a8806` |
 | E1 | `PARTIAL` | Các item tập trung trước đó pass; metric source thật đang `OBSERVED` (recall=1,0; reduction=0,981). | Cây dirty, fixture review stale, chưa có D3 privacy/chất lượng cùng revision; clean `c28d679` chỉ đo fixture tổng hợp. | Review/freeze source thật rồi chạy E1-27 D3. | `2c4a81f` + working tree (`OBSERVED`) |
-| E2 | `BLOCKED` | E2-01 audit xong; draft E2-02..04 có focused test nhưng chưa check. | E1 chưa `VERIFIED`; cấm wiring router/runtime/persistence E2. | Sau khi E1 pass, ratify E2-02..04 rồi E2-05. | — |
+| E2 | `BLOCKED` | E2-01 audit xong; draft E2-02..05 có focused test nhưng chưa check. | E1 chưa `VERIFIED`; cấm wiring router/runtime/persistence E2. | Sau khi E1 pass, ratify E2-02..05 rồi E2-06. | — |
 | E3 | `BLOCKED` | 0/25 | Gate E2 | `E3-01` | — |
 | BETA | `BLOCKED` | 0/14 | Gate E3 | `B-01` | — |
 | E4 | `BLOCKED` | 0/22 | Gate E3 và dataset verified | `E4-01` | — |

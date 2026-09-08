@@ -37,7 +37,7 @@ is provisional input and does not activate E2.
 | Core Stabilization | `VERIFIED` on `f3ad4ef` | All S0–S6 acceptance items passed the clean-revision D3 gate; the `f3ad4ef` freeze commit is the canonical evidence. |
 | E0 (Engineering benchmark and feature subtraction) | `VERIFIED` for the deterministic offline fixture-validation baseline on `f3ad4ef` | The contract, the 13-case set (8 minimum E0-08..15 + 5 research-decision E0-28..35), the deterministic evidence runner (`shell=False` for `command_exit`), and the integration-pack record are in place. The 13/13 SUCCESS line in `docs/benchmarks/e0/integration_pack_run.md` is **fixture-validation** evidence, not an agent-quality gate; the runtime-driven agent-quality tier is post-gate work (E0-40). The cloud baseline remains deferred per the project charter. |
 | E1 | `PARTIAL` | The clean `c28d679` report verifies only the 12-file synthetic-fixture metric (recall 1.0, median reduction 0.871). The current 70-file `src/paw` metric observation passes (recall 1.0, reduction 0.981) but is dirty and has stale fixture provenance. Overall privacy/quality/release evidence is not frozen. |
-| E2–E3 and BETA | `BLOCKED` | E2-01 is provisional audit input. E2-02..04 have isolated, tested value-contract drafts in `core/reasoning_contracts.py`, but no router, runtime, persistence or readiness wiring is authorized before E1 `VERIFIED`. |
+| E2–E3 and BETA | `BLOCKED` | E2-01 is provisional audit input. E2-02..05 have isolated, tested value-contract drafts in `core/reasoning_contracts.py` (`RoleContract`, `TaskSignals`, `OODCondition`/`EligibilityRule`), but no router, runtime, persistence or readiness wiring is authorized before E1 `VERIFIED`. |
 | E4 controlled adaptation | `BLOCKED`, optional | Requires E0–E3 and a verified dataset; it is not required for BETA. |
 
 The engineering-intelligence direction dated 2026-09-01 is recorded in the
@@ -541,6 +541,7 @@ appear complete.
    the named E1 privacy/quality proofs and the scheduled D3
    test/lint/build/isolated-install gate. Preserve the report's corpus, revision,
    dirty flag and fixture-review rows as evidence.
-3. Record E1 `VERIFIED` only if every acceptance condition passes on that one
-   revision. Then re-approve E2-02..04 as active contracts and begin E2-05;
-   otherwise keep E2 blocked and repair the named E1 failure.
+3. Record E1 `VERIFIED` only if every acceptance conditions passes on that one
+   revision. Then re-approve E2-02..05 as active contracts and continue with
+   E2-06 (extend the existing router decision); otherwise keep E2 blocked and
+   repair the named E1 failure.
