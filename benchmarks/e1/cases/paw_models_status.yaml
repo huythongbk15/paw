@@ -1,7 +1,7 @@
 schema_version: "1.0.0"
 case_id: paw_models_status
 decision_artifact_version: "1.0.0"
-project_revision: "e4c9e78"
+project_revision: "02e5119"
 category: repo_understanding
 privacy_class: internal
 goal: |
@@ -11,7 +11,7 @@ goal: |
   at the expected source locations.
 fixtures:
   - path: src/paw/core/models.py
-    revision: e4c9e78
+    revision: 02e5119
     purpose: |
       Reviewed PAW module definitions. TaskStatus + PolicyDecision
       are co-located with Capability, ChatRole, ChatSessionStatus
