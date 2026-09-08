@@ -323,6 +323,119 @@ CANONICAL_ROLE_CONTRACTS: dict[str, RoleContract] = {
 }
 
 
+# --- E2-04: Task Signals ---
+
+class NoveltyLevel(StrEnum):
+    """How novel or unfamiliar the task is relative to PAW's known patterns."""
+    ROUTINE = "routine"       # well-understood, frequent pattern
+    FAMILIAR = "familiar"     # similar to past tasks, minor variation
+    NOVEL = "novel"           # new pattern, not seen before
+    UNPRECEDENTED = "unprecedented"  # no prior analog exists
+
+
+class ImpactLevel(StrEnum):
+    """How consequential the decision outcome is."""
+    LOW = "low"               # cosmetic or reversible change
+    MEDIUM = "medium"         # affects user workflow, reversible
+    HIGH = "high"             # affects production, hard to revert
+    CRITICAL = "critical"     # irreversible or security-sensitive
+
+
+class PrivacyLevel(StrEnum):
+    """Sensitivity of the data the task touches."""
+    PUBLIC = "public"         # no sensitive data
+    INTERNAL = "internal"     # workspace-level data
+    WORKSPACE = "workspace"   # cross-workspace or shared data
+    SECRET = "secret"         # credentials, keys, or regulated data
+
+
+class ContextSufficiencyLevel(StrEnum):
+    """Whether the task has sufficient context to proceed."""
+    SUFFICIENT = "sufficient"    # clear goal, inputs, constraints
+    PARTIAL = "partial"          # some context, needs reconnaissance
+    INSUFFICIENT = "insufficient"  # missing critical context
+    UNKNOWN = "unknown"          # cannot determine from available signals
+
+
+class BudgetLevel(StrEnum):
+    """Cost/token/effort constraint on the task."""
+    UNLIMITED = "unlimited"     # no explicit budget cap
+    LOW = "low"                 # cheap, fast completion expected
+    MEDIUM = "medium"           # moderate budget, standard completion
+    HIGH = "high"               # generous budget, thorough analysis
+    CONSTRAINED = "constrained" # hard budget cap must not be exceeded
+
+
+@dataclass(frozen=True)
+class TaskSignals:
+    """E2-04: Signal bundle that classifies a task before routing.
+
+    These signals are the input to goal classification (FAST/STANDARD/DEEP)
+    and to routing depth decisions. They are determined by reconnaissance
+    or user input and are immutable once set.
+    """
+    novelty: NoveltyLevel = NoveltyLevel.ROUTINE
+    impact: ImpactLevel = ImpactLevel.LOW
+    privacy: PrivacyLevel = PrivacyLevel.PUBLIC
+    context_sufficiency: ContextSufficiencyLevel = ContextSufficiencyLevel.SUFFICIENT
+    budget: BudgetLevel = BudgetLevel.UNLIMITED
+    # Optional explicit uncertainty score (0.0-1.0), set by reconnaissance
+    uncertainty_score: float = 0.0
+    # Optional estimated token cost, set by context compiler
+    estimated_tokens: int = 0
+
+    def is_escalation_required(self) -> bool:
+        """True if any signal crosses the escalation threshold."""
+        return (
+            self.novelty in (NoveltyLevel.NOVEL, NoveltyLevel.UNPRECEDENTED)
+            or self.impact in (ImpactLevel.HIGH, ImpactLevel.CRITICAL)
+            or self.privacy in (PrivacyLevel.WORKSPACE, PrivacyLevel.SECRET)
+            or self.context_sufficiency in (
+                ContextSufficiencyLevel.PARTIAL,
+                ContextSufficiencyLevel.INSUFFICIENT,
+                ContextSufficiencyLevel.UNKNOWN,
+            )
+            or self.budget == BudgetLevel.CONSTRAINED
+            or self.uncertainty_score >= 0.5
+        )
+
+    def goal_classification(self) -> str:
+        """Classify the goal as FAST, STANDARD, or DEEP.
+
+        FAST: routine, low impact, public, sufficient, unlimited.
+        STANDARD: familiar or routine with some elevated signals.
+        DEEP: novel/high-impact/privacy-heavy/context-insufficient.
+        """
+        if (
+            self.novelty == NoveltyLevel.ROUTINE
+            and self.impact == ImpactLevel.LOW
+            and self.privacy == PrivacyLevel.PUBLIC
+            and self.context_sufficiency == ContextSufficiencyLevel.SUFFICIENT
+            and self.budget in (BudgetLevel.UNLIMITED, BudgetLevel.LOW)
+            and self.uncertainty_score < 0.3
+        ):
+            return "FAST"
+        if self.is_escalation_required():
+            return "DEEP"
+        return "STANDARD"
+
+
+#: Canonical task signal defaults for reconnaissance-free tasks.
+DEFAULT_TASK_SIGNALS = TaskSignals()
+
+
+def classify_task(signals: TaskSignals) -> str:
+    """Classify a task's goal as FAST, STANDARD, or DEEP from signals.
+
+    This is the entry point for E2-04 signal classification.
+    The classification feeds into ModelRouter.route() role selection
+    and Autonomy budget sizing.
+    """
+    return signals.goal_classification()
+
+
+# --- Phase 10: Autonomy Decisions ---
+
 class SkillRisk(StrEnum):
     LOW = "low"
     MEDIUM = "medium"
