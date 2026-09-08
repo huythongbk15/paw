@@ -8,12 +8,17 @@ becoming accidental permanent contracts.
 from __future__ import annotations
 
 from .models import (
+    CANONICAL_MODEL_ROLES,
+    CANONICAL_ROLE_CONTRACTS,
     AutonomyDecision,
     Capability,
     ExecutionObservation,
+    ModelRole,
     PolicyDecision,
     ProposedAction,
     ResourceUsage,
+    RoleContract,
+    RoleDefinition,
     StopReason,
     TaskResult,
     TaskStatus,
@@ -21,13 +26,18 @@ from .models import (
 from .runtime import PawRuntime, RuntimeOutcome
 
 __all__ = [
+    "CANONICAL_MODEL_ROLES",
+    "CANONICAL_ROLE_CONTRACTS",
     "AutonomyDecision",
     "Capability",
     "ExecutionObservation",
+    "ModelRole",
     "PawRuntime",
     "PolicyDecision",
     "ProposedAction",
     "ResourceUsage",
+    "RoleContract",
+    "RoleDefinition",
     "RuntimeOutcome",
     "StopReason",
     "TaskResult",

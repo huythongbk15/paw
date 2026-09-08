@@ -7,6 +7,7 @@ All domain objects are owned by PAW. No external framework types leak into these
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Annotated, Any, TypeVar
@@ -143,6 +144,13 @@ class ModelCapability(StrEnum):
 
 
 class ModelRole(StrEnum):
+    """Canonical PAW cognitive roles (E2-02).
+
+    These are the minimum roles that E0 benchmark cases and the runtime
+    expect. ``ModelManifest.roles`` should contain only values from this
+    enum. ``FALLBACK`` is a catch-all for models that can serve any role
+    but with reduced quality.
+    """
     FAST = "fast"
     REASONING = "reasoning"
     CODING = "coding"
@@ -150,6 +158,169 @@ class ModelRole(StrEnum):
     VISION = "vision"
     EMBEDDING = "embedding"
     FALLBACK = "fallback"
+
+
+@dataclass
+class RoleDefinition:
+    """Metadata for a canonical PAW cognitive role (E2-02).
+
+    Describes what the role means, what output format is expected, and
+    how uncertainty is surfaced. This is documentation + type-level info;
+    the runtime does not enforce these beyond what the ledger records.
+    """
+    role: str
+    description: str
+    # E2-03: expected output / evidence / uncertainty contract
+    expected_output: str = ""
+    requires_evidence: bool = False
+    uncertainty_handled: bool = False
+    preferred_by: list[str] = field(default_factory=list)  # scenario tags that prefer this role
+
+
+#: Canonical role registry (E2-02). Every RoleDefinition has a stable,
+#: documented entry. The set of keys is the minimum viable role surface
+#: that PAW's E0 benchmark cases exercise.
+CANONICAL_MODEL_ROLES: dict[str, RoleDefinition] = {
+    ModelRole.FAST: RoleDefinition(
+        role=ModelRole.FAST,
+        description="Low-latency, low-cost completion for simple tasks.",
+        expected_output="plain text, chat-format",
+        requires_evidence=False,
+        uncertainty_handled=False,
+        preferred_by=["speed", "summary"],
+    ),
+    ModelRole.REASONING: RoleDefinition(
+        role=ModelRole.REASONING,
+        description="Deep chain-of-thought for multi-step / uncertain problems.",
+        expected_output="structured text with explicit reasoning trace",
+        requires_evidence=True,
+        uncertainty_handled=True,
+        preferred_by=["complexity", "uncertainty"],
+    ),
+    ModelRole.CODING: RoleDefinition(
+        role=ModelRole.CODING,
+        description="Code generation, editing and refactoring.",
+        expected_output="code blocks with language tag",
+        requires_evidence=False,
+        uncertainty_handled=False,
+        preferred_by=["coding"],
+    ),
+    ModelRole.TOOLS: RoleDefinition(
+        role=ModelRole.TOOLS,
+        description="Tool / function calling across APIs and shell.",
+        expected_output="tool_call arrays or plain text",
+        requires_evidence=False,
+        uncertainty_handled=False,
+        preferred_by=["tools"],
+    ),
+    ModelRole.VISION: RoleDefinition(
+        role=ModelRole.VISION,
+        description="Image / multimodal understanding.",
+        expected_output="structured text",
+        requires_evidence=False,
+        uncertainty_handled=False,
+        preferred_by=["vision"],
+    ),
+    ModelRole.EMBEDDING: RoleDefinition(
+        role=ModelRole.EMBEDDING,
+        description="Embedding / vector representation for retrieval.",
+        expected_output="list[float]",
+        requires_evidence=False,
+        uncertainty_handled=True,
+        preferred_by=["retrieval"],
+    ),
+    ModelRole.FALLBACK: RoleDefinition(
+        role=ModelRole.FALLBACK,
+        description="Catch-all role; used when no specific role matches.",
+        expected_output="plain text",
+        requires_evidence=False,
+        uncertainty_handled=False,
+        preferred_by=["emergency"],
+    ),
+}
+
+
+@dataclass
+class RoleContract:
+    """Per-role output, evidence, and uncertainty contract (E2-03).
+
+    Defines what every model serving a given role should produce so that
+    the runtime can validate / observe outcomes consistently.
+    """
+    role: str
+    # E2-03: output schema identifier (for future structured-output validation)
+    output_schema: str = ""
+    # Whether the role's result must carry verifiable evidence
+    requires_evidence: bool = False
+    # Whether the role reports confidence / uncertainty alongside the answer
+    uncertainty_handled: bool = False
+    # Allowed evidence types (empty = unrestricted)
+    allowed_evidence_types: tuple[str, ...] = ()
+    # Maximum acceptable self-reported confidence before escalation (0.0-1.0)
+    escalation_confidence_threshold: float = 0.0  # 0.0 = no threshold
+    # Whether low-confidence results must escalate vs. stop
+    escalation_mode: str = "stop"  # "stop" | "ask" | "escalate"
+    # Whether the role requires citation provenance
+    requires_citation: bool = False
+
+
+#: Canonical role contracts (E2-03). One entry per canonical role.
+CANONICAL_ROLE_CONTRACTS: dict[str, RoleContract] = {
+    ModelRole.FAST: RoleContract(
+        role=ModelRole.FAST,
+        output_schema="chat",
+        requires_evidence=False,
+        uncertainty_handled=False,
+        escalation_mode="stop",
+    ),
+    ModelRole.REASONING: RoleContract(
+        role=ModelRole.REASONING,
+        output_schema="reasoning_trace",
+        requires_evidence=True,
+        uncertainty_handled=True,
+        allowed_evidence_types=("source", "computation", "counter_example"),
+        escalation_confidence_threshold=0.5,
+        escalation_mode="escalate",
+        requires_citation=True,
+    ),
+    ModelRole.CODING: RoleContract(
+        role=ModelRole.CODING,
+        output_schema="code_block",
+        requires_evidence=False,
+        uncertainty_handled=False,
+        escalation_confidence_threshold=0.3,
+        escalation_mode="ask",
+    ),
+    ModelRole.TOOLS: RoleContract(
+        role=ModelRole.TOOLS,
+        output_schema="tool_call_or_text",
+        requires_evidence=False,
+        uncertainty_handled=False,
+        escalation_mode="stop",
+    ),
+    ModelRole.VISION: RoleContract(
+        role=ModelRole.VISION,
+        output_schema="structured_text",
+        requires_evidence=False,
+        uncertainty_handled=False,
+        escalation_mode="stop",
+    ),
+    ModelRole.EMBEDDING: RoleContract(
+        role=ModelRole.EMBEDDING,
+        output_schema="float_vector",
+        requires_evidence=False,
+        uncertainty_handled=True,
+        escalation_confidence_threshold=0.0,
+        escalation_mode="stop",
+    ),
+    ModelRole.FALLBACK: RoleContract(
+        role=ModelRole.FALLBACK,
+        output_schema="plain_text",
+        requires_evidence=False,
+        uncertainty_handled=False,
+        escalation_mode="stop",
+    ),
+}
 
 
 class SkillRisk(StrEnum):
