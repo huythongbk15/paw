@@ -191,6 +191,7 @@ def _skill_overhead() -> int:
 async def measure(
     *, repo_root: Path, roots: Sequence[str], case_dir: str,
     budget: ContextBudget,
+    embedding: str = "disabled",
 ) -> dict:
     """Measure one immutable input snapshot; changed inputs block the result."""
     repo_root = repo_root.resolve()
@@ -242,6 +243,24 @@ async def measure(
         await set_db_path(Path(directory) / "paw.db")
         await db.initialize()
         try:
+            # E1-23/24/25 real measurement: optionally enable a local
+            # embedding provider so semantic re-ranking is exercised on the
+            # production corpus. ``local`` uses the deterministic
+            # hashed-bag-of-words provider (zero external dependency);
+            # ``ollama`` tries a local Ollama server and falls back to
+            # lexical-only when it is unavailable.
+            embedding_provider = None
+            embedding_kind = "disabled"
+            if embedding == "local":
+                from paw.core.embeddings import LocalEmbeddingProvider
+                embedding_provider = LocalEmbeddingProvider()
+                embedding_kind = "local"
+            elif embedding == "ollama":
+                from paw.core.embeddings import try_ollama_embedding_provider
+                embedding_provider = await try_ollama_embedding_provider()
+                embedding_kind = "ollama" if embedding_provider else "disabled"
+            result["embedding_provider"] = embedding_kind
+
             sources = KnowledgeSourceManager()
             chunks = KnowledgeChunkStore()
             for path, content, file_chunks in prepared:
@@ -257,7 +276,10 @@ async def measure(
                         span_start=start, span_end=end,
                         metadata={"file": rel},
                     )
-            compiler = ContextCompiler(budget=budget, auto_attach_embeddings=False)
+            compiler = ContextCompiler(
+                budget=budget, auto_attach_embeddings=False,
+                embedding_provider=embedding_provider,
+            )
             for case_path, _raw, case in case_rows:
                 for mode in ("cold", "warm"):
                     manifest = await compiler.compile_manifest(
@@ -342,6 +364,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--max-tokens", type=int, default=5000)
     parser.add_argument("--max-fragments", type=int, default=30)
     parser.add_argument("--max-sources", type=int, default=10)
+    parser.add_argument(
+        "--embedding", choices=["disabled", "local", "ollama"],
+        default="disabled",
+        help="Embedding provider for semantic re-ranking. "
+             "'local' uses the deterministic hashed-bag-of-words provider "
+             "(zero external dependency); 'ollama' tries a local Ollama server.",
+    )
     args = parser.parse_args(argv)
     budget = ContextBudget(
         max_tokens=args.max_tokens, max_fragments=args.max_fragments,
@@ -352,6 +381,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             report = asyncio.run(measure(
                 repo_root=args.repo_root, roots=args.roots,
                 case_dir=args.case_dir, budget=budget,
+                embedding=args.embedding,
             ))
         except Exception as exc:
             json.dump({"measurement_gate": "BLOCKED", "error_type": type(exc).__name__}, stream)

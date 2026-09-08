@@ -16,7 +16,7 @@ from .logging import get_logger
 
 logger = get_logger(__name__)
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA = """
 -- Core tables for PAW
@@ -525,6 +525,9 @@ class Database:
             "invalidation_reason": "TEXT NOT NULL DEFAULT ''",
             "superseded_by":       "TEXT NOT NULL DEFAULT ''",
             "privacy_class":       "TEXT NOT NULL DEFAULT 'internal'",
+            "status":              "TEXT NOT NULL DEFAULT 'active'",
+            "chunk_count":         "INTEGER NOT NULL DEFAULT 0",
+            "last_sync":           "TEXT",
         }
         for col, col_def in ks_additions.items():
             if col not in ks_cols:
