@@ -21,6 +21,9 @@ from .citation import KnowledgeCitation
 from .evidence import KnowledgeEvidence
 
 logger = get_logger(__name__)
+_DEFAULT_EMBEDDING_PROVIDER = object()
+_MAX_LEXICAL_CANDIDATES = 5_000
+_MAX_HYBRID_CANDIDATES = 100
 
 
 @dataclass
@@ -49,8 +52,12 @@ class KnowledgeSearchResult:
 class KnowledgeIndex:
     """Index and search knowledge content locally."""
 
-    def __init__(self):
+    def __init__(self, embedding_provider: Any | None = None):
         self._chunk_cache: dict[str, KnowledgeChunk] = {}
+        # E2-31: optional hybrid retrieval. When set, search_chunks
+        # computes embeddings for the query + candidate chunks and
+        # re-ranks by a blended lexical + semantic score.
+        self.embedding_provider = embedding_provider
 
     async def search_chunks(
         self,
@@ -58,44 +65,119 @@ class KnowledgeIndex:
         source_id: str | None = None,
         min_score: float = 0.1,
         limit: int = 20,
+        embedding_provider: Any = _DEFAULT_EMBEDDING_PROVIDER,
     ) -> list[KnowledgeSearchResult]:
-        """Search chunks by keyword matching with relevance scoring."""
+        """Search bounded fresh chunks and optionally re-rank lexical matches."""
         query_tokens = self._tokenize(query)
         if not query_tokens:
             return []
+        if limit <= 0:
+            return []
+        provider = (
+            self.embedding_provider
+            if embedding_provider is _DEFAULT_EMBEDDING_PROVIDER
+            else embedding_provider
+        )
 
         if source_id:
             rows = await db.fetchall(
-                "SELECT * FROM knowledge_chunks WHERE source_id = ? ORDER BY created_at DESC LIMIT 500",
-                (source_id,),
+                "SELECT * FROM knowledge_chunks "
+                "WHERE source_id = ? AND stale_at IS NULL "
+                "ORDER BY created_at DESC LIMIT ?",
+                (source_id, _MAX_LEXICAL_CANDIDATES),
             )
         else:
             rows = await db.fetchall(
-                "SELECT * FROM knowledge_chunks ORDER BY created_at DESC LIMIT 500",
+                "SELECT * FROM knowledge_chunks WHERE stale_at IS NULL "
+                "ORDER BY created_at DESC LIMIT ?",
+                (_MAX_LEXICAL_CANDIDATES,),
             )
 
         results: list[KnowledgeSearchResult] = []
+        content_by_id: dict[str, str] = {}
         for row in rows:
             chunk = KnowledgeChunk.from_row(dict(row))
             score = self._score_chunk(chunk, query_tokens)
             if score >= min_score:
-                # Count evidence
-                evidence_count = await self._count_evidence(chunk.id)
-                # Get citations
-                citations = await self._get_citation_ids(chunk.id)
-
                 results.append(KnowledgeSearchResult(
                     chunk_id=chunk.id,
                     content=chunk.content[:200],
                     source_id=chunk.source_id,
                     score=score,
-                    evidence_count=evidence_count,
-                    citations=citations,
                     metadata=chunk.metadata,
                 ))
+                content_by_id[chunk.id] = chunk.content
 
         results.sort(key=lambda r: r.score, reverse=True)
-        return results[:limit]
+
+        # Optional local re-ranking applies only to already-admitted lexical
+        # candidates. A missing/broken provider leaves lexical order intact.
+        if provider is not None and results:
+            try:
+                from paw.core.embeddings import (
+                    cosine_similarity,
+                    embedding_model_id,
+                    load_knowledge_chunk_embeddings_for,
+                    store_knowledge_chunk_embedding,
+                )
+                provider_name = embedding_model_id(provider)
+                query_vecs = await provider.embed([query])
+                query_vec = query_vecs[0] if query_vecs and query_vecs[0] else None
+                if query_vec is not None:
+                    hybrid_results = results[:_MAX_HYBRID_CANDIDATES]
+                    chunk_ids = [r.chunk_id for r in hybrid_results]
+                    stored = await load_knowledge_chunk_embeddings_for(
+                        chunk_ids, provider_name,
+                    )
+                    missing = [cid for cid in chunk_ids if cid not in stored]
+                    if missing:
+                        try:
+                            miss_texts = [content_by_id[cid] for cid in missing]
+                            miss_vecs = await provider.embed(miss_texts)
+                            if len(miss_vecs) != len(missing):
+                                raise ValueError("embedding result count mismatch")
+                            for cid, vec in zip(missing, miss_vecs, strict=True):
+                                if vec:
+                                    stored[cid] = vec
+                                    try:
+                                        await store_knowledge_chunk_embedding(
+                                            cid, provider_name, vec
+                                        )
+                                    except Exception as exc:
+                                        logger.warning(
+                                            "knowledge_chunk_embed_store_failed",
+                                            chunk_id=cid,
+                                            error=str(exc),
+                                        )
+                        except Exception as exc:
+                            logger.warning(
+                                "knowledge_chunk_embed_batch_failed",
+                                error=str(exc),
+                            )
+                    # Re-rank by blended score
+                    for r in hybrid_results:
+                        vec = stored.get(r.chunk_id)
+                        if vec is None:
+                            continue
+                        sim = cosine_similarity(query_vec, vec)
+                        sem_norm = (sim + 1.0) / 2.0
+                        blended = max(r.score, sem_norm)
+                        bonus = 0.0
+                        if r.score >= 0.5 and sem_norm >= 0.5:
+                            bonus = 0.1 * min(r.score, sem_norm)
+                        r.score = blended + bonus
+                    results.sort(key=lambda r: r.score, reverse=True)
+            except Exception as exc:
+                logger.warning(
+                    "knowledge_hybrid_search_failed", error=str(exc),
+                )
+
+        results.sort(key=lambda r: r.score, reverse=True)
+        selected = results[:limit]
+        for result in selected:
+            result.evidence_count = await self._count_evidence(result.chunk_id)
+            result.citations = await self._get_citation_ids(result.chunk_id)
+        return selected
 
     async def search_evidence(
         self,
@@ -332,33 +414,86 @@ class KnowledgeIndex:
         return [r["id"] for r in rows]
 
     def _tokenize(self, text: str) -> list[str]:
-        """Simple tokenizer."""
+        """Tokenize prose and preserve/split Python identifiers.
+
+        Keeping both ``taskstatus`` and ``task``/``status`` lets an exact symbol
+        name outrank generic Python prose without requiring an embedding model.
+        """
         if not text:
             return []
-        return re.findall(r'\w+', text.lower())
+        tokens: list[str] = []
+        for raw in re.findall(r"[A-Za-z_][A-Za-z0-9_]*|\d+", text):
+            normalized = raw.strip("_").lower()
+            if not normalized:
+                continue
+            tokens.extend(self._word_forms(normalized))
+            for snake_part in raw.strip("_").split("_"):
+                camel_parts = re.findall(
+                    r"[A-Z]+(?=[A-Z][a-z]|$)|[A-Z]?[a-z]+|\d+", snake_part,
+                )
+                for part in camel_parts:
+                    lowered = part.lower()
+                    if part and lowered != normalized:
+                        tokens.extend(self._word_forms(lowered))
+        return tokens
+
+    @staticmethod
+    def _word_forms(token: str) -> list[str]:
+        """Add a small deterministic code-search stem without NLP dependencies."""
+        forms = [token]
+        if len(token) > 7 and token.endswith("ation"):
+            forms.append(f"{token[:-5]}ate")
+        elif len(token) > 6 and token.endswith("ing"):
+            forms.append(token[:-3].rstrip("n"))
+        elif len(token) > 5 and token.endswith("ed"):
+            forms.append(token[:-2])
+        return forms
 
     def _score_chunk(self, chunk: KnowledgeChunk, query_tokens: list[str]) -> float:
         """Score a chunk for relevance to query tokens."""
         if not query_tokens:
             return 0.0
 
-        content_tokens = self._tokenize(chunk.content)
-        metadata_tokens = self._tokenize(json.dumps(chunk.metadata))
-        all_tokens = content_tokens + metadata_tokens + chunk.content.lower().split()
+        stop_words = {
+            "a", "an", "and", "are", "at", "be", "by", "file", "find",
+            "for", "from", "function", "identify", "in", "is", "it", "of",
+            "on", "or", "other", "same", "that", "the", "to", "what", "which",
+            "with", "logic", "present", "expected", "outcome", "recorded",
+            "evidence", "source", "location", "defines", "defined", "helper",
+        }
+        query = {token for token in query_tokens if token not in stop_words}
+        if not query:
+            query = set(query_tokens)
+        content = set(self._tokenize(chunk.content))
+        metadata = set(self._tokenize(json.dumps(chunk.metadata, sort_keys=True)))
 
-        matched = 0
-        total = len(query_tokens)
+        def weight(token: str) -> float:
+            return 2.0 if "_" in token or len(token) >= 9 else 1.0
 
-        for qt in query_tokens:
-            if qt in all_tokens:
-                matched += 1
-            elif len(qt) > 3 and qt in chunk.content.lower():
-                matched += 0.5
-
-        # Boost for content length (more content = more likely relevant)
-        length_bonus = min(len(content_tokens) / 1000, 0.1)
-
-        return min((matched / total) + length_bonus, 1.0)
+        denominator = sum(weight(token) for token in query)
+        content_match = sum(weight(token) for token in query & content)
+        metadata_match = sum(weight(token) for token in query & metadata)
+        coverage = content_match / denominator if denominator else 0.0
+        path_boost = min(metadata_match / denominator, 0.2) if denominator else 0.0
+        content_lower = chunk.content.lower()
+        definition_boost = 0.0
+        for token in query:
+            if ("_" in token or len(token) >= 9) and re.search(
+                rf"\b(?:class|def|async\s+def)\s+_*{re.escape(token)}\b",
+                content_lower,
+            ):
+                definition_boost = max(definition_boost, 0.4)
+        for symbol in re.findall(
+            r"\b(?:class|def|async\s+def)\s+([A-Za-z_][A-Za-z0-9_]*)",
+            chunk.content,
+        ):
+            parts = {
+                part for part in self._tokenize(symbol)
+                if "_" not in part and len(part) > 2
+            }
+            if parts and parts.issubset(query):
+                definition_boost = max(definition_boost, 0.4)
+        return min(coverage + path_boost + definition_boost, 1.0)
 
 
 # Global instance

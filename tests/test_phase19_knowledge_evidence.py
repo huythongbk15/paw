@@ -30,7 +30,8 @@ class FakeKnowledgeIndex:
         self.get_chunk_calls = []
         self.search_evidence_calls = []
 
-    async def search_chunks(self, query, limit=10):
+    async def search_chunks(self, query, limit=10, embedding_provider=None):
+        del query, limit, embedding_provider
         return [_SearchResult("c1", "s1", 0.9, [])]
 
     async def get_chunk_with_evidence(self, chunk_id):

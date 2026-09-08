@@ -126,10 +126,18 @@ def test_candidate_e1_17_fields_default_to_empty() -> None:
 
 def test_candidate_sorting_still_works() -> None:
     """The pre-existing ``__lt__`` (relevance * priority)
-    is unchanged by the E1-17 addition."""
+    is unchanged by the E1-17 addition.
+
+    ``__lt__`` uses ascending comparison (lower score first), so
+    ``sorted(candidates, reverse=True)`` produces descending order
+    (higher score first), which is what the runtime's
+    ``_rank_candidates`` relies on.
+    """
     a = ContextCandidate(source="x", source_id="a", content="", relevance_score=0.9, priority=1.0)
     b = ContextCandidate(source="x", source_id="b", content="", relevance_score=0.5, priority=1.0)
-    assert a < b  # higher relevance * priority first
+    assert not (a < b)  # higher score is NOT less-than lower score
+    assert b < a        # lower score is less-than higher score
+    assert sorted([a, b], reverse=True)[0] is a  # highest score first
 
 
 # --- 3. Manifest carries included + excluded per E1-17 + E1-18 -----

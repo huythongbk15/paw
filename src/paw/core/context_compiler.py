@@ -117,16 +117,11 @@ class ContextCandidate:
     skill_level: int = 0             # 0=metadata only, 1=body, 2=resources
 
     def __lt__(self, other: ContextCandidate) -> bool:
-        """For sorting: higher relevance * priority first.
+        """For sorting: lower relevance * priority sorts first (ascending).
 
-        Note: ``sorted(candidates)`` (default, ascending) puts the
-        *lowest* score first because ``sorted`` orders by ``__lt__``.
-        Callers that want descending order must use
-        ``sorted(candidates, key=lambda c: c.rank, reverse=True)`` or
-        pass ``reverse=True`` to a ``sort`` that uses this ``__lt__``
-        with a properly inverted comparator. The runtime uses
-        ``sorted(candidates, key=lambda c: (c.relevance_score * c.priority), reverse=True)``
-        to get descending order.
+        Callers that want descending order (highest score first) use
+        ``sorted(candidates, reverse=True)``, which is what the runtime's
+        ``_rank_candidates`` does.
         """
         return (self.relevance_score * self.priority) < (other.relevance_score * other.priority)
 
@@ -445,9 +440,12 @@ class ContextCompiler:
         try:
             from paw.knowledge.index import get_knowledge_index
             idx = get_knowledge_index()
-
             # Search for relevant chunks
-            results = await idx.search_chunks(plan.knowledge_query, limit=plan.max_knowledge_chunks)
+            results = await idx.search_chunks(
+                plan.knowledge_query,
+                limit=plan.max_knowledge_chunks,
+                embedding_provider=self.embedding_provider,
+            )
 
             candidates = []
             for result in results:

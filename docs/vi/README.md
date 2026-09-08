@@ -1,8 +1,10 @@
 # Tài liệu hệ thống PAW — tiếng Việt
 
-Audit hiện tại (2026-09-07, f625fcb): **PARTIAL**. Mở lại qualification E1;
-E2 bị chặn tới khi sửa measurement. Snapshot trạng thái cũ bên dưới là lịch sử,
-không cho phép chuyển track. Xem mục audit mới trong IMPLEMENTATION_MAP.md.
+Audit hiện tại (2026-09-08, `ba1a583` cộng working tree): **PARTIAL**. Phép đo
+E1 trên chính source PAW đã đạt ngưỡng metric, nhưng evidence mới ở trạng thái
+`OBSERVED`: cây còn dirty, một fixture đã khác revision được review và gate D3
+trên revision sạch chưa chạy. E2 vẫn bị chặn. Xem quyết định và execution record
+trong `IMPLEMENTATION_MAP.md`.
 
 Đây là bộ tài liệu tiếng Việt tương ứng với bộ tài liệu hệ thống PAW hiện tại.
 Mỗi tài liệu trong thư mục này bám theo tài liệu tiếng Anh cùng tên ở thư mục
@@ -15,13 +17,14 @@ lọc, và nghiên cứu có nguồn, có giới hạn phải tạo readiness de
 hoạch triển khai. Đây là đích đã ghi trong tài liệu, chưa phải trạng thái đã
 triển khai; Core Stabilization vẫn là track duy nhất đang hoạt động.
 
-Kết quả gate hiện tại: **`PARTIAL`**. Behavior sửa S0–S6 đã được quan sát trong
-working tree nhưng SX chưa qualify một revision sạch đã review. SX-01 tới SX-03
-đã có focused evidence. Vì vậy E0–E3, BETA và E4 tùy chọn vẫn `BLOCKED`; item
-tiếp theo là `SX-04`.
+Kết quả hiện tại: Core Stabilization và baseline E0 đã `VERIFIED`; E1 là
+`PARTIAL`; E2/E3/BETA và E4 tùy chọn vẫn `BLOCKED` theo thứ tự gate. Sáu case
+PAW-source hiện có recall cold/warm 1,00 và median giảm context warm 0,981.
+Freshness kiểm Git blob của fixture, hash input, revision và tree state; kết quả
+dirty không được tự chứng nhận `PASS`.
 
-Baseline audit là commit `c48a22e` cộng working tree Core Stabilization hiện
-tại, kiểm tra ngày 2026-08-31. Setup tái lập dùng lock riêng của PAW:
+Baseline audit gồm freeze `f3ad4ef`, HEAD `ba1a583` và working tree kiểm tra
+ngày 2026-09-08. Setup tái lập dùng lock riêng của PAW:
 
 ```bash
 uv lock --check

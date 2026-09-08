@@ -119,10 +119,16 @@ class KnowledgeChunkStore:
 
     async def delete_by_source(self, source_id: str) -> int:
         """Delete all chunks from a source."""
-        cursor = await db.execute(
-            "DELETE FROM knowledge_chunks WHERE source_id = ?", (source_id,)
-        )
-        return cursor.rowcount
+        async with db.transaction() as conn:
+            await conn.execute(
+                "DELETE FROM knowledge_chunk_embeddings "
+                "WHERE chunk_id IN (SELECT id FROM knowledge_chunks WHERE source_id = ?)",
+                (source_id,),
+            )
+            cursor = await conn.execute(
+                "DELETE FROM knowledge_chunks WHERE source_id = ?", (source_id,)
+            )
+            return cursor.rowcount
 
     async def count(self, source_id: str | None = None) -> int:
         """Count chunks."""
@@ -138,18 +144,23 @@ class KnowledgeChunkStore:
         """Save chunk to database."""
         if not chunk.id:
             chunk.id = uuid.uuid4().hex[:16]
-        await db.execute(
-            """
-            INSERT OR REPLACE INTO knowledge_chunks
-            (id, source_id, content, span_start, span_end, metadata, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                chunk.id, chunk.source_id, chunk.content,
-                chunk.span_start, chunk.span_end,
-                json.dumps(chunk.metadata), chunk.created_at.isoformat(),
-            ),
-        )
+        async with db.transaction() as conn:
+            await conn.execute(
+                "DELETE FROM knowledge_chunk_embeddings WHERE chunk_id = ?",
+                (chunk.id,),
+            )
+            await conn.execute(
+                """
+                INSERT OR REPLACE INTO knowledge_chunks
+                (id, source_id, content, span_start, span_end, metadata, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    chunk.id, chunk.source_id, chunk.content,
+                    chunk.span_start, chunk.span_end,
+                    json.dumps(chunk.metadata), chunk.created_at.isoformat(),
+                ),
+            )
 
 
 # Global instance

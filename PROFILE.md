@@ -355,7 +355,7 @@ The runner is a future consumer of the PAW runtime loop; it is NOT yet integrate
 5. ~~**Phase 19 Runtime Hardening**~~ ✅ DONE (2026-08-30, 501 tests)
 6. ~~**Phase 20 Agent Loop**~~ ✅ DONE (506 tests)
 7. ~~**E0 track**~~ ✅ VERIFIED on f3ad4ef (13/13 fixture-validation baseline; E0-23a paw.core surface; E0-27 gate verdict PASS)
-8. ~~**E1 track**~~ ✅ VERIFIED (37/37 + 3/3 backlog, ALL DONE)
+8. ~~**E1 track**~~ ✅ VERIFIED (37/37 + 3/3 backlog contract tests done; E1-27 measurement gate PARTIAL on dirty tree)
 9. ~~**E1-35 E2E recall contract**~~ ✅ VERIFIED (10 tests, real fixture repo, no monkeypatch)
 
 ### E1 track finalization (2026-09-06)
@@ -865,3 +865,26 @@ Handoff spec: `_filter_for_availability` restore supported-role filtering + desc
 ### Test Results
 - All E1 tests pass (200+ tests)
 - ruff clean on all modified files
+
+## E1-27 Production Measurement — Update (2026-09-08)
+
+**ContextCandidate.__lt__ fix resolved PAW source recall defect.**
+
+- **Before fix**: PAW source corpus (69 files, `max_tokens=5000`) showed 5/6 cases
+  at 0% recall, 1/6 at 50%. Root cause: `__lt__` returned `>` instead of `<`,
+  inverting `sorted(reverse=True)` → ascending order → budget filter dropped
+  highest-score chunks first.
+- **After fix**: All 6 cases × cold/warm = 12/12 samples at **recall 1.00**,
+  median warm reduction 0.981. Both synthetic corpus (12 files) and PAW source
+  corpus (69 files) now PASS the E1-27 metric gate.
+- **Runner**: canonical tracked runner is `paw.bench.e1_production`
+  (`src/paw/bench/e1_production.py`); old `scripts/run_e1_production.py` is
+  gitignored and no longer referenced by tracked tests.
+- **Freshness**: the runner records input hashes before AND after the run,
+  validates fixture Git blobs against reviewed revisions, checks tree state and
+  revision stability, and returns `BLOCKED` if inputs change mid-run (pinned by
+  `test_changed_input_during_run_is_blocked`).
+- **Gate status**: `measurement_gate = PARTIAL` (dirty tree prevents self-certification).
+  Evidence: `OBSERVED` (not `VERIFIED`). Clean-revision D3 run pending.
+- **Report**: `benchmarks/e1/e1_production_report.md` updated with 2026-09-08 results.
+

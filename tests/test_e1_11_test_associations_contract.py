@@ -26,7 +26,7 @@ from pathlib import Path
 
 import pytest
 
-from paw.knowledge.test_associations import TestLink, associate_tests
+from paw.knowledge.associations import TestLink, associate_tests
 
 
 def _write(root: Path, rel: str, content: str) -> None:
@@ -288,7 +288,7 @@ def test_adv_associations_no_silent_drops(tmp_path) -> None:
     still produce an association with reason="no_clear_match"
     — never silently drop a test.
     """
-    from paw.knowledge.test_associations import associate_tests
+    from paw.knowledge.associations import associate_tests
 
     # Create a test file with a test that doesn't match any source
     test_file = tmp_path / "tests" / "test_unmatched.py"
@@ -308,7 +308,7 @@ def test_adv_associations_deterministic_order(tmp_path) -> None:
     Calling associate_tests twice with the same inputs
     must produce the same result — never in random order.
     """
-    from paw.knowledge.test_associations import associate_tests
+    from paw.knowledge.associations import associate_tests
 
     test_file = tmp_path / "tests" / "test_bar.py"
     test_file.parent.mkdir(parents=True)

@@ -1,7 +1,7 @@
 schema_version: "1.0.0"
 case_id: paw_checkpoint
 decision_artifact_version: "1.0.0"
-project_revision: "30ed2ac"
+project_revision: "e4c9e78"
 category: repo_understanding
 privacy_class: internal
 goal: |
@@ -10,7 +10,7 @@ goal: |
   file is found and the replay-safety primitives are present.
 fixtures:
   - path: src/paw/core/checkpoint.py
-    revision: 30ed2ac
+    revision: e4c9e78
     purpose: |
       Reviewed PAW checkpoint module. OperationRecordStore gives
       idempotent replay safety; CheckpointManager is the durable

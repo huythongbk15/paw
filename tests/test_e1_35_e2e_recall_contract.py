@@ -34,7 +34,7 @@ from paw.core.repo_scanner import scan_repo
 from paw.core.repo_filter import RepoFilter
 from paw.knowledge.checksum import compute_checksum
 from paw.knowledge.symbols import extract_symbols
-from paw.knowledge.test_associations import associate_tests
+from paw.knowledge.associations import associate_tests
 from paw.knowledge.source import KnowledgeSourceManager
 from paw.knowledge.chunk import KnowledgeChunkStore
 from paw.core.privacy import PROVIDER_LOCAL, gate_remote_disclosure, PrivacyClass

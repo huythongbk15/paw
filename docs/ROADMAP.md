@@ -1,20 +1,20 @@
 # PAW Core Stabilization roadmap
 
-Current review — 2026-09-07: **PARTIAL**, E1 qualification reopened at
-`f625fcb`. The earlier E1 VERIFIED/E2-active snapshot below is superseded.
-Next work: repair E1 measurement (nonempty reviewed cases, cold/warm evidence,
-30% median reduction and privacy/quality checks), repair revision freshness,
-then qualify the integrated E1 result before starting E2 implementation.
+Current review — 2026-09-08: **PARTIAL**, E1 qualification active on
+`ba1a583` plus the working tree. The PAW-source metric gate now passes as
+`OBSERVED` evidence: minimum cold/warm recall 1.00 and median warm context
+reduction 0.981. The project gate is not `PASS`: the combined tree is dirty,
+one fixture differs from its reviewed Git blob, and clean D3 remains open.
 
 | Current qualification | Result |
 |---|---|
-| E1 measurement | `PARTIAL` |
+| E1 measurement | metric `PASS`, overall `PARTIAL` on dirty tree |
 | E2–E3 and BETA | `BLOCKED` |
 
 This is the only active work sequence. Historical numbered phases describe how
 the repository grew; they do not determine what should be built next.
 
-Current track: **E2 — evidence-backed research gate and selective local/cloud reasoning (E2-01 ModelRouter audit)**.
+Current track: **E1 — clean-revision qualification**.
 Core Stabilization is `VERIFIED` on the frozen revision
 `f3ad4ef` (SX-14 verdict, 685/685 tests pass, D3 release check
 green, 8/8 minimum cases produce `SUCCESS` with
@@ -23,17 +23,17 @@ green, 8/8 minimum cases produce `SUCCESS` with
 `ENGINEERING_RULES` analog), the case-manifest contract
 (`paw.bench`), 14 minimum + research-decision cases with
 reviewed evidence, the deterministic evidence runner, and
-the E0-27 integration pack record. E0 is closed; E1 is
-`VERIFIED` (37/37 core + 13/13 backlog ALL PASS, ~1188 tests
-pass; ruff clean). E1-23/24/25 contracts are written but re-opened
-pending real measurement against E0 cases. E2 is the next track;
-the first item is `E2-01` (audit ModelRouter inputs/outputs/callers).
+the E0-27 integration pack record. E0 is closed. Historical E1 checklist items
+exist, but current acceptance depends on representative measurement,
+privacy/quality regression proof and a clean revision. The read-only E2-01 audit
+is provisional input and does not activate E2.
 
 | Scope | Current result | Meaning |
 |---|---|---|
 | Core Stabilization | `VERIFIED` on `f3ad4ef` | All S0–S6 acceptance items passed the clean-revision D3 gate; the `f3ad4ef` freeze commit is the canonical evidence. |
 | E0 (Engineering benchmark and feature subtraction) | `VERIFIED` for the deterministic offline fixture-validation baseline on `f3ad4ef` | The contract, the 13-case set (8 minimum E0-08..15 + 5 research-decision E0-28..35), the deterministic evidence runner (`shell=False` for `command_exit`), and the integration-pack record are in place. The 13/13 SUCCESS line in `docs/benchmarks/e0/integration_pack_run.md` is **fixture-validation** evidence, not an agent-quality gate; the runtime-driven agent-quality tier is post-gate work (E0-40). The cloud baseline remains deferred per the project charter. |
-| E1 | `PARTIAL` | 37/37 core + 13/13 backlog items ALL PASS. Phase 21 bug fixes (2026-09-07): `ModelRouter.score_model_for_task()` added as canonical scoring entry point; `ContextManifest` included/excluded truth fixed (no more double-listed candidates); `RemoteDisclosureRefusedError` exception added to `core/privacy.py`; remote-disclosure gate is now HARD (raises exception to stop the execution loop instead of silently setting `model_result={}`). 4 new regression test classes (~20 tests). E1 measurement provenance repair (commit `08a8806`): revision pinned to HEAD `263c075` (which owns `src/paw/bench/integration.py`); baselines from real fixture content (179 / 103); fixtures ingested via `KnowledgeSourceManager` (not skills substituted); privacy-gate claim isolated to its contract test. **E1-27 gate decision: PARTIAL** (recall=1.00, reduction=-0.13/-0.23). ~1193 tests pass; ruff clean. |
+| E1 | `PARTIAL` | Canonical tracked runner: `python -m paw.bench.e1_production`. Current PAW-source observation: 6 cases × cold/warm, recall 1.00, median warm reduction 0.981, metric `PASS`. It hashes code/corpus/cases, validates fixture Git blobs, detects mid-run revision/input/tree changes and prevents dirty-tree self-certification. Remaining: review/freeze the changed fixture and run integrated D3 on that clean revision. |
+| E2–E3 and BETA | `BLOCKED` | E2 entry requires E0 + E1 `VERIFIED`; an audit or observed metric cannot substitute for that gate. |
 | E4 controlled adaptation | `BLOCKED`, optional | Requires E0–E3 and a verified dataset; it is not required for BETA. |
 
 The engineering-intelligence direction dated 2026-09-01 is recorded in the
@@ -529,16 +529,11 @@ appear complete.
 
 ## Next three safe tasks
 
-1. Pick up the next open item from `EXECUTION_CHECKLIST.md`. The first
-   queued item is `E0-17` (define success / partial / failure / unsafe-outcome
-   scoring — D0, D0). The reviewer may also re-open any of `E0-08..42`; the
-   deterministic evidence runner (E0-16) and the case-manifest contract
-   (E0-07) are already merged and frozen, so the contract for those items
-   is stable.
-2. After every five D1 items, re-run the D2 focused suite
-   (`./scripts/pt.sh D2 tests/test_e0_*.py`) so the focused tests catch
-   regressions early; reserve the D3 full-suite run (`./scripts/pt.sh D3`)
-   for the track freeze.
-3. When E2 is complete, freeze one clean candidate and record the
-   `VERIFIED` gate decision in `docs/ROADMAP.md`. Only that verdict
-   unblocks E3; BETA is the final gate.
+1. Review and commit the combined E1 repair without unrelated changes. Update
+   the `paw_context_compiler` fixture revision to the clean source commit whose
+   bytes were reviewed; never use a future or self-referential revision.
+2. Re-run the tracked PAW-source measurement, E1 privacy/quality proofs and the
+   D3 full test/lint/build/isolated-install gate on that exact clean revision.
+3. Record E1 `PASS` only if every acceptance condition passes. Then use the
+   provisional E2-01 audit as input to the first active E2 decision; otherwise
+   keep E2 blocked and repair the named failure.

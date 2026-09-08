@@ -423,6 +423,18 @@ CREATE TABLE IF NOT EXISTS memory_embeddings (
     created_at TEXT NOT NULL
 );
 
+-- Optional local knowledge-ranking cache. Runtime schema remains centralized
+-- here; feature modules only use the table through storage helpers.
+CREATE TABLE IF NOT EXISTS knowledge_chunk_embeddings (
+    chunk_id TEXT PRIMARY KEY,
+    model TEXT NOT NULL,
+    vector TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (chunk_id) REFERENCES knowledge_chunks(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_kce_model ON knowledge_chunk_embeddings(model);
+
 """
 
 

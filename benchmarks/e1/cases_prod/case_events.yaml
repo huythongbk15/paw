@@ -1,7 +1,7 @@
 schema_version: "1.0.0"
 case_id: case_events
 decision_artifact_version: "1.0.0"
-project_revision: "30ed2ac"
+project_revision: "e4c9e78"
 category: repo_understanding
 privacy_class: internal
 goal: |
@@ -11,7 +11,7 @@ goal: |
   is present.
 fixtures:
   - path: benchmarks/e1/fixtures_paw/events.py
-    revision: 30ed2ac
+    revision: e4c9e78
     purpose: |
       Reviewed synthetic events module. Each file in this corpus
       has a unique UNIQUEKEYWORD_<MODULE> marker for deterministic

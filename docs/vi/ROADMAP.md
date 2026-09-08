@@ -1,25 +1,24 @@
 # Lộ trình Core Stabilization của PAW
 
-Review 2026-09-07: **PARTIAL**, mở lại qualification E1 tại `f625fcb`.
-Snapshot E1 VERIFIED/E2-active cũ bên dưới được thay thế. Tiếp theo: sửa
-measurement E1 (case có review, cold/warm, giảm median 30%, privacy/quality),
-sửa freshness revision, rồi nghiệm thu E1 trước khi triển khai E2.
+Review 2026-09-08: **PARTIAL**, qualification E1 đang hoạt động trên
+`ba1a583` cộng working tree. Metric PAW-source hiện đạt ngưỡng dưới dạng
+evidence `OBSERVED`: recall cold/warm tối thiểu 1,00 và median giảm context
+warm 0,981. Gate dự án chưa `PASS` vì cây còn dirty, một fixture khác Git blob
+được review và D3 trên revision sạch chưa chạy. Chưa được triển khai E2.
 
 Đây là work sequence duy nhất đang hoạt động. Các phase được đánh số trong lịch
 sử mô tả cách repository phình lên; chúng không quyết định việc phải xây tiếp.
 
-Track hiện tại: **đưa một candidate Core Stabilization sạch qua SX**. Behavior
-sửa S0–S6 là `OBSERVED` trong source hiện tại và lượt full verification gần
-nhất trên working tree đã pass trước delta tài liệu/contract-test mới nhất.
-Evidence đó không phải proof exit trên revision sạch. SX phải review combined
-tree, sửa finding, đóng băng một candidate sạch rồi chạy gate D3 đã lên lịch
-trên đúng revision đó.
+Track hiện tại: **E1 — qualification trên revision sạch**. Core Stabilization
+và baseline E0 đã `VERIFIED`. Audit E2-01 có sẵn chỉ là input tạm thời; nó không
+kích hoạt E2 trước khi E1 pass.
 
 | Phạm vi | Kết quả hiện tại | Ý nghĩa |
 |---|---|---|
-| Implementation sửa S0–S6 | `OBSERVED`; đã ghi verification working-tree trước đó | Behavior tồn tại nhưng chưa có evidence cho clean candidate hiện hành. |
-| Exit gate Core Stabilization | `PARTIAL` | SX còn 14 item qualification; tiếp theo là `SX-01`. |
-| E0–E3 và BETA | `BLOCKED` | Gate SX/track trước bắt buộc chưa pass. |
+| Core Stabilization | `VERIFIED` trên `f3ad4ef` | Freeze S0–S6 vẫn là baseline lõi. |
+| E0 | `VERIFIED` cho fixture-validation deterministic | Không phải agent-quality hoặc cloud baseline. |
+| E1 | `PARTIAL`; metric `PASS` là `OBSERVED` | Runner tracked đã đạt recall/reduction; còn review fixture, clean freeze và D3. |
+| E2–E3 và BETA | `BLOCKED` | E2 cần E0 + E1 `VERIFIED`. |
 | E4 controlled adaptation | `BLOCKED`, tùy chọn | Cần E0–E3 và dataset verified; không bắt buộc cho BETA. |
 
 Hướng engineering intelligence ngày 2026-09-01 đã được ghi trong Product
@@ -394,9 +393,9 @@ tài liệu, không được hạ để biến implementation kém thành hoàn 
 
 ## Ba task an toàn tiếp theo
 
-1. Làm SX-01/SX-02: ghi và phân loại combined working tree, không đổi user work
-   không liên quan.
-2. Trong SX-03/SX-10, tái hiện và sửa mismatch Task/Plan identity bằng proof
-   persistence/caller tập trung, rồi hoàn tất review compatibility/migration.
-3. Đóng băng một clean candidate và chạy SX-12–SX-14. Chỉ exit decision pass mới
-   bắt đầu E0; E1–E4/BETA và mở rộng provider vẫn bị chặn trong lúc đó.
+1. Review và commit repair E1 kết hợp, không trộn thay đổi không liên quan. Cập
+   nhật revision fixture `paw_context_compiler` tới commit source sạch đã review.
+2. Trên đúng revision sạch đó, chạy lại measurement PAW-source, proof
+   privacy/quality và gate D3 gồm test, lint, build, cài wheel cô lập.
+3. Chỉ ghi E1 `PASS` nếu toàn bộ acceptance đạt. Khi đó mới dùng audit E2-01 làm
+   input cho quyết định E2 đầu tiên; nếu không, giữ E2 bị chặn và sửa lỗi có tên.

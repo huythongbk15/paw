@@ -26,11 +26,14 @@ test tập trung; dừng khi có nghiệm thu bác bỏ được. Scope đổi t
 
 Làm theo thứ tự; mỗi ô cần bằng chứng lệnh hiện tại:
 
-- [x] P1 Runner: đã GIẢI QUYẾT (commit `08a8806`). `scripts/run_e1_measurement.py`
-  đã tracked; `tests/test_run_e1_measurement.py` đã tracked (7 contract test pass);
-  runner-script `TokenEstimator` JSON-serializability bug fixed (loại khỏi
-  `asdict(ContextBudget(...))`); ruff import order đã fix. Runner tái lập được và
-  từ chối overwrite báo cáo cũ (mở file với `mode='x'` exclusive-create).
+- [x] P1 Runner: đã GIẢI QUYẾT (commit `08a8806`). `paw.bench.e1_production`
+  đã tracked; runner-script `TokenEstimator` JSON-serializability bug fixed (loại
+  khỏi `asdict(ContextBudget(...))`); ruff import order đã fix. Runner tái lập
+  được và từ chối overwrite báo cáo cũ (mở file với `mode='x'` exclusive-create).
+  Đã thay thế bởi canonical runner `paw.bench.e1_production`
+  (`src/paw/bench/e1_production.py`) với test coverage trong
+  `tests/test_run_e1_production.py` (10 tests) và
+  `tests/test_e1_knowledge_retrieval.py` (9 tests).
 - [x] P1 Router: đã GIẢI QUYẾT (commit mới). `ModelRouter._filter_for_availability` ở `src/paw/core/model_router.py`:
   - Local-fallback branch giờ lọc bằng `m.supports_role(role)` (không leak model không hỗ trợ role);
   - Re-score bằng `ModelRouter.score_model_for_task` (canonical entry point);
@@ -260,7 +263,7 @@ không giảm chất lượng/an toàn. Ước lượng 25–35 ngày.
 
 ### Đánh giá
 
-- [x] `E1-23` Đo recall evidence cold/warm trên mọi case E0. `(1d, D2)` — PARTIAL (đo chẩn đoán; chưa reviewed E0 baseline): contract `docs/benchmarks/e1/recall_measurement.md` + `paw/bench/recall.py` (`RecallResult` + `measure_recall`); `tests/test_e1_23_recall_measurement_contract.py` (5 D2 test) pass. Real measurement ngày 2026-09-07 09:52 UTC (HEAD `208783c`): `scripts/run_e1_measurement.py --output benchmarks/e1/measurement_20260907.json` chạy **full 14-case E0 set** (28 (case, mode) mẫu) → recall = 1.00 trên mọi mẫu. Per-case isolation (fresh `TemporaryDirectory` + fresh `Database`); revision + input không đổi (`inputs_unchanged: true`). Chỉ chẩn đoán.
+- [x] `E1-23` Đo recall evidence cold/warm trên mọi case E0. `(1d, D2)` — PARTIAL (đo chẩn đoán; chưa reviewed E0 baseline): contract `docs/benchmarks/e1/recall_measurement.md` + `paw/bench/recall.py` (`RecallResult` + `measure_recall`); `tests/test_e1_23_recall_measurement_contract.py` (5 D2 test) pass. Real measurement ngày 2026-09-07 09:52 UTC (HEAD `208783c`): `python -m paw.bench.e1_production --output benchmarks/e1/measurement_20260907.json` chạy **full 14-case E0 set** (28 (case, mode) mẫu) → recall = 1.00 trên mọi mẫu. Per-case isolation (fresh `TemporaryDirectory` + fresh `Database`); revision + input không đổi (`inputs_unchanged: true`). Chỉ chẩn đoán.
 - [x] `E1-24` Đo cloud input token cold/warm so với baseline đóng băng. `(1d, D2)` — PARTIAL (đo chẩn đoán; baseline là `TokenEstimator.estimate(content)` của case's fixture files, chưa phải reviewed E0/cloud baseline): contract `docs/benchmarks/e1/token_measurement.md` + `paw/bench/tokens.py` (`TokenResult` + `measure_tokens`); `tests/test_e1_24_token_measurement_contract.py` (5 D2 test) pass. Real measurement ngày 2026-09-07 08:24 UTC (HEAD `263c075`): `architecture_decision_cache` baseline=179 measured=203 reduction=-0.13; `cross_module_change_constant` baseline=103 measured=127 reduction=-0.23. Reduction âm (manifest wrap file với session/skill metadata), giống nhau cho cold và warm (lexical-only path, fresh per-case DB). Sàn `>= 0.30` warm-reduction KHÔNG đạt trên corpus này.
 - [x] `E1-25` Review mọi recall miss trước khi đổi ranking/threshold. `(biến đổi; tách từng miss)` — PARTIAL (không có miss thật trong lượt chẩn đoán 2026-09-07): contract `docs/benchmarks/e1/recall_misses.md` + closed `MISS_CATEGORIES` (`ranking` / `threshold` / `retrieval` / `source_missing` / `fixture_wrong`) + deterministic action mapping; `tests/test_e1_25_recall_misses_contract.py` (6 D1 test) pass. Real measurement 2026-09-07: 0 miss qua 4 (case, mode) combination — không có `MISS_CATEGORIES` classification để áp dụng. Miss-review process giờ chạy được end-to-end; nếu case E0 tương lai sinh miss, closed set + action mapping hướng dẫn sửa tiếp.
 - [x] `E1-26` Chạy negative control privacy, budget và stale source. `(0.5d, D2)` — PASS: `docs/benchmarks/e1/exclusion_reasons.md` + `docs/benchmarks/e1/remote_disclosure_gate.md` + E1-07 cascade spec. Test `tests/test_e1_26_negative_controls_contract.py` (5 D2 test) là consolidated end-to-end check: ba negative-control scenario (E1-07 stale source + E1-03 privacy + E1-20 budget + E1-21 gate) đều refuse sạch, trong cùng đường dẫn runtime, với E1-21 gate. Test pin: stale SECRET source + cloud provider (E1-21 gate refuse trên class); budget-fitted manifest có nội dung SECRET (E1-21 gate refuse; E1-20 budget thỏa); chuỗi closed-set E1-18 (`class_secret_remote`, `class_workspace_remote`, `class_internal_unapproved_cloud`) cũng nằm trong E1-21 `DISCLOSURE_REFUSED_REASONS` (hai contract chia sẻ từ vựng reviewer-readable); utility E1-13 `bound_by_budget` clip một list; E1-20 `BudgetExceededError` được export từ module E1-18. D2 verify: `pytest -q tests/test_e1_26_negative_controls_contract.py` → 5 passed.

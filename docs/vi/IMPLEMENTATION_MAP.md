@@ -6,6 +6,30 @@ cập nhật tài liệu này.
 
 ## Baseline audit
 
+### Sửa qualification E1 trên dự án thật — STANDARD / READY (2026-09-07)
+
+Vấn đề: corpus synthetic đạt E1-27 nhưng các case trên source PAW không tìm đủ
+bằng chứng; runner production bị Git bỏ qua và test không import được. Cây hiện
+còn thay đổi hybrid retrieval/schema dở dang mang nhãn E2-31. Không được dùng
+PASS synthetic để bỏ qua điều kiện vào E2.
+
+Invariant: context giảm vẫn giữ bằng chứng bắt buộc; phép đo tái lập từ input
+được quản lý; input đổi không thể còn qualified; schema có một owner/version;
+chỉ bắt đầu E2 sau acceptance E1 trên corpus dự án đại diện. Ba phương án:
+A dùng PASS synthetic và hoãn retrieval thật — loại vì trái mục tiêu phân tích
+code; B bật semantic rồi giả định hết lỗi — loại khi chưa có đối chứng; C đưa
+runner về owner canonical, tái hiện lỗi PAW, sửa defect deterministic nhỏ nhất,
+chỉ giữ persistence hybrid nếu chứng minh giá trị riêng — được chọn. Bằng chứng
+ngược: sáu case PAW vẫn là proxy nhỏ, pass không chứng minh chất lượng tổng quát.
+Ngân sách: source/test tracked, sáu case PAW, kiểm tra runtime/schema tập trung;
+dừng khi có kết quả gate E1 có thể bác bỏ.
+
+Owner runner: `paw.bench.e1_production`; `KnowledgeIndex` sở hữu retrieval;
+`ContextCompiler` dùng kết quả; `storage.py` sở hữu schema nếu giữ thay đổi.
+Nghiệm thu: case PAW đạt recall >=95% cold/warm, median giảm context >=30%; runner
+từ chối bằng chứng dirty/đổi giữa lượt; proof remote-disclosure qua; test tập
+trung, Ruff và tài liệu thống nhất. Vì có thể chạm schema, cần D3 trước khi mở E2.
+
 ### Rà soát 2026-09-07 tại f625fcb
 
 Kết quả hiện tại: `PARTIAL`. Mở lại qualification E1; E2 phải chờ bằng chứng

@@ -24,8 +24,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from .associations import TestLink, associate_tests
 from .symbols import SymbolRecord, extract_symbols
-from .test_associations import TestLink, associate_tests
 
 if TYPE_CHECKING:
     from .evidence import KnowledgeEvidence

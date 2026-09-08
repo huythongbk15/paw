@@ -15,6 +15,7 @@ from typing import Any
 
 from .embeddings import (
     cosine_similarity,
+    embedding_model_id,
     load_embeddings_for,
     store_embedding,
 )
@@ -557,7 +558,9 @@ class AdvancedMemoryRetriever:
         embeddings: dict[str, list[float]] = {}
         if self.embedding_provider is not None:
             ids = [c["record"].id for c in candidates]
-            embeddings = await load_embeddings_for(ids)
+            embeddings = await load_embeddings_for(
+                ids, embedding_model_id(self.embedding_provider),
+            )
             # Embed the query once (if provider usable)
             try:
                 query_vecs = await self.embedding_provider.embed([query])
@@ -635,7 +638,8 @@ class AdvancedMemoryRetriever:
         stored: dict[str, list[float]] = {}
         if self.embedding_provider is not None:
             ids = [r.id for r in records]
-            stored = await load_embeddings_for(ids)
+            model_id = embedding_model_id(self.embedding_provider)
+            stored = await load_embeddings_for(ids, model_id)
             # Lazily embed any missing memories
             missing = [r for r in records if r.id not in stored]
             if missing:
@@ -645,7 +649,7 @@ class AdvancedMemoryRetriever:
                         if vec:
                             stored[rec.id] = vec
                             await store_embedding(
-                                rec.id, self.embedding_provider.name, vec
+                                rec.id, model_id, vec
                             )
                 except Exception as exc:
                     logger.warning("embedding_batch_failed", error=str(exc))

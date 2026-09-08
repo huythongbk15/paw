@@ -18,6 +18,7 @@ migration of ``memory_records`` required, backward-compatible).
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import math
@@ -60,6 +61,13 @@ class EmbeddingProvider(Protocol):
     async def embed(self, texts: list[str]) -> list[list[float]]:
         """Return one embedding vector per input text."""
         ...
+
+
+def embedding_model_id(provider: Any) -> str:
+    """Return a stable persistence key for a provider and model variant."""
+    name = str(getattr(provider, "name", "unknown"))
+    model = getattr(provider, "model", None)
+    return f"{name}:{model}" if model else name
 
 
 class LocalEmbeddingProvider:
@@ -128,23 +136,74 @@ class OllamaEmbeddingProvider:
         return bool(self._available)
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
-        """Embed a batch of texts via Ollama. Falls back to local on failure."""
+        """Embed a batch of texts via Ollama. Falls back to local on failure.
+
+        Prefer Ollama's batched ``/api/embed`` endpoint. Older servers that
+        return 404 are handled through the legacy per-text endpoint. Transient
+        failures are retried before the deterministic local fallback is used.
+        """
         if not self._available:
             logger.warning("ollama_embed_skipped_unavailable")
             return await LocalEmbeddingProvider().embed(texts)
+        if not texts:
+            return []
         out: list[list[float]] = []
-        for text in texts:
-            try:
-                data = await self._request(
-                    "POST", "/api/embeddings", {"model": self.model, "prompt": text}
-                )
-                out.append(list(data.get("embedding", [])))
-            except (OSError, urllib.error.URLError, TimeoutError) as exc:
-                logger.error("ollama_embed_failed", error=str(exc))
-                # graceful: one bad item -> local fallback for that item
-                local = (await LocalEmbeddingProvider().embed([text]))[0]
-                out.append(local)
+        batch_size = 16
+        for start in range(0, len(texts), batch_size):
+            batch = texts[start:start + batch_size]
+            last_exc: Exception | None = None
+            for attempt in range(3):
+                try:
+                    data = await self._request(
+                        "POST", "/api/embed",
+                        {"model": self.model, "input": batch},
+                    )
+                    vecs = data.get("embeddings")
+                    if not isinstance(vecs, list) or len(vecs) != len(batch):
+                        raise ValueError("Ollama returned an invalid embedding batch")
+                    out.extend(list(vector) for vector in vecs)
+                    last_exc = None
+                    break
+                except urllib.error.HTTPError as exc:
+                    if exc.code == 404:
+                        try:
+                            legacy = await self._embed_legacy(batch)
+                        except (
+                            OSError,
+                            urllib.error.URLError,
+                            TimeoutError,
+                            ValueError,
+                        ) as legacy_exc:
+                            last_exc = legacy_exc
+                        else:
+                            out.extend(legacy)
+                            last_exc = None
+                            break
+                    last_exc = exc
+                    if attempt < 2:
+                        await asyncio.sleep(0.2 * (attempt + 1))
+                except (OSError, urllib.error.URLError, TimeoutError, ValueError) as exc:
+                    last_exc = exc
+                    if attempt < 2:
+                        await asyncio.sleep(0.2 * (attempt + 1))
+            if last_exc is not None:
+                logger.error("ollama_embed_failed", error=str(last_exc), attempts=3)
+                local_vecs = await LocalEmbeddingProvider().embed(batch)
+                out.extend(local_vecs)
         return out
+
+    async def _embed_legacy(self, texts: list[str]) -> list[list[float]]:
+        """Use the pre-batch Ollama endpoint after an explicit 404 response."""
+        vectors = []
+        for text in texts:
+            data = await self._request(
+                "POST", "/api/embeddings", {"model": self.model, "prompt": text}
+            )
+            vector = data.get("embedding")
+            if not isinstance(vector, list):
+                raise ValueError("Ollama returned an invalid legacy embedding")
+            vectors.append(list(vector))
+        return vectors
 
     async def _request(self, method: str, path: str, body: dict | None = None) -> Any:
         import asyncio
@@ -225,15 +284,23 @@ async def load_embedding(memory_id: str) -> list[float] | None:
         return None
 
 
-async def load_embeddings_for(ids: list[str]) -> dict[str, list[float]]:
+async def load_embeddings_for(
+    ids: list[str], model: str | None = None,
+) -> dict[str, list[float]]:
     if not ids:
         return {}
     await ensure_embedding_table()
     placeholders = ",".join("?" for _ in ids)
-    rows = await db.fetch_all(
-        f"SELECT memory_id, vector FROM memory_embeddings WHERE memory_id IN ({placeholders})",
-        tuple(ids),
-    )
+    if model is None:
+        sql = f"SELECT memory_id, vector FROM memory_embeddings WHERE memory_id IN ({placeholders})"
+        params = tuple(ids)
+    else:
+        sql = (
+            "SELECT memory_id, vector FROM memory_embeddings "
+            f"WHERE model = ? AND memory_id IN ({placeholders})"
+        )
+        params = (model, *ids)
+    rows = await db.fetch_all(sql, params)
     out: dict[str, list[float]] = {}
     for r in rows:
         try:
@@ -241,3 +308,54 @@ async def load_embeddings_for(ids: list[str]) -> dict[str, list[float]]:
         except (ValueError, KeyError):
             continue
     return out
+
+
+# --- Optional local knowledge-ranking persistence --------------------------
+
+
+async def ensure_knowledge_chunk_embedding_table() -> None:
+    """Create the (optional) knowledge_chunk_embeddings table if it does not exist."""
+    await db.initialize()
+
+
+async def store_knowledge_chunk_embedding(
+    chunk_id: str, model: str, vector: list[float]
+) -> None:
+    """Persist an embedding vector for a knowledge chunk."""
+    from datetime import UTC, datetime
+    await ensure_knowledge_chunk_embedding_table()
+    await db.write(
+        """
+        INSERT OR REPLACE INTO knowledge_chunk_embeddings
+        (chunk_id, model, vector, created_at)
+        VALUES (?, ?, ?, ?)
+        """,
+        (chunk_id, model, json.dumps(vector), datetime.now(UTC).isoformat()),
+    )
+
+
+async def load_knowledge_chunk_embeddings_for(
+    ids: list[str], model: str,
+) -> dict[str, list[float]]:
+    """Load vectors for the given chunks only when their model matches.
+
+    Returns ``{chunk_id: vector}`` for chunks that have a stored
+    embedding; missing chunks are simply absent from the result.
+    """
+    if not ids:
+        return {}
+    await ensure_knowledge_chunk_embedding_table()
+    placeholders = ",".join("?" for _ in ids)
+    rows = await db.fetch_all(
+        f"SELECT chunk_id, vector FROM knowledge_chunk_embeddings "
+        f"WHERE model = ? AND chunk_id IN ({placeholders})",
+        (model, *ids),
+    )
+    out: dict[str, list[float]] = {}
+    for r in rows:
+        try:
+            out[r["chunk_id"]] = json.loads(r["vector"])
+        except (ValueError, KeyError):
+            continue
+    return out
+

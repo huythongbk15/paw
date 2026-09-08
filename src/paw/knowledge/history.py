@@ -14,8 +14,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+from .associations import TestLink
 from .changes import RecentChange
-from .test_associations import TestLink
 
 
 @dataclass(frozen=True)

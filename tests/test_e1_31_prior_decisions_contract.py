@@ -27,7 +27,7 @@ from paw.knowledge.history import (
     PriorDecision,
     retrieve_prior_decisions,
 )
-from paw.knowledge.test_associations import TestLink
+from paw.knowledge.associations import TestLink
 
 
 def _change(message: str, date: str = "2026-09-01T00:00:00+00:00") -> RecentChange:

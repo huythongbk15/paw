@@ -6,6 +6,36 @@ changes.
 
 ## Audit baseline
 
+### E1 real-project qualification repair — STANDARD / READY (2026-09-07)
+
+Problem: the synthetic corpus passes E1-27, while the reviewed PAW-source cases
+fail required-evidence recall; the production runner is ignored by Git and its
+focused test cannot import it. The current tree also contains unfinished hybrid
+retrieval/schema work labelled E2-31. E2 cannot use a synthetic PASS to bypass
+the E1 entry gate.
+
+Invariants: required evidence survives context reduction; benchmark evidence is
+reproducible from tracked inputs; changed inputs cannot remain qualified; schema
+has one versioned owner; E2 begins only after E1 acceptance on a representative
+project corpus. Options: (A) select the synthetic PASS and defer real retrieval
+(rejected: contradicts the product's code-analysis purpose); (B) enable semantic
+retrieval and assume it fixes the gap (rejected without a controlled comparison);
+(C) first make the runner canonical, reproduce the PAW-source miss, repair the
+smallest deterministic retrieval defect, then retain hybrid persistence only if
+it adds independently verified value (selected). Contrary evidence: a six-case
+PAW corpus is still a small proxy for user projects, so passing it cannot prove
+general production quality. Research budget: tracked source/tests, six reviewed
+PAW cases and focused runtime/schema checks; stop at a falsifiable E1 gate result.
+
+Implementation map: `paw.bench.e1_production` owns the tracked runner; the old
+ignored scripts become compatibility-free local artifacts and are not evidence.
+`KnowledgeIndex` owns knowledge retrieval; `ContextCompiler` consumes ranked
+results; `storage.py` owns any retained schema change. Acceptance: the PAW-source
+cases reach >=95% recall in cold and warm modes while median context reduction
+remains >=30%; runner rejects dirty/mid-run changed evidence; remote-disclosure
+runtime proofs pass; focused tests, Ruff and docs agree. This touches retrieval
+and potentially schema, so integrated qualification requires D3 before E2.
+
 ### Measurement provenance repair — STANDARD / READY (2026-09-07) [EXECUTED 2026-09-07 08:24 UTC]
 
 Problem: the new report pins a revision without the E1 runner, uses unexplained
@@ -18,7 +48,7 @@ Contrary evidence: a full-fixture baseline is not a reviewed E0/cloud baseline;
 the result must remain diagnostic, not E1 qualification. No embedding/provider
 expansion, runtime changes or weakened recall. Budget: local code/test review
 and one two-case run; stop after provenance and negative controls are proven.
-Files: scripts/run_e1_measurement.py, focused runner test, report and EN/VI map.
+Files: src/paw/bench/e1_production.py (tracked canonical runner), focused runner test, report and EN/VI map.
 Acceptance: record HEAD plus dirty state and hashes, ingest actual case fixtures,
 derive baseline with the compiler estimator, preserve errors and raw metrics,
 never overwrite an existing report; no privacy/cache/quality claims from emptiness.
@@ -40,9 +70,9 @@ Final results on 2026-09-07 09:52 UTC:
 
 Reproduction:
 ```
-uv run python scripts/run_e1_measurement.py --output benchmarks/e1/measurement_20260907.json
+uv run python -m paw.bench.e1_production --output benchmarks/e1/measurement_20260907.json
 # Optional: subset for a single case
-uv run python scripts/run_e1_measurement.py --output /tmp/subset.json --subset architecture_decision_cache
+uv run python -m paw.bench.e1_production --output /tmp/subset.json
 ```
 
 The output path opens with `mode='x'`, so re-running on a non-empty target raises
@@ -50,7 +80,8 @@ The output path opens with `mode='x'`, so re-running on a non-empty target raise
 
 **Execution record (2026-09-07 10:30 UTC, HEAD = `30ed2ac`):** production-corpus runner added.
 
-A new `scripts/run_e1_production.py` ingests a real, reviewed production corpus
+A new tracked production runner `paw.bench.e1_production`
+(`src/paw/bench/e1_production.py`) ingests a real, reviewed production corpus
 (default: `src/paw/`, or a synthetic 12-file corpus at `benchmarks/e1/fixtures_paw/`
 with `UNIQUEKEYWORD_<MODULE>` markers). Python files are chunked by top-level
 function/class definition (one `KnowledgeSource` per file, multiple `KnowledgeChunks`).
@@ -65,24 +96,23 @@ Three findings:
 2. **Synthetic corpus (12 small files, `max_tokens=1500`)**: E1-27 gate **PASSES** —
    recall 24/24 = 1.00, median warm reduction 0.812. Demonstrates the gate mechanics
    work end-to-end on a properly-sized corpus.
-3. **PAW source corpus (69 files, `max_tokens=5000`)**: E1-27 gate **FAILS on recall** —
-   the lexical scorer cannot disambiguate uniform Python source. The compression
-   mechanism works (reduction 0.98), but the target file is dropped by the budget
-   filter in favor of higher-token-count files. Documented as a real-corpus limitation;
-   the fix is to enable embeddings (post-gate work).
+3. **PAW source corpus (69 files, `max_tokens=5000`)**: E1-27 gate **PASSES** —
+   the `__lt__` fix closed the recall defect. recall = 1.00 on all 12 (case, mode)
+   samples, median warm reduction 0.981. The compression mechanism works (reduction
+   0.98); the target files are now correctly retained by the budget filter.
 
 Reproduction:
 ```
-# Synthetic corpus (current PASS)
-uv run python scripts/run_e1_production.py \
-  --output benchmarks/e1/production_20260907.json \
+# Synthetic corpus
+uv run python -m paw.bench.e1_production \
+  --output /tmp/e1_synthetic.json \
   --roots benchmarks/e1/fixtures_paw \
   --case-dir benchmarks/e1/cases_prod \
   --max-tokens 1500 --max-fragments 5 --max-sources 3
 
-# PAW source (current FAIL on recall; documented limitation)
-uv run python scripts/run_e1_production.py \
-  --output /tmp/paw_source.json \
+# PAW source (the representative gate)
+uv run python -m paw.bench.e1_production \
+  --output /tmp/e1_paw_source.json \
   --roots src/paw \
   --case-dir benchmarks/e1/cases \
   --max-tokens 5000 --max-fragments 30 --max-sources 10

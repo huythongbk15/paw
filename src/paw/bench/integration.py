@@ -24,6 +24,32 @@ GATE_REGRESSION_THRESHOLD = 0.5
 GATE_REDUCTION_FLOOR = 0.30
 
 
+def evaluate_measurement_metrics(
+    recall_values: list[float], warm_reductions: list[float],
+) -> tuple[str, tuple[str, ...]]:
+    """Evaluate the one canonical E1 recall/reduction threshold contract."""
+    if not recall_values or not warm_reductions:
+        return "BLOCKED", ("measurement samples are missing",)
+    if any(value < GATE_REGRESSION_THRESHOLD for value in recall_values):
+        return "FAIL", (
+            f"at least one recall sample is below {GATE_REGRESSION_THRESHOLD:.2f}",
+        )
+    reasons = []
+    if any(value < GATE_RECALL_THRESHOLD for value in recall_values):
+        reasons.append(
+            f"at least one recall sample is below {GATE_RECALL_THRESHOLD:.2f}"
+        )
+    warm_median = median(warm_reductions)
+    if warm_median < GATE_REDUCTION_FLOOR:
+        reasons.append(
+            f"median warm token reduction {warm_median:.2f} "
+            f"< {GATE_REDUCTION_FLOOR:.2f}"
+        )
+    return ("PARTIAL", tuple(reasons)) if reasons else (
+        "PASS", ("measurement thresholds passed",),
+    )
+
+
 @dataclass(frozen=True)
 class IntegrationResult:
     case_count: int
@@ -104,31 +130,13 @@ async def run_integration_pack(
             ))
 
     # Gate decision.
-    reasons: list[str] = []
-    decision = "PASS"
-    for r in recall_results:
-        if r.recall < GATE_REGRESSION_THRESHOLD:
-            decision = "FAIL"
-            reasons.append(
-                f"case {r.case_id!r} regressed: recall {r.recall:.2f} "
-                f"< {GATE_REGRESSION_THRESHOLD}"
-            )
-        elif r.recall < GATE_RECALL_THRESHOLD:
-            if decision != "FAIL":
-                decision = "PARTIAL"
-            reasons.append(
-                f"case {r.case_id!r} partial: recall {r.recall:.2f} "
-                f"< {GATE_RECALL_THRESHOLD}"
-            )
-    warm_reduction = median(t.reduction for t in token_results if t.mode == "warm")
-    if warm_reduction < GATE_REDUCTION_FLOOR:
-        if decision == "PASS":
-            decision = "PARTIAL"
-        reasons.append(
-            f"median warm token reduction {warm_reduction:.2f} < {GATE_REDUCTION_FLOOR}"
-        )
-    if not reasons:
-        reasons.append("measurement targets met; full E1 acceptance is not established")
+    decision, metric_reasons = evaluate_measurement_metrics(
+        [result.recall for result in recall_results],
+        [result.reduction for result in token_results if result.mode == "warm"],
+    )
+    reasons = list(metric_reasons)
+    if decision == "PASS":
+        reasons.append("full E1 acceptance is not established by metrics alone")
 
     # Markdown report.
     lines: list[str] = []
@@ -176,5 +184,6 @@ __all__ = [
     "GATE_REDUCTION_FLOOR",
     "GATE_REGRESSION_THRESHOLD",
     "IntegrationResult",
+    "evaluate_measurement_metrics",
     "run_integration_pack",
 ]

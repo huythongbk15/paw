@@ -116,7 +116,7 @@ def test_recent_changes_in_output() -> None:
 def test_symbols_and_test_links_and_deps_in_output() -> None:
     from paw.knowledge.dependencies import DependencyEdge
     from paw.knowledge.symbols import SymbolRecord
-    from paw.knowledge.test_associations import TestLink
+    from paw.knowledge.associations import TestLink
 
     sym = SymbolRecord(
         qualified_name="src.foo", kind="function",

@@ -1,9 +1,10 @@
 # PAW system documents
 
-Current audit (2026-09-07, f625fcb): **PARTIAL**. E1 qualification is reopened;
-E2 remains blocked pending measurement repair. The earlier status snapshot
-below is historical and does not authorize progression. See the dated review
-in IMPLEMENTATION_MAP.md.
+Current audit (2026-09-08, `ba1a583` plus the working tree): **PARTIAL**.
+The representative PAW-source E1 measurement now meets its metric targets, but
+the result is `OBSERVED`: the tree is dirty, one reviewed fixture changed, and
+the integrated clean-revision gate has not run. E2 remains blocked. See the
+current decision and execution record in `IMPLEMENTATION_MAP.md`.
 
 This directory is the canonical documentation set for PAW. It exists to keep
 the product boundary, architecture, implementation reality and work sequence
@@ -23,15 +24,13 @@ Current gate result:
 |---|---|---|
 | Core Stabilization | **`VERIFIED`** on `f3ad4ef` | S0–S6 acceptance passed the clean-revision D3 gate; the freeze commit is the canonical evidence. |
 | E0 (fixture-validation baseline) | **`VERIFIED`** for deterministic offline | The contract, 13 cases (8 minimum + 5 research-decision), the deterministic evidence runner, and the integration-pack record are in place. The 13/13 SUCCESS line is **fixture-validation**, not an agent-quality gate; the runtime-driven agent-quality tier is post-gate work (E0-40). |
-| E1 (Local project intelligence) | `IN PROGRESS`, 1/34 closed (E1-01 ownership audit) | The ownership audit (`docs/benchmarks/e1/ownership_audit.md`) is regenerated from source and pinned by `tests/test_e1_ownership_audit_contract.py`. |
-| E2, E3, BETA | `READY` | E0 is no longer the prerequisite; the next track is E1 per ROADMAP sequencing. |
+| E1 (Local project intelligence) | `PARTIAL`; metric gate `PASS` is `OBSERVED` | On six reviewed PAW-source cases, cold/warm recall is 1.00 and median warm context reduction is 0.981. Freshness now checks fixture Git blobs, current hashes, all measurement inputs, tree state and revision. A clean freeze plus D3 remains required. |
+| E2, E3, BETA | `BLOCKED` | E2 requires E0 + E1 `VERIFIED`; an E2 audit written early is only provisional input. |
 | E4 (controlled adaptation) | `BLOCKED`, optional | Requires E0–E3 and a verified dataset; not required for BETA. |
 
-Audit baseline: repository commit `f3ad4ef` (Core Stabilization freeze) plus
-the current working tree, inspected on 2026-09-04. The E0 gate verdict
-(`VERIFIED` for fixture-validation) and the E1-01 reopen
-(`docs/benchmarks/e1/ownership_audit.md` regenerated from source + contract
-test) are the most recent state changes.
+Audit baseline: Core Stabilization freeze `f3ad4ef`, current HEAD `ba1a583`, and
+the working tree inspected on 2026-09-08. Historical counts are not current
+gate evidence.
 
 Vietnamese readers: see the synchronized [bộ tài liệu tiếng Việt](vi/README.md).
 The English files remain the canonical contract text; the source code and tests
