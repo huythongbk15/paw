@@ -6,6 +6,32 @@ cập nhật tài liệu này.
 
 ## Baseline audit
 
+### Sửa inference local có manifest và khóa trạng thái — STANDARD / READY (2026-09-08)
+
+Vấn đề: D3 tái hiện hai lỗi trên candidate E1 sạch. Trong
+`PawRuntime._execute_action`, lời gọi model bị lồng trong nhánh privacy dành cho
+provider không-local khi đã có manifest. Vì vậy local model được phép lại không
+được gọi; capability executor vẫn thành công và output mock che mất model
+response. Đồng thời `test_project_lock` còn tìm hàng Roadmap cũ
+`E1 measurement` thay vì hàng qualification canonical `E1`. Lượt D3 này cũng
+thấy hai lỗi hygiene Ruff có sẵn: `paw.bench.__all__` chưa sắp xếp và một
+generator thừa trong test export.
+
+Invariant: mọi side effect provider phải sau Policy/privacy gate; model đã được
+chọn và cho phép phải chạy đúng một lần; executor success không chứng minh
+inference; tài liệu canonical và lock test phải cùng một gate. Ba phương án:
+A đổi expected chat thành output mock — loại vì hợp thức hóa việc bỏ model; B bỏ
+manifest cho local — loại vì làm mất boundary context/privacy; C chỉ kiểm tra
+disclosure với provider không-local rồi gọi mọi provider đã được phép qua một
+completion path chung — được chọn. Bằng chứng ngược: task/checkpoint/executor đều
+hoàn thành bình thường, nên lifecycle evidence hiện tại không tự phát hiện lỗi.
+
+Ngân sách nghiên cứu: runtime, model executor, chat slice, privacy contract và
+hai test lỗi; không nghiên cứu ngoài hay thêm abstraction. Dừng khi chat local
+trả response local xác định, remote refusal gọi provider 0 lần, thứ tự policy
+vẫn được cover, status lock dùng hàng canonical và full Ruff sạch. Chỉ chuẩn hóa
+danh sách export/test benchmark hiện có, không đổi member. Readiness: `READY`.
+
 ### Sửa qualification E1 và contract E2 — DEEP / READY (2026-09-08)
 
 Vấn đề: E1 bị nâng lên `VERIFIED` từ báo cáo sạch có
@@ -281,6 +307,7 @@ candidate đã đóng băng:
 | Planning | `Planner`; `StructuredReasoner` thuần; runtime proposer; `TaskScheduler` | Đã tách rõ tạo/lưu Plan, đề xuất action và DAG readiness/state. |
 | Evidence/Citation | result model trong `core/models.py`, stored record trong `paw.knowledge`, boundary ở `knowledge/normalization.py` | `normalize_knowledge_result()` map source/provenance, sắp citation và từ chối link hỏng. |
 | Cognitive role và task signal E2 | `core/reasoning_contracts.py`; `ModelRole` ở `core/models.py`; `PrivacyClass` ở `core/privacy.py` | Một registry `RoleContract`; task signal tham chiếu privacy enum canonical. Không còn `PrivacyLevel`, role-definition registry thứ hai, depth classifier hoặc escalation decision. |
+| Local eligibility và OOD E2 | `core/reasoning_contracts.py` | Một enum `OODCondition` đóng 9 giá trị và một `EligibilityRule` bất biến cho mỗi cognitive role. `FAST`/`TOOLS` bị giới hạn; `REASONING`/`CODING` nghiêm ngặt. `evaluate_local_eligibility()` deterministic và fail-closed. Không chọn model, không authorize escalation, không gọi provider. |
 
 `core/__init__.py` chỉ export 11 symbol của runtime contract. Planner, scheduler,
 store, adapter và helper tương thích phải import từ module sở hữu; contract test

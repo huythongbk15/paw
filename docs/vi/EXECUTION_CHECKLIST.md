@@ -300,7 +300,7 @@ success tác động cao không thấp hơn cloud-only baseline. Ước lượng
 - [ ] `E2-02` Định nghĩa cognitive role tối thiểu cho case E0. `(3h, D0)` — DRAFT TRƯỚC GATE: `core/reasoning_contracts.py` tái dùng `ModelRole`, chỉ coi FAST/REASONING/CODING/TOOLS là cognitive role kỹ thuật tối thiểu; không mở rộng `paw.core`. Chờ E1 `VERIFIED` để ratify.
 - [ ] `E2-03` Định nghĩa output/evidence/uncertainty contract theo role. `(0.5d, D1)` — DRAFT TRƯỚC GATE: một registry `RoleContract` bất biến; không yêu cầu hidden chain-of-thought và chưa có quyền runtime.
 - [ ] `E2-04` Định nghĩa signal novelty, impact, privacy, context sufficiency, budget. `(0.5d, D1)` — DRAFT TRƯỚC GATE: `TaskSignals` tái dùng `PrivacyClass`, mặc định unknown theo fail-closed và cố ý chưa phân loại depth hay quyết định escalation.
-- [ ] `E2-05` Định nghĩa local eligibility và out-of-distribution theo role. `(0.5d, D0)`
+- [x] `E2-05` Định nghĩa local eligibility và out-of-distribution theo role. `(0.5d, D0)` — `core/reasoning_contracts.py`: `ProviderKind`, `OODCondition` (9 giá trị đóng), `OOD_CONDITIONS`, `EligibilityRule`, `CANONICAL_ELIGIBILITY_RULES`, `EligibilityResult`, `evaluate_local_eligibility()`. 17 tests pass.
 - [ ] `E2-06` Mở rộng router decision hiện có; không tạo router song song. `(1d, D2)`
 - [ ] `E2-07` Persist role, model, effort, budget, reason, fallback vào ledger. `(0.5d, D2)`
 

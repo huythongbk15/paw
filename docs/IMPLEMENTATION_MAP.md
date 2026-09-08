@@ -6,6 +6,41 @@ changes.
 
 ## Audit baseline
 
+### Local manifest inference and status-lock repair — STANDARD / READY (2026-09-08)
+
+Problem: D3 reproduces two failures on the clean E1 candidate. In
+`PawRuntime._execute_action`, model completion is nested inside the non-local
+privacy branch when a current manifest exists. A permitted local selection is
+therefore never invoked; the capability executor still succeeds and its mock
+output hides the missing model response. Separately, `test_project_lock` still
+expects the retired `E1 measurement` roadmap row instead of the canonical `E1`
+qualification row. The same D3 run finds two existing full-Ruff hygiene errors:
+an unsorted `paw.bench.__all__` and an unnecessary generator in its export test.
+
+Affected invariants: every provider side effect occurs after Policy and privacy
+gates; a permitted selected model is executed exactly once; executor success is
+not evidence that inference occurred; canonical documentation and its lock test
+describe the same gate. Options considered: (A) change the chat expectation to
+the mock-executor output (rejected because it blesses a skipped model call); (B)
+omit the manifest for local chat (rejected because it removes the context and
+privacy boundary); (C) apply disclosure checks only to non-local providers, then
+invoke every admitted provider through one common completion path (selected).
+Contrary evidence: task, checkpoint and executor records all complete normally,
+so existing lifecycle evidence alone does not expose this inference omission.
+
+Research budget and stop condition: current runtime, model executor, chat slice,
+privacy contract and the two failing tests only; no external research or new
+abstraction. Stop when local chat returns the deterministic local-model response,
+remote refusal still makes zero provider calls, policy ordering remains covered,
+and the documentation lock names the canonical row. Readiness: `READY`.
+
+Implementation map: repair the call placement in `core/runtime.py`; keep
+`ModelExecutor`, `CapabilityRouter` and privacy ownership unchanged. Normalize
+the existing benchmark export list/test without changing its members, and
+update the focused runtime regression plus canonical status lock. Acceptance:
+the two reproduced failures, E1 disclosure tests, affected runtime ordering
+tests and full Ruff pass before D3 is rerun.
+
 ### E1 qualification and E2 contract repair — DEEP / READY (2026-09-08)
 
 Problem: E1 was promoted to `VERIFIED` from a clean report whose own
@@ -1026,6 +1061,7 @@ does not establish `VERIFIED` status for a frozen clean candidate:
 | Executor | Port/registry and `EffectIntent` in `core/executor.py`; local adapter in `executors/filesystem.py`; model providers in `core/model_executor.py` | `PawRuntime._execute_action` invokes or reconciles the capability-selected executor | `PASS` for the built-in adapter: skill body is context only, filesystem writes prepare a durable intent and restart never repeats a prepared effect blindly. |
 | Model Router | `core/model_router.py`: registry/router/provider registry; `core/model_executor.py` | Execution stage routes after the proposal gate | `PASS` for current gate ordering. `ModelRouter.score_model_for_task()` added as the canonical scoring entry point. **P1 Router fix (2026-09-07)**: `_filter_for_availability` local-fallback branch now (a) filters by `m.supports_role(role)` so wrong-role models do not leak; (b) re-scores via the canonical entry point; (c) sorts by score descending so registration order does not affect the final selection; (d) returns `[]` when no local model supports the role. 9 new contract tests in `tests/test_p1_router_filter_availability.py` pin every property. Post-gate escalation needs a side-effect-free cached selection path; live initialization/discovery cannot hide before the new proposal gate. |
 | E2 reasoning contracts | `core/reasoning_contracts.py`; historical routing vocabulary remains `core/models.py:ModelRole`; privacy remains `core/privacy.py:PrivacyClass` | Not wired into router/runtime while E1 is `PARTIAL` | Pre-gate contract repair only. One immutable registry covers the minimum FAST/REASONING/CODING/TOOLS role outputs; `TaskSignals` records fail-closed novelty/impact/privacy/context/budget inputs. It deliberately does not classify research depth, select a route or authorize escalation. |
+| E2 local eligibility + OOD | `core/reasoning_contracts.py` | Not wired into router/runtime while E1 is `PARTIAL` | Pre-gate contract repair only. One closed `OODCondition` enum (9 values) and one immutable `EligibilityRule` per cognitive role define when a role is not eligible for local execution. `FAST` and `TOOLS` are bounded; `REASONING` and `CODING` are strict. `evaluate_local_eligibility()` is deterministic and fail-closed for unknown roles. It does not select a model, authorize escalation or invoke a provider. |
 | Ledger | `core/ledger.py`; transaction coordinator in `core/runtime_persistence.py` | Used throughout runtime | `PASS` for local atomic evidence: observation/artifact/execution events and operation record commit together; terminal task/checkpoint/events roll back together under injected failures. |
 | Checkpoint/Resume | `core/checkpoint.py`: checkpoint, prepared/completed operation record, resume services | `run`/`run_agent`/`run_graph` restore durable state; executor restart consults prepared effects | `PASS` for committed stores, atomic checkpoint events, restored autonomy/context, stable idempotency IDs and filesystem reconciliation after close/reopen. |
 | Storage | `core/storage.py`: global database proxy and schema; runtime transaction grouping in `core/runtime_persistence.py` | Shared by nearly every service | `PASS` for centralized DDL, non-destructive migration, autocommit-safe legacy writes and explicit multi-record commit boundaries. |

@@ -271,6 +271,16 @@ output contract asks for an evidence-backed assessment and uncertainty, not
 hidden chain-of-thought. E2-05 onward may consume these values only after the E2
 entry gate is satisfied and the contracts are re-approved on that revision.
 
+**`[CURRENT]`** Local eligibility and out-of-distribution conditions live in the
+same isolated module. One closed `OODCondition` enum (9 values) and one
+immutable `EligibilityRule` per cognitive role define when a role is not eligible
+for local execution. `FAST` and `TOOLS` are bounded (capability, provider,
+privacy, budget); `REASONING` and `CODING` are strict (also evidence, confidence,
+novelty, high-impact). `evaluate_local_eligibility()` is deterministic and
+fail-closed for unknown roles. This is a value contract: it does not select a
+model, authorize escalation or invoke a provider. E2-06 extends the existing
+router decision with these conditions.
+
 In this post-gate target, every local or cloud inference is a typed
 `model.inference` operation. Its context manifest, privacy class, estimated
 budget, selected role and escalation reason are recorded before invocation. A

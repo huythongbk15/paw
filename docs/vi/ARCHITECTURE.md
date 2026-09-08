@@ -167,6 +167,16 @@ bằng chứng và uncertainty, không yêu cầu hidden chain-of-thought. Chỉ
 đi mới được dùng các value này sau khi entry gate E2 đạt và contract được review
 lại trên revision đó.
 
+Local eligibility và out-of-distribution theo role cũng nằm trong module độc lập
+này. `OODCondition` là enum đóng 9 giá trị; mỗi cognitive role có một
+`EligibilityRule` bất biến ghi điều kiện khiến role không đủ điều kiện chạy local.
+`FAST` và `TOOLS` bị giới hạn (capability match, provider reachable, privacy,
+budget); `REASONING` và `CODING` nghiêm ngặt thêm evidence, confidence, novelty,
+high-impact. `evaluate_local_eligibility()` deterministic và fail-closed với role
+không có rule. Đây là value contract: không chọn model, không authorize
+escalation, không gọi provider. E2-06 mở rộng router decision hiện tại với các
+điều kiện này.
+
 Trong đích sau gate này, mọi inference local hoặc cloud đều là operation
 `model.inference` có kiểu. Context manifest, privacy class, budget ước tính,
 role đã chọn và lý do escalation được ghi trước invocation. Model response có

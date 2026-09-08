@@ -247,8 +247,15 @@ should address. None are blockers for E2-01 itself.
    identifies FAST/REASONING/CODING/TOOLS as the minimum engineering roles.
    VISION/EMBEDDING are modalities and FALLBACK is a routing marker. Activation
    waits for E1 `VERIFIED`.
-2. **No role/capability eligibility matrix** — still open. E2-05 owns local
-   eligibility and explicit OOD conditions.
+2. **Local eligibility and OOD conditions are a pre-gate draft** —
+   `core/reasoning_contracts.py` now carries a closed `OODCondition` enum
+   (9 values: no_matching_capability, missing_evidence, low_confidence,
+   novel_task, high_impact, privacy_blocked, budget_exhausted,
+   provider_unavailable, unknown), one immutable `EligibilityRule` per
+   cognitive role and a deterministic `evaluate_local_eligibility()` that is
+   fail-closed for unknown roles. FAST and TOOLS are bounded (no
+   evidence/confidence/novelty conditions); REASONING and CODING are strict.
+   Activation waits for E1 `VERIFIED`.
 3. **No novelty / OOD / impact signal** — `route()` consumes `goal`, `context_size`, `complexity`, `privacy_required`, `execution_profile`, `preferred_provider`; none carries a "novelty" or "OOD" signal. E2-04 territory.
 4. **No trajectory-aware re-evaluation** — `route()` is a single-shot decision. E2-10 introduces trajectory-aware routing.
 5. **No verifier-policy selection** — `route()` always picks the best-scoring model for the role. E2-18 introduces verifier-policy selection.

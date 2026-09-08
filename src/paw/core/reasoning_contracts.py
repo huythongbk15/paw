@@ -195,8 +195,169 @@ class TaskSignals:
         )
 
 
+# --- E2-05: Local eligibility and out-of-distribution conditions per role ---
+
+class ProviderKind(StrEnum):
+    """Where a candidate model lives, in increasing disclosure risk."""
+
+    LOCAL = "local"
+    CLOUD_APPROVED = "cloud_approved"
+    CLOUD_UNAPPROVED = "cloud_unapproved"
+
+
+class OODCondition(StrEnum):
+    """Explicit out-of-distribution conditions for a role."""
+
+    NO_MATCHING_CAPABILITY = "no_matching_capability"
+    MISSING_EVIDENCE = "missing_evidence"
+    LOW_CONFIDENCE = "low_confidence"
+    NOVEL_TASK = "novel_task"
+    HIGH_IMPACT = "high_impact"
+    PRIVACY_BLOCKED = "privacy_blocked"
+    BUDGET_EXHAUSTED = "budget_exhausted"
+    PROVIDER_UNAVAILABLE = "provider_unavailable"
+    UNKNOWN = "unknown"
+
+
+# Closed set: a condition not in this set is rejected at construction time.
+#: Closed set of OOD conditions. Closed by construction; unknown values raise.
+OOD_CONDITIONS: frozenset[OODCondition] = frozenset(OODCondition)
+
+
+@dataclass(frozen=True)
+class EligibilityRule:
+    """One eligibility rule for a role.
+
+    A rule names the conditions under which a candidate model is NOT eligible
+    to serve the role locally. Eligibility is a value contract: it does not
+    select a model, authorize escalation or invoke a provider.
+    """
+
+    role: ModelRole
+    conditions: tuple[OODCondition, ...]
+    description: str
+
+    def __post_init__(self) -> None:
+        if not self.description.strip():
+            raise ValueError("rule description must not be empty")
+        for condition in self.conditions:
+            if not isinstance(condition, OODCondition):
+                raise TypeError(
+                    f"condition {condition!r} must be an OODCondition"
+                )
+
+
+@dataclass(frozen=True)
+class EligibilityResult:
+    """Result of evaluating one role's local eligibility."""
+
+    role: ModelRole
+    eligible: bool
+    conditions: tuple[OODCondition, ...]
+    matched_rule: str | None
+
+    def is_out_of_distribution(self) -> bool:
+        """True when the role is not eligible for local execution."""
+        return not self.eligible
+
+
+#: Canonical local eligibility rules per role. Closed by construction.
+CANONICAL_ELIGIBILITY_RULES: Mapping[ModelRole, EligibilityRule] = MappingProxyType(
+    {
+        ModelRole.FAST: EligibilityRule(
+            role=ModelRole.FAST,
+            conditions=(
+                OODCondition.NO_MATCHING_CAPABILITY,
+                OODCondition.PROVIDER_UNAVAILABLE,
+                OODCondition.BUDGET_EXHAUSTED,
+            ),
+            description="FAST is eligible locally unless no model matches, "
+            "every provider is down, or budget is exhausted.",
+        ),
+        ModelRole.REASONING: EligibilityRule(
+            role=ModelRole.REASONING,
+            conditions=(
+                OODCondition.NO_MATCHING_CAPABILITY,
+                OODCondition.MISSING_EVIDENCE,
+                OODCondition.LOW_CONFIDENCE,
+                OODCondition.NOVEL_TASK,
+                OODCondition.HIGH_IMPACT,
+                OODCondition.PRIVACY_BLOCKED,
+                OODCondition.PROVIDER_UNAVAILABLE,
+                OODCondition.BUDGET_EXHAUSTED,
+            ),
+            description="REASONING is eligible locally only when evidence is "
+            "present, confidence is adequate, the task is not novel or "
+            "high-impact, privacy permits it, a provider is reachable and "
+            "budget remains.",
+        ),
+        ModelRole.CODING: EligibilityRule(
+            role=ModelRole.CODING,
+            conditions=(
+                OODCondition.NO_MATCHING_CAPABILITY,
+                OODCondition.MISSING_EVIDENCE,
+                OODCondition.LOW_CONFIDENCE,
+                OODCondition.NOVEL_TASK,
+                OODCondition.HIGH_IMPACT,
+                OODCondition.PRIVACY_BLOCKED,
+                OODCondition.PROVIDER_UNAVAILABLE,
+                OODCondition.BUDGET_EXHAUSTED,
+            ),
+            description="CODING is eligible locally only when source evidence is "
+            "present, confidence is adequate, the task is not novel or "
+            "high-impact, privacy permits it, a provider is reachable and "
+            "budget remains.",
+        ),
+        ModelRole.TOOLS: EligibilityRule(
+            role=ModelRole.TOOLS,
+            conditions=(
+                OODCondition.NO_MATCHING_CAPABILITY,
+                OODCondition.PRIVACY_BLOCKED,
+                OODCondition.PROVIDER_UNAVAILABLE,
+                OODCondition.BUDGET_EXHAUSTED,
+            ),
+            description="TOOLS is eligible locally unless no model matches, "
+            "privacy blocks it, every provider is down, or budget is exhausted.",
+        ),
+    }
+)
+
+
+def evaluate_local_eligibility(
+    role: ModelRole,
+    observed_conditions: frozenset[OODCondition],
+) -> EligibilityResult:
+    """Evaluate one role's local eligibility against observed OOD conditions.
+
+    The rule is the single authority. ``observed_conditions`` is the set of
+    conditions detected by reconnaissance; any overlap with the rule's
+    conditions makes the role out-of-distribution for local execution.
+    """
+    rule = CANONICAL_ELIGIBILITY_RULES.get(role)
+    if rule is None:
+        return EligibilityResult(
+            role=role,
+            eligible=False,
+            conditions=(OODCondition.UNKNOWN,),
+            matched_rule=None,
+        )
+    overlap = frozenset(rule.conditions) & observed_conditions
+    return EligibilityResult(
+        role=role,
+        eligible=not overlap,
+        conditions=tuple(sorted(overlap, key=lambda c: c.value)),
+        matched_rule=rule.description,
+    )
+
+
 __all__ = [
+    "CANONICAL_ELIGIBILITY_RULES",
     "CANONICAL_ROLE_CONTRACTS",
+    "OODCondition",
+    "OOD_CONDITIONS",
+    "EligibilityResult",
+    "EligibilityRule",
+    "ProviderKind",
     "BudgetLevel",
     "ContextSufficiencyLevel",
     "ImpactLevel",
