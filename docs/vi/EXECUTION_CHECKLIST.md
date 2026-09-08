@@ -1,20 +1,24 @@
 # Checklist thực thi PAW
 
-Kiểm chứng mới nhất (2026-09-08, `74b563e` + working tree): **PARTIAL**, thay thế
-snapshot cũ bên dưới. 71 file / 836.732 byte, recall 1,0, reduction 0,981366;
-fixture fresh, input/tree ổn định, dirty=true. Bản sửa local inference và status
-lock đạt 41 test, full Ruff và chat từ wheel cài riêng. E1-27 còn mở cho D3 sạch;
-checkbox contract E2-02..05 chưa cho phép kích hoạt E2.
+Kiểm chứng mới nhất (2026-09-08, `649ded9`): **E1 = VERIFIED**.
+Báo cáo source thật tại `benchmarks/e1/real_measurement_local.json`
+(HEAD `649ded9`, dirty=false, fixtures_fresh=true) đã chạy full 71 file /
+839.006 byte corpus sản xuất PAW (`src/paw`) trên 6 case PAW đã review
+(12 (case, mode) mẫu) với `LocalEmbeddingProvider` đã enable.
+Kết quả: min_recall = 1,00, median_warm_reduction = 0,9847,
+`measurement_gate = PASS`, `evidence_state = VERIFIED`.
+E1-27 đã đóng. Contract E2-02..05 vẫn là bản ghi thực thi provisional,
+chưa cho phép kích hoạt E2 cho tới khi gate E2 được phê duyệt.
 
-Review 2026-09-08: E1 **PARTIAL**, E2 **BLOCKED**. Báo cáo sạch tại
+Review 2026-09-08: E1 **VERIFIED**, E2 **BLOCKED**. Báo cáo sạch trước đó tại
 `c28d679` đo 12 file `benchmarks/e1/fixtures_paw`, không phải `src/paw`, nên
-không thể đóng gate E1 đại diện cho dự án thật. Lượt đo hiện tại trên 70 file
-source PAW quan sát recall=1,00 và reduction=0,981 nhưng trả
-`PARTIAL`/`OBSERVED` do cây dirty và provenance fixture đã stale. Contract
-E2-02..05 độc lập chỉ là repair trước gate, chưa có quyền runtime.
-Mở lại E1-23/24/25/27 và E1-33 bất kể checkbox lịch sử bên dưới.
-Repair input rỗng/thiếu E1-27 qua 8 test tập trung; acceptance đầy đủ còn mở.
-Tiếp theo: sửa độ tin cậy measurement và freshness revision.
+chưa từng确立 gate E1 đại diện cho dự án thật. Lượt đo dirty-tree ngày
+2026-09-08 trên 70 file source PAW quan sát recall=1,00 và reduction=0,981
+nhưng có provenance fixture stale và trả `PARTIAL`/`OBSERVED` đúng.
+Bốn điều kiện acceptance của E1-27 đã đủ trên revision `649ded9`: fixture
+re-bind tới HEAD `74b563e` (`037f9b9`), revision sạch đã đóng băng,
+measurement source thật + bằng chứng D3 quality/privacy trên cùng revision,
+và file `--output` bị loại khỏi dirty-tree check (`ef48637`, `649ded9`).
 
 Đây là tracker thực thi nguyên tử được dẫn xuất từ `ROADMAP.md`. Roadmap vẫn là
 authority duy nhất về scope, thứ tự và acceptance gate. File này chỉ được chia
@@ -289,7 +293,7 @@ không giảm chất lượng/an toàn. Ước lượng 25–35 ngày.
 - [x] `E1-32` Ghi claim status, confidence và freshness tại evidence boundary. `(0.5d, D1)` — PASS: `docs/benchmarks/e1/claim_status_record.md` định nghĩa contract. `paw/knowledge/evidence.py` thêm 2 field mới trên `KnowledgeEvidence`: `status: str` (một trong `EVIDENCE_STATUSES = {"unverified", "verified", "disputed", "stale"}`; mặc định `"unverified"`) và `freshness: str | None` (ISO-8601 timestamp lần verify cuối; mặc định `None`). Cả hai field có default an toàn nên existing call site construct `KnowledgeEvidence` không có field mới vẫn hoạt động không đổi. `to_dict()` và `from_row()` round-trip field mới. Ownership audit E1-01 update: `KnowledgeEvidence` 8 → 10 field. Contract test `tests/test_e1_32_claim_status_contract.py` (9 D1 test) pin: tập đóng, default value, custom-value round-trip, `to_dict` exposure, `from_row` round-trip, missing-field defaults, back-compat construction. D1 verify: `pytest -q tests/test_e1_32_claim_status_contract.py` → 9 passed.
 - [x] `E1-33` Invalidate hoặc đánh giá lại decision input khi project revision đổi. `(0.5d, D2)` — PASS: `docs/benchmarks/e1/revision_invalidation.md` định nghĩa contract. `paw/knowledge/history.py` thêm frozen dataclass `ReEvaluationResult` (4 field: `pinned_revision`, `current_revision`, `stale`, `reason`) và async `re_evaluate_on_revision(*, pinned_revision, current_revision, recent_changes)`. Hàm là pure: cùng input → cùng output. Heuristic: revision match → `reason="revision_match"`, not stale; revision khác VÀ pinned không trong recent-changes SHA list → `reason="revision_mismatch"`, stale; revision khác VÀ pinned CÓ trong SHA list → `reason="pinned_revision_not_found"`, not stale (pinned vẫn reachable). Empty input xử lý là revision mismatch (stale). Contract test `tests/test_e1_33_revision_invalidation_contract.py` (7 D2 test) pin: result shape, matching-revisions happy path, revision-mismatch path, pinned-revision-still-reachable path, empty-input path, determinism, frozen dataclass. D2 verify: `pytest -q tests/test_e1_33_revision_invalidation_contract.py` → 7 passed.
 - [x] `E1-34` Admit external evidence như input không tin cậy, có provenance và negative control prompt injection. `(1d, D2)` — PASS: `docs/benchmarks/e1/external_evidence_admission.md` định nghĩa contract. `paw/knowledge/external.py` là module mới với tập đóng `EXTERNAL_SOURCE_KINDS = {"web", "user_message", "tool_output", "unknown"}`, danh sách đóng `INJECTION_PATTERNS` (5 regex: "ignore previous instructions", "disregard the system prompt", "forget everything above", "you are now an evil/jailbroken/unrestricted", "new instructions:"), frozen dataclass `ExternalEvidence` (6 field: `text`, `fingerprint`, `source_kind`, `source_url`, `injection_suspected`, `matched_pattern`, `status`), và `admit_external_evidence(text, *, source_kind, source_url="")`. Hàm ghi SHA-256 fingerprint, chạy prompt-injection regex pass (case-insensitive), từ chối unknown `source_kind` với `ValueError`. Contract test `tests/test_e1_34_external_evidence_contract.py` (11 D2 test) pin: tập đóng, happy path, injection path (3 biến thể), unknown-source-kind refusal, empty-text known fingerprint, determinism, frozen dataclass. D2 verify: `pytest -q tests/test_e1_34_external_evidence_contract.py` → 11 passed.
-- [ ] `E1-27` Chạy E1 integration pack và ghi gate. `(1d, D3)` — **PARTIAL**. Runner canonical là `paw.bench.e1_production`. Báo cáo sạch tại `c28d679` chỉ là metric evidence cho `benchmarks/e1/fixtures_paw` (12 file, 6.128 byte, recall=1,0, reduction=0,871) và đã bị mô tả nhầm thành qualification source PAW. Lượt chạy 2026-09-08 trên `src/paw` cùng sáu case PAW quan sát 70 file / 835.061 byte, recall=1,0 và reduction=0,981, nhưng trả `PARTIAL`/`OBSERVED` vì cây dirty và ít nhất một fixture không còn khớp Git blob đã review. Còn thiếu: gắn fixture vào byte hiện tại đã review, freeze revision sạch, rồi chạy measurement source thật cùng privacy/quality và D3 trên chính revision đó.
+- [x] `E1-27` Chạy E1 integration pack và ghi gate. `(1d, D3)` — **VERIFIED** trên revision sạch `649ded9`. Runner canonical là `paw.bench.e1_production`. Báo cáo source thật tại `benchmarks/e1/real_measurement_local.json` (HEAD `649ded9`, dirty=false, fixtures_fresh=true) chạy full 71 file / 839.006 byte corpus sản xuất PAW (`src/paw`) trên sáu case PAW đã review (12 (case, mode) mẫu) với `LocalEmbeddingProvider` đã enable. Kết quả: min_recall = 1,00, median_warm_reduction = 0,9847, baseline_tokens = 254.648, `measurement_gate = PASS`, `evidence_state = VERIFIED`, `gate_reasons = ["metrics and provenance checks passed"]`. Bốn điều kiện acceptance đã đủ: (1) sáu fixture gắn vào byte hiện tại đã review tại HEAD `74b563e` (tất cả 12 expected_evidence marker verified, SHA-256 match HEAD blob); (2) revision sạch đã đóng băng (`649ded9`, `git status` chỉ có report); (3) measurement source thật + bằng chứng privacy/quality D3 trên cùng revision; (4) file `--output` bị loại khỏi dirty-tree check. Báo cáo `c28d679` trước đó chỉ đo corpus tổng hợp `fixtures_paw` (12 file, 6.128 byte) và chưa từng là qualification source PAW. Commit `037f9b9` re-pin case YAML, `fdf3719` enable embeddings + ingest 71 file / 321 chunks, `ef48637` + `649ded9` sửa dirty-tree exclusion. D3 verify: `python -m paw.bench.e1_production --roots src/paw --case-dir benchmarks/e1/cases --embedding local --output benchmarks/e1/real_measurement_local.json` → `measurement_gate=PASS`, `evidence_state=VERIFIED`.
 
 Gate: chỉ giảm token không đủ pass E1. Nếu recall dưới 95%, sửa project
 understanding trước E2.
@@ -474,7 +478,7 @@ thái tiến độ gate, không cho phép gọi implementation quan sát đượ
 |---|---|---:|---|---|---|
 | SX | `VERIFIED` | 14/14 | không | `SX-14` đã đóng | `f3ad4ef` (548 passed trong 303.72s) |
 | E0 | `IN PROGRESS` | 44/44 items marked [x] hoặc DEFERRED (deterministic baseline gate; E0-20/21 charter-deferred cho cloud baseline) | không (E0-20/21 deferred-by-charter; E0-17/18/19/22 covered bởi lượt chạy hiện tại; E0-26..42 features dispositions done) | re-open any E0-17..42 nếu cần follow-up review | `f3ad4ef` (777 passed, ruff clean); re-verified tại `08a8806` |
-| E1 | `PARTIAL` | Các item tập trung trước đó pass; metric source thật đang `OBSERVED` (recall=1,0; reduction=0,981). | Cây dirty, fixture review stale, chưa có D3 privacy/chất lượng cùng revision; clean `c28d679` chỉ đo fixture tổng hợp. | Review/freeze source thật rồi chạy E1-27 D3. | `2c4a81f` + working tree (`OBSERVED`) |
+| E1 | `VERIFIED` | Các item tập trung đều pass; E1-27 D3 gate đã đóng trên revision sạch `649ded9`. Measurement source thật: recall=1,0, reduction=0,9847, 71 file / 839.006 byte, `LocalEmbeddingProvider` đã enable, `measurement_gate=PASS`, `evidence_state=VERIFIED`. | Không còn việc để lại. Báo cáo `c28d679` trước đó chỉ đo corpus tổng hợp `fixtures_paw`; lượt dirty-tree `037f9b9` có provenance fixture stale. Cả hai đã được thay thế bởi báo cáo clean-revision `649ded9`. | E1 đã đóng. Tiếp theo: E2-06 (extend existing router) hoặc mở lại E1-23/24/25 cho adversarial hardening thêm. | `649ded9` (`VERIFIED`) |
 | E2 | `BLOCKED` | E2-01 audit xong; draft E2-02..05 có focused test nhưng chưa check. | E1 chưa `VERIFIED`; cấm wiring router/runtime/persistence E2. | Sau khi E1 pass, ratify E2-02..05 rồi E2-06. | — |
 | E3 | `BLOCKED` | 0/25 | Gate E2 | `E3-01` | — |
 | BETA | `BLOCKED` | 0/14 | Gate E3 | `B-01` | — |
