@@ -197,7 +197,16 @@ async def measure(
     repo_root = repo_root.resolve()
     revision = _git(repo_root, "rev-parse", "HEAD")
     tree_state_before = _git(repo_root, "status", "--porcelain=v1")
-    dirty = bool(tree_state_before)
+    # The measurement writes its own report file (``--output``). That file
+    # is not part of the source tree under review, so exclude it from the
+    # dirty check. Everything else that appears in ``git status`` between
+    # the before/after snapshots is treated as a dirty-tree signal.
+    _output_rel = output.relative_to(repo_root).as_posix() if output.is_absolute() else str(output)
+    _non_output = [
+        line for line in tree_state_before.splitlines()
+        if not line.strip().endswith(_output_rel)
+    ]
+    dirty = bool(_non_output)
     corpus, cases, owned_inputs = _measurement_inputs(repo_root, roots, case_dir)
     if not corpus:
         raise ValueError("production corpus contains no Python files")
