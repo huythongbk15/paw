@@ -1,6 +1,16 @@
 # PAW Core Stabilization roadmap
 
-Current review — 2026-09-08: **PARTIAL**. E1 was incorrectly promoted from a
+Latest review — 2026-09-08, `74b563e` + working tree: **PARTIAL**.
+This supersedes the earlier measurement snapshot below. Fixture provenance
+was refreshed in `7d0cc7e`; its clean source measurement passed. The latest
+source run measures 71 files / 836,732 bytes, recall 1.0 and median reduction
+0.981366, with fresh fixtures but a dirty tree. The local-manifest inference
+bug and stale status assertion are repaired; 41 affected tests, full Ruff and
+installed-wheel chat pass. E1 still requires a new clean D3 qualification.
+E2-02..05 source contracts remain provisional regardless of checked boxes;
+they acquire no runtime authority before the E1 gate passes.
+
+Earlier review — 2026-09-08: **PARTIAL**. E1 was incorrectly promoted from a
 clean report at `c28d679` whose own `corpus_roots` value is
 `benchmarks/e1/fixtures_paw` (12 files, 6,128 bytes), not `src/paw`. That run
 does verify its synthetic-fixture metric, but it cannot close the representative

@@ -577,10 +577,14 @@ def is_valid_case_manifest(data: Any) -> bool:
     return len(validate_case_manifest(data)) == 0
 
 
+# E1-BL2: CaseRunResult is the benchmark contract result type (a pure
+# dataclass). Submodule functions and verification types stay importable via
+# their explicit module paths.
 __all__ = [
     "CASE_MANIFEST_SCHEMA_VERSION",
     "CaseCategory",
     "CaseManifest",
+    "CaseRunResult",
     "ExpectedEvidence",
     "FixtureRef",
     "PrivacyClass",
@@ -589,13 +593,6 @@ __all__ = [
     "case_manifest_to_dict",
     "is_valid_case_manifest",
     "validate_case_manifest",
-    # E1-BL2: CaseRunResult is the benchmark contract
-    # result type (a pure dataclass). Submodule functions
-    # (run_case, load_case, etc.) and verification types
-    # stay importable via their explicit paths:
-    # ``from paw.bench.runner import ...`` /
-    # ``from paw.bench.verification import ...``.
-    "CaseRunResult",
 ]
 
 

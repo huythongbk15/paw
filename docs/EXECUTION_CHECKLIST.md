@@ -1,5 +1,13 @@
 # PAW execution checklist
 
+Latest verification, 2026-09-08 (`74b563e` + working tree): **PARTIAL**.
+This supersedes older E1 measurement snapshots below. Source measurement:
+71 files / 836,732 bytes; recall 1.0; median reduction 0.981366;
+fixtures_fresh=true; inputs/tree unchanged; dirty=true. Local inference and
+status-lock repairs pass 41 affected tests, full Ruff and installed-wheel chat.
+E1-27 stays open until a new clean D3 passes. Checked E2-02..05 contracts are
+provisional implementation records, not permission to activate E2.
+
 Review correction — 2026-09-08: E1 is **PARTIAL**; E2 is **BLOCKED**.
 The clean report at `c28d679` measured the 12-file
 `benchmarks/e1/fixtures_paw` corpus, not `src/paw`, so it cannot establish the

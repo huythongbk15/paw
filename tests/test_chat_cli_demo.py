@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -19,9 +20,11 @@ from paw.core.task import TaskManager
 
 
 @pytest.mark.asyncio
-async def test_chat_turn_runs_complete_runtime_path(temp_db):
+async def test_chat_turn_runs_complete_runtime_path(temp_db, monkeypatch):
     service = ChatService(provider_mode="local")
     session = await service.open()
+    completion = AsyncMock(wraps=service._model_executor.complete)
+    monkeypatch.setattr(service._model_executor, "complete", completion)
 
     reply = await service.send("xin chào PAW")
 
@@ -30,6 +33,7 @@ async def test_chat_turn_runs_complete_runtime_path(temp_db):
     assert reply.model == "local-fast"
     assert reply.executor == "mock"
     assert reply.content == "[local-standin] xin chào PAW"
+    completion.assert_awaited_once()
     assert reply.task_id is not None
 
     task = await TaskManager.get(reply.task_id)

@@ -1,7 +1,7 @@
 schema_version: "1.0.0"
 case_id: paw_context_compiler
 decision_artifact_version: "1.0.0"
-project_revision: "02e5119"
+project_revision: "74b563e"
 category: repo_understanding
 privacy_class: internal
 goal: |
@@ -10,7 +10,7 @@ goal: |
   found and the compile + budget primitives are present.
 fixtures:
   - path: src/paw/core/context_compiler.py
-    revision: 02e5119
+    revision: 74b563e
     purpose: |
       Reviewed PAW context module. ContextCompiler is the assembly
       pipeline; _allocate_budget enforces the per-fragment/per-source

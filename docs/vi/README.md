@@ -1,5 +1,12 @@
 # Tài liệu hệ thống PAW — tiếng Việt
 
+Kiểm chứng mới nhất (2026-09-08, `74b563e` + working tree): **PARTIAL**;
+thay thế snapshot cũ bên dưới. Phép đo 71 file / 836.732 byte đạt recall 1,0,
+median reduction 0,981366; fixture fresh, input/tree ổn định, nhưng cây dirty.
+Đã sửa local inference khi có manifest: 41 test liên quan, full Ruff và CLI từ
+wheel cài riêng đều pass. Chưa có D3 hoàn chỉnh trên revision này; E2 vẫn chờ
+gate E1. Xem record mới nhất trong `IMPLEMENTATION_MAP.md`.
+
 Audit hiện tại (2026-09-08, `2c4a81f` cộng working tree): **PARTIAL**. Báo cáo
 sạch trước đây dùng để nâng E1 lên `VERIFIED` thực tế đo corpus nhỏ
 `benchmarks/e1/fixtures_paw`, không phải `src/paw` như Roadmap đã ghi. Lượt đo

@@ -1,6 +1,15 @@
 # PAW system documents
 
-Current audit (2026-09-08, `2c4a81f` plus the working tree): **PARTIAL**.
+Latest verification (2026-09-08, `74b563e` + working tree): **PARTIAL**.
+This supersedes the earlier numeric/status snapshot below. The current
+71-file source run has recall 1.0, median reduction 0.981366, fresh fixtures
+and unchanged inputs/tree; measurement remains PARTIAL because the tree is
+dirty. Local inference with a manifest is repaired: 41 affected tests pass,
+full Ruff passes, and a source-matched installed wheel passes local CLI chat.
+Full D3 has not passed on this revision; E2 activation remains blocked.
+See the latest verification record in `IMPLEMENTATION_MAP.md`.
+
+Earlier audit (2026-09-08, `2c4a81f` plus the working tree): **PARTIAL**.
 The real `src/paw` E1 observation meets its numeric targets, but E1 is not
 `VERIFIED`: the clean report previously used for that claim measured the small
 `benchmarks/e1/fixtures_paw` corpus, while the current real-source run is dirty

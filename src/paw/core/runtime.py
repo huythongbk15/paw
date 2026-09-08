@@ -1679,15 +1679,10 @@ class PawRuntime:
                                         provider_kind=provider_kind,
                                         refused=disclosure.refused,
                                     )
-                                messages = proposed.metadata.get("messages") or [
-                                    {"role": "user", "content": proposed.goal},
-                                ]
-                                model_result = await self.model_executor.complete(selection, messages) or {}
-                        else:
-                            messages = proposed.metadata.get("messages") or [
-                                {"role": "user", "content": proposed.goal},
-                            ]
-                            model_result = await self.model_executor.complete(selection, messages) or {}
+                        messages = proposed.metadata.get("messages") or [
+                            {"role": "user", "content": proposed.goal},
+                        ]
+                        model_result = await self.model_executor.complete(selection, messages) or {}
             except RemoteDisclosureRefusedError:
                 # Propagate to _execute_unit which handles it as a
                 # hard stop — the operation is NOT completed.

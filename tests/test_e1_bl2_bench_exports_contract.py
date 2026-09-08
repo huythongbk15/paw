@@ -146,7 +146,7 @@ def test_star_import_does_not_leak_runner_symbols() -> None:
     import sys
 
     # Capture current runner-related names in the namespace.
-    before = set(k for k in sys.modules if k.startswith("paw.bench"))
+    before = {key for key in sys.modules if key.startswith("paw.bench")}
     # Perform the wildcard import in a fresh namespace.
     ns: dict = {}
     exec("from paw.bench import *", ns)

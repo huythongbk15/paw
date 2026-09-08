@@ -6,6 +6,43 @@ changes.
 
 ## Audit baseline
 
+### Verification follow-up — 2026-09-08 (`74b563e` + working tree)
+
+Result: `PARTIAL`. The STANDARD/READY local-manifest repair below remains
+applicable: its owning runtime branch is unchanged in HEAD. Model completion
+now occurs once after the applicable disclosure check, including local
+selections with a compiled manifest. The chat regression wraps the real model
+executor and asserts one awaited completion. The status-lock assertion now
+matches the canonical E1 row. Benchmark export lint repairs preserve members.
+
+Current command evidence:
+
+- `uv sync --locked --extra dev`: PASS (34 resolved, 33 checked).
+- `python -m pytest -q tests/test_chat_cli_demo.py tests/test_runtime_privacy_proof.py tests/test_project_lock.py tests/test_e1_bl2_bench_exports_contract.py`:
+  41 passed in 24.75s.
+- `python -m ruff check .`: PASS.
+- `uv build --wheel --out-dir /tmp/paw-d3-wheel-current`: PASS after preserving
+  previous build staging outside the repository. Wheel archive bytes match all
+  71 current Python source files. A separate venv installed that wheel and ran
+  `python -m paw chat -m 'xin chào CLI' --provider local --json` outside the repo:
+  completed, context compiled, response `[local-standin] xin chào CLI`.
+- `python -m paw.bench.e1_production --output /tmp/paw-e1-review-74b563e-current.json --roots src/paw --case-dir benchmarks/e1/cases`:
+  71 files / 836,732 bytes, recall 1.0, median reduction 0.9813659458820749,
+  fresh fixtures, unchanged inputs/tree; PARTIAL/OBSERVED on dirty tree.
+
+Earlier full-suite attempt: 1360 passed / 2 failed in 853.84s; the failures
+were the local completion omission and old roadmap row assertion, both covered
+by the current focused run. That attempt is not a passing D3 and cannot certify
+the later E2-05 revision. The clean measurement at `7d0cc7e` passed with 71 files,
+831,450 bytes and reduction 0.981077; it certifies that measurement only.
+
+Remaining gate work: freeze the reviewed repair with current user changes
+resolved, then rerun full D3 and representative measurement on that revision.
+The workspace currently has unrelated AGENTS/PROFILE and bootstrap/state
+changes; these were preserved. In particular, the uncommitted generic AGENTS
+template no longer carries the tracked PAW rules and needs owner review before
+freeze. No E2 activation is inferred from implementation checkboxes.
+
 ### Local manifest inference and status-lock repair — STANDARD / READY (2026-09-08)
 
 Problem: D3 reproduces two failures on the clean E1 candidate. In

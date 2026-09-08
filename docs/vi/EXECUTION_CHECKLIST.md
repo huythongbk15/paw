@@ -1,5 +1,11 @@
 # Checklist thực thi PAW
 
+Kiểm chứng mới nhất (2026-09-08, `74b563e` + working tree): **PARTIAL**, thay thế
+snapshot cũ bên dưới. 71 file / 836.732 byte, recall 1,0, reduction 0,981366;
+fixture fresh, input/tree ổn định, dirty=true. Bản sửa local inference và status
+lock đạt 41 test, full Ruff và chat từ wheel cài riêng. E1-27 còn mở cho D3 sạch;
+checkbox contract E2-02..05 chưa cho phép kích hoạt E2.
+
 Review 2026-09-08: E1 **PARTIAL**, E2 **BLOCKED**. Báo cáo sạch tại
 `c28d679` đo 12 file `benchmarks/e1/fixtures_paw`, không phải `src/paw`, nên
 không thể đóng gate E1 đại diện cho dự án thật. Lượt đo hiện tại trên 70 file

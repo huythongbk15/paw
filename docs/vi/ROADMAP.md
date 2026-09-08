@@ -1,5 +1,12 @@
 # Lộ trình Core Stabilization của PAW
 
+Review mới nhất (2026-09-08, `74b563e` + working tree): **PARTIAL**, thay thế
+snapshot cũ bên dưới. Fixture provenance đã sửa ở `7d0cc7e`; measurement sạch
+tại đó pass. Lượt hiện tại đo 71 file / 836.732 byte, recall 1,0, reduction
+0,981366, fixture fresh nhưng cây dirty. Bản sửa local inference và status lock
+đạt 41 test, full Ruff và CLI cài riêng. Còn thiếu D3 sạch trên revision mới.
+Contract E2-02..05 vẫn provisional dù checkbox đã đánh dấu; chỉ kích hoạt sau E1.
+
 Review 2026-09-08: **PARTIAL**. Báo cáo sạch tại `c28d679` có
 `corpus_roots=benchmarks/e1/fixtures_paw` (12 file, 6.128 byte), không phải
 `src/paw`; vì vậy nó chỉ xác minh metric của fixture tổng hợp, không đóng gate

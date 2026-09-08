@@ -1,7 +1,7 @@
 schema_version: "1.0.0"
 case_id: paw_autonomy_budget
 decision_artifact_version: "1.0.0"
-project_revision: "e4c9e78"
+project_revision: "74b563e"
 category: repo_understanding
 privacy_class: internal
 goal: |
@@ -10,7 +10,7 @@ goal: |
   and the budget/controller classes are present.
 fixtures:
   - path: src/paw/core/autonomy.py
-    revision: e4c9e78
+    revision: 74b563e
     purpose: |
       Reviewed PAW autonomy module. AutonomyBudget tracks per-resource
       usage; AutonomyController decides CONTINUE/STOP/ASK/PAUSE.

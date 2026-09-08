@@ -6,6 +6,31 @@ cập nhật tài liệu này.
 
 ## Baseline audit
 
+### Kiểm chứng tiếp theo — 2026-09-08 (`74b563e` + working tree)
+
+Kết quả `PARTIAL`. Bản sửa STANDARD/READY dưới đây vẫn áp dụng: nhánh runtime
+trong HEAD không đổi. Local model khi có manifest được gọi đúng một lần sau
+gate; test chat wrap executor thật để kiểm tra số lần await. Sửa assertion
+Roadmap theo hàng E1 canonical và hai lỗi lint benchmark giữ nguyên exports.
+
+Evidence hiện tại: `uv sync --locked --extra dev` pass; `pytest -q` với
+`tests/test_chat_cli_demo.py`, `tests/test_runtime_privacy_proof.py`,
+`tests/test_project_lock.py`, `tests/test_e1_bl2_bench_exports_contract.py`
+đạt 41 passed trong 24,75s; `ruff check .` pass. Wheel build mới khớp byte của
+71 file Python nguồn; cài vào venv riêng, chạy chat ngoài repo và nhận đúng
+`[local-standin] xin chào CLI`.
+
+Phép đo `/tmp/paw-e1-review-74b563e-current.json`: 71 file / 836.732 byte,
+recall 1,0, median reduction 0,9813659458820749; fixture fresh, input/tree không
+đổi; PARTIAL/OBSERVED vì dirty. Lượt full suite trước đó có 1360 pass / 2 fail
+trong 853,84s; hai lỗi được sửa và kiểm tra tập trung, chưa phải D3 pass cho
+revision mới. Measurement sạch `7d0cc7e` chỉ chứng nhận phép đo revision đó.
+
+Còn cần freeze bản sửa rồi chạy full D3 cùng measurement trên một revision.
+Giữ nguyên thay đổi AGENTS/PROFILE và bootstrap/state ngoài phạm vi; template
+AGENTS chưa commit đang thiếu quy tắc PAW tracked, cần owner review trước freeze.
+Checkbox E2-02..05 không cấp quyền kích hoạt E2 trước gate E1.
+
 ### Sửa inference local có manifest và khóa trạng thái — STANDARD / READY (2026-09-08)
 
 Vấn đề: D3 tái hiện hai lỗi trên candidate E1 sạch. Trong
