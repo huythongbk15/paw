@@ -1,23 +1,26 @@
-# E2-02 — Durable ImplementationReadiness Schema
+# E2-02 — Canonical Cognitive Roles
 
 **Date**: 2026-09-08
-**HEAD**: `c28d679`
-**Prerequisite**: E1 `VERIFIED`
-**Scope**: `docs/benchmarks/e2/e2_02_implementation_readiness.md` (this file) — schema spec only. The implementation in `src/paw/core/` is scaffolded in docs pending Đại ca direction on code constraints.
-**Status**: DRAFT (doc-only scaffolding; code to follow)
+**HEAD**: `5bb0226`
+**Prerequisite**: E0 `VERIFIED`, E1 `VERIFIED`
+**Scope**: `src/paw/core/models.py` (`ModelRole` enum, `RoleDefinition` dataclass, `CANONICAL_MODEL_ROLES` constant) + `src/paw/core/__init__.py` (exports) + `tests/test_e2_02_cognitive_roles.py` (9 tests).
+**Status**: IMPLEMENTED ✅ — 9 tests PASS, ruff clean.
 
 ---
 
 ## 1. Purpose
 
-This document specifies the durable `ImplementationReadiness` record that
-closes the gap between E1 (source intelligence is deterministic and
-source-backed) and E2-50 (model-assisted decision making). Every
-implementation-purpose Plan must reference a current `READY` decision.
+This document specifies the canonical cognitive roles that PAW uses
+to categorize model routing decisions. It closes gap #1 from the
+E2-01 audit (`docs/benchmarks/e2/e2_01_audit.md` §5.1): `roles` was a
+free-form `list[str]` per `ModelManifest` with no canonical list.
+
+**Implementation**: `ModelRole` enum (already existed in `src/paw/core/models.py`) + `RoleDefinition` dataclass + `CANONICAL_MODEL_ROLES` constant mapping each role to metadata (description, preferred_by, requires_evidence, uncertainty_handled).
 
 **Entry conditions met**:
 - E0: `VERIFIED` (deterministic fixture-validation baseline on `f3ad4ef`)
 - E1: `VERIFIED` (E1-27 gate PASS/VERIFIED on clean revision `c28d679`, dirty=false, recall=1.0, reduction=0.871)
+- E2-01 audit: complete (`ba1a583`)
 
 ---
 
