@@ -1,15 +1,15 @@
 {
   "scope": "E1 measurement gate; overall E1 qualification is separate",
-  "revision": "037f9b906468fa45421dc854f4048e0162adb6dc",
-  "dirty": true,
-  "created_at": "2026-09-08T16:08:32.161550+00:00",
+  "revision": "649ded91d33ce740bd2299d7005408895c0f89f8",
+  "dirty": false,
+  "created_at": "2026-09-08T16:11:20.428050+00:00",
   "corpus_roots": [
     "src/paw"
   ],
   "case_dir": "benchmarks/e1/cases",
   "case_count": 6,
   "corpus_file_count": 71,
-  "corpus_total_bytes": 838437,
+  "corpus_total_bytes": 839006,
   "configuration": {
     "max_tokens": 5000,
     "max_fragments": 30,
@@ -40,7 +40,7 @@
     "src/paw/application/chat_inspection.py": "ad9eac8b0d16785f58d1d121a11577cbbe101cce575ed22f67db3f8a1a248f04",
     "src/paw/application/chat_intents.py": "a1dbc2f1e3c67d6dde3701f3aecee1c1d9b4a1636dfb843221e9e370152d15ce",
     "src/paw/bench/__init__.py": "aee13d905f1bba1f2d6e1d0771f29c0eeed7270d8d3d5aa442967d760c44b07e",
-    "src/paw/bench/e1_production.py": "6c74c0366bcf6edc3c102c51de989f25d20dbfb2adbf7c99225e68bae578e95e",
+    "src/paw/bench/e1_production.py": "4d951c647586ba1cd5f50476ed09c5a6d8095efd44d79ef430fa6b6afb5f02c7",
     "src/paw/bench/integration.py": "50844e77b883050fd12ce6e42c9757e8ad27d019b8ab891cc52a041f86438f45",
     "src/paw/bench/recall.py": "6af74e6431b0e102ca6367d92079b18a1379f3abd741f987ed33744b02308a8d",
     "src/paw/bench/runner.py": "fa94f13412fe386950f01ef15d7b42ad42f42e9ad6a7160ace8d0ab36013f02b",
@@ -177,9 +177,9 @@
       "tokens": {
         "case_id": "paw_autonomy_budget",
         "mode": "cold",
-        "baseline_tokens": 254458,
+        "baseline_tokens": 254648,
         "measured_tokens": 3991,
-        "reduction": 0.984315682745286,
+        "reduction": 0.9843273852533694,
         "duration_ms": 0
       },
       "included": [
@@ -262,9 +262,9 @@
       "tokens": {
         "case_id": "paw_autonomy_budget",
         "mode": "warm",
-        "baseline_tokens": 254458,
+        "baseline_tokens": 254648,
         "measured_tokens": 3991,
-        "reduction": 0.984315682745286,
+        "reduction": 0.9843273852533694,
         "duration_ms": 0
       },
       "included": [
@@ -347,9 +347,9 @@
       "tokens": {
         "case_id": "paw_checkpoint",
         "mode": "cold",
-        "baseline_tokens": 254458,
+        "baseline_tokens": 254648,
         "measured_tokens": 3814,
-        "reduction": 0.9850112788750992,
+        "reduction": 0.9850224623794415,
         "duration_ms": 0
       },
       "included": [
@@ -430,9 +430,9 @@
       "tokens": {
         "case_id": "paw_checkpoint",
         "mode": "warm",
-        "baseline_tokens": 254458,
+        "baseline_tokens": 254648,
         "measured_tokens": 3814,
-        "reduction": 0.9850112788750992,
+        "reduction": 0.9850224623794415,
         "duration_ms": 0
       },
       "included": [
@@ -513,9 +513,9 @@
       "tokens": {
         "case_id": "paw_context_compiler",
         "mode": "cold",
-        "baseline_tokens": 254458,
+        "baseline_tokens": 254648,
         "measured_tokens": 4117,
-        "reduction": 0.9838205126189784,
+        "reduction": 0.9838325845873519,
         "duration_ms": 0
       },
       "included": [
@@ -596,9 +596,9 @@
       "tokens": {
         "case_id": "paw_context_compiler",
         "mode": "warm",
-        "baseline_tokens": 254458,
+        "baseline_tokens": 254648,
         "measured_tokens": 4117,
-        "reduction": 0.9838205126189784,
+        "reduction": 0.9838325845873519,
         "duration_ms": 0
       },
       "included": [
@@ -679,9 +679,9 @@
       "tokens": {
         "case_id": "paw_model_router",
         "mode": "cold",
-        "baseline_tokens": 254458,
+        "baseline_tokens": 254648,
         "measured_tokens": 3706,
-        "reduction": 0.9854357104119343,
+        "reduction": 0.9854465772360278,
         "duration_ms": 0
       },
       "included": [
@@ -757,9 +757,9 @@
       "tokens": {
         "case_id": "paw_model_router",
         "mode": "warm",
-        "baseline_tokens": 254458,
+        "baseline_tokens": 254648,
         "measured_tokens": 3706,
-        "reduction": 0.9854357104119343,
+        "reduction": 0.9854465772360278,
         "duration_ms": 0
       },
       "included": [
@@ -835,9 +835,9 @@
       "tokens": {
         "case_id": "paw_models_status",
         "mode": "cold",
-        "baseline_tokens": 254458,
+        "baseline_tokens": 254648,
         "measured_tokens": 3697,
-        "reduction": 0.9854710797066707,
+        "reduction": 0.9854819201407433,
         "duration_ms": 0
       },
       "included": [
@@ -918,9 +918,9 @@
       "tokens": {
         "case_id": "paw_models_status",
         "mode": "warm",
-        "baseline_tokens": 254458,
+        "baseline_tokens": 254648,
         "measured_tokens": 3697,
-        "reduction": 0.9854710797066707,
+        "reduction": 0.9854819201407433,
         "duration_ms": 0
       },
       "included": [
@@ -1001,9 +1001,9 @@
       "tokens": {
         "case_id": "paw_privacy_gate",
         "mode": "cold",
-        "baseline_tokens": 254458,
+        "baseline_tokens": 254648,
         "measured_tokens": 4094,
-        "reduction": 0.9839109008166377,
+        "reduction": 0.9839229053438472,
         "duration_ms": 0
       },
       "included": [
@@ -1084,9 +1084,9 @@
       "tokens": {
         "case_id": "paw_privacy_gate",
         "mode": "warm",
-        "baseline_tokens": 254458,
+        "baseline_tokens": 254648,
         "measured_tokens": 4094,
-        "reduction": 0.9839109008166377,
+        "reduction": 0.9839229053438472,
         "duration_ms": 0
       },
       "included": [
@@ -1154,21 +1154,21 @@
       "excluded": []
     }
   ],
-  "baseline_tokens": 254458,
+  "baseline_tokens": 254648,
   "embedding_provider": "local",
   "revision_unchanged": true,
   "inputs_unchanged": true,
   "tree_state_unchanged": true,
   "fixtures_fresh": true,
   "min_recall": 1.0,
-  "median_warm_reduction": 0.9846634808101926,
+  "median_warm_reduction": 0.9846749238164054,
   "metric_gate": "PASS",
   "metric_reasons": [
     "measurement thresholds passed"
   ],
-  "measurement_gate": "PARTIAL",
+  "measurement_gate": "PASS",
   "gate_reasons": [
-    "metrics passed on a dirty tree; clean-revision evidence is required"
+    "metrics and provenance checks passed"
   ],
-  "evidence_state": "OBSERVED"
+  "evidence_state": "VERIFIED"
 }
