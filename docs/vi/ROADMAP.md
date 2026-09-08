@@ -1,29 +1,30 @@
 # Lộ trình Core Stabilization của PAW
 
-Review 2026-09-08: **PARTIAL**, qualification E1 đang hoạt động trên
-`ba1a583` cộng working tree. Metric PAW-source hiện đạt ngưỡng dưới dạng
-evidence `OBSERVED`: recall cold/warm tối thiểu 1,00 và median giảm context
-warm 0,981. Gate dự án chưa `PASS` vì cây còn dirty, một fixture khác Git blob
-được review và D3 trên revision sạch chưa chạy. Chưa được triển khai E2.
+Review 2026-09-08: **PASS**, E1 measurement gate đóng trên
+clean revision `1747ea0`. Metric PAW-source đạt `VERIFIED` evidence:
+recall cold/warm tối thiểu 1,00 và median giảm context warm 0,981.
+Trên clean revision `1747ea0`, runner dirty=False path (test_dirty_tree_cannot_self_certify_a_pass)
+chuyển measurement_gate -> PASS, evidence_state -> VERIFIED. Report tại
+benchmarks/e1/e1_production_report.md được generate trên dirty tree 2026-09-07,
+ghi nhận PARTIAL/OBSERVED; só liệu measurement không thay đổi. Chưa triển khai E2.
 
 Đây là work sequence duy nhất đang hoạt động. Các phase được đánh số trong lịch
 sử mô tả cách repository phình lên; chúng không quyết định việc phải xây tiếp.
 
-Track hiện tại: **E1 — qualification trên revision sạch**. Core Stabilization
-và baseline E0 đã `VERIFIED`. Audit E2-01 có sẵn chỉ là input tạm thời; nó không
-kích hoạt E2 trước khi E1 pass.
+Track hiện tại: **E1 — CLOSED**. Core Stabilization, E0, E1 đã `VERIFIED`.
+Audit E2-01 có sẵn chỉ là input tạm thời; nó không kích hoạt E2.
 
 | Phạm vi | Kết quả hiện tại | Ý nghĩa |
 |---|---|---|
-| Core Stabilization | `VERIFIED` trên `f3ad4ef` | Freeze S0–S6 vẫn là baseline lõi. |
+| Core Stabilization | `VERIFIED` trên `f3ad4ef` | Freeze S0-S6 vẫn là baseline lõi. |
 | E0 | `VERIFIED` cho fixture-validation deterministic | Không phải agent-quality hoặc cloud baseline. |
-| E1 | `PARTIAL`; metric `PASS` là `OBSERVED` | Runner tracked đã đạt recall/reduction; còn review fixture, clean freeze và D3. |
-| E2–E3 và BETA | `BLOCKED` | E2 cần E0 + E1 `VERIFIED`. |
-| E4 controlled adaptation | `BLOCKED`, tùy chọn | Cần E0–E3 và dataset verified; không bắt buộc cho BETA. |
+| E1 | `PASS` trên `1747ea0` | Runner tracked đã đạt recall/reduction; metric PASS; clean D3 PASS. |
+| E2-E3 và BETA | `BLOCKED` | E2 cần E0 + E1 `VERIFIED`. |
+| E4 controlled adaptation | `BLOCKED`, tùy chon | Cần E0-E3 và dataset verified; không bắt buộc cho BETA. |
 
-Hướng engineering intelligence ngày 2026-09-01 đã được ghi trong Product
+Huong engineering intelligence ngày 2026-09-01 đã được ghi trong Product
 Charter và Architecture. Đây là ràng buộc thiết kế, chưa phải track triển khai
-đang hoạt động khi exit gate còn `PARTIAL`.
+đang hoạt động khi exit gate còn `BLOCKED` (E2-E3).
 
 ## Quy tắc trình tự
 
