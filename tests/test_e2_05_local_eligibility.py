@@ -40,7 +40,7 @@ def test_eligibility_rule_is_frozen():
 
 def test_ood_condition_set_is_closed():
     """OODCondition is a closed enum; OOD_CONDITIONS mirrors it exactly."""
-    assert OOD_CONDITIONS == frozenset(OODCondition)
+    assert frozenset(OODCondition) == OOD_CONDITIONS
     for member in OODCondition:
         assert member in OOD_CONDITIONS
 
