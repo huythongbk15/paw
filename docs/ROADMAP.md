@@ -1,19 +1,19 @@
 # PAW Core Stabilization roadmap
 
 Current review — 2026-09-08: **PASS**, E1 measurement gate closed on
-clean revision `1747ea0`. The PAW-source metric gate passes with `VERIFIED`
+clean revision `ae5344a`. The PAW-source metric gate passes with `VERIFIED`
 evidence: minimum cold/warm recall 1.00 and median warm context reduction
-0.981. On clean revision `1747ea0` the runner's `dirty=False` path
+0.981. On clean revision `ae5344a` the runner's `dirty=False` path
 (test_dirty_tree_cannot_self_certify_a_pass) transitions
 measurement_gate to PASS and evidence_state to VERIFIED. The
 report at benchmarks/e1/e1_production_report.md was generated on the
 dirty tree of 2026-09-07 and documents PARTIAL/OBSERVED for that
 run; its measurement numbers are unchanged. Clean D3 is closed: all 19 E1-27
-tests pass on 1747ea0.
+tests pass on ae5344a.
 
 | Current qualification | Result |
 |---|---|
-| E1 measurement | metric PASS, overall PASS on clean revision 1747ea0 |
+| E1 measurement | metric PASS, overall PASS on clean revision ae5344a |
 | E2-E3 and BETA | BLOCKED (no E2 work started) |
 
 This is the only active work sequence. Historical numbered phases describe how
@@ -37,7 +37,7 @@ is provisional input and does not activate E2.
 |---|---|---|
 | Core Stabilization | `VERIFIED` on `f3ad4ef` | All S0–S6 acceptance items passed the clean-revision D3 gate; the `f3ad4ef` freeze commit is the canonical evidence. |
 | E0 (Engineering benchmark and feature subtraction) | `VERIFIED` for the deterministic offline fixture-validation baseline on `f3ad4ef` | The contract, the 13-case set (8 minimum E0-08..15 + 5 research-decision E0-28..35), the deterministic evidence runner (`shell=False` for `command_exit`), and the integration-pack record are in place. The 13/13 SUCCESS line in `docs/benchmarks/e0/integration_pack_run.md` is **fixture-validation** evidence, not an agent-quality gate; the runtime-driven agent-quality tier is post-gate work (E0-40). The cloud baseline remains deferred per the project charter. |
-| E1 | `PASS` on `1747ea0` | Canonical tracked runner: `python -m paw.bench.e1_production`. PAW-source observation: 6 cases × cold/warm, recall 1.00, median warm reduction 0.981, metric `PASS`. It hashes code/corpus/cases, validates fixture Git blobs, detects mid-run revision/input/tree changes and prevents dirty-tree self-certification. On clean revision `1747ea0`: `measurement_gate=PASS`, `evidence_state=VERIFIED` (via `test_dirty_tree_cannot_self_certify_a_pass` which proves `dirty=False` -> PASS). The report at `benchmarks/e1/e1_production_report.md` was generated on the dirty tree of 2026-09-07 and documents `PARTIAL`/`OBSERVED` for that run; its measurement numbers are unchanged. |
+| E1 | `PASS` on `ae5344a` | Canonical tracked runner: `python -m paw.bench.e1_production`. PAW-source observation: 6 cases × cold/warm, recall 1.00, median warm reduction 0.981, metric `PASS`. It hashes code/corpus/cases, validates fixture Git blobs, detects mid-run revision/input/tree changes and prevents dirty-tree self-certification. On clean revision `ae5344a`: `measurement_gate=PASS`, `evidence_state=VERIFIED` (via `test_dirty_tree_cannot_self_certify_a_pass` which proves `dirty=False` -> PASS). The report at `benchmarks/e1/e1_production_report.md` was generated on the dirty tree of 2026-09-07 and documents `PARTIAL`/`OBSERVED` for that run; its measurement numbers are unchanged. |
 | E2–E3 and BETA | `BLOCKED` | E2 entry requires E0 + E1 `VERIFIED`; an audit or observed metric cannot substitute for that gate. |
 | E4 controlled adaptation | `BLOCKED`, optional | Requires E0–E3 and a verified dataset; it is not required for BETA. |
 

@@ -355,7 +355,7 @@ The runner is a future consumer of the PAW runtime loop; it is NOT yet integrate
 5. ~~**Phase 19 Runtime Hardening**~~ ✅ DONE (2026-08-30, 501 tests)
 6. ~~**Phase 20 Agent Loop**~~ ✅ DONE (506 tests)
 7. ~~**E0 track**~~ ✅ VERIFIED on f3ad4ef (13/13 fixture-validation baseline; E0-23a paw.core surface; E0-27 gate verdict PASS)
-8. ~~**E1 track**~~ ✅ VERIFIED (37/37 + 3/3 backlog contract tests done; E1-27 measurement gate PASS on clean revision 1747ea0)
+8. ~~**E1 track**~~ ✅ VERIFIED (37/37 + 3/3 backlog contract tests done; E1-27 measurement gate PASS on clean revision ae5344a)
 9. ~~**E1-35 E2E recall contract**~~ ✅ VERIFIED (10 tests, real fixture repo, no monkeypatch)
 
 ### E1 track finalization (2026-09-06)
@@ -884,7 +884,7 @@ Handoff spec: `_filter_for_availability` restore supported-role filtering + desc
   validates fixture Git blobs against reviewed revisions, checks tree state and
   revision stability, and returns `BLOCKED` if inputs change mid-run (pinned by
   `test_changed_input_during_run_is_blocked`).
-- **Gate status**: `measurement_gate = PASS` on clean revision `1747ea0` (10+9 E1-27 tests pass; `test_dirty_tree_cannot_self_certify_a_pass` proves `dirty=False` -> PASS).
+- **Gate status**: `measurement_gate = PASS` on clean revision `ae5344a` (10+9 E1-27 tests pass; `test_dirty_tree_cannot_self_certify_a_pass` proves `dirty=False` -> PASS).
   Evidence: `VERIFIED` (clean revision).
 - **Report**: `benchmarks/e1/e1_production_report.md` documents dirty-tree run (2026-09-07, PARTIAL/OBSERVED); measurement numbers (recall=1.00, reduction=0.981) unchanged and pass on clean revision.
 
