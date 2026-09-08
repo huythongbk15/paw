@@ -192,6 +192,7 @@ async def measure(
     *, repo_root: Path, roots: Sequence[str], case_dir: str,
     budget: ContextBudget,
     embedding: str = "disabled",
+    output: Path | None = None,
 ) -> dict:
     """Measure one immutable input snapshot; changed inputs block the result."""
     repo_root = repo_root.resolve()
@@ -390,7 +391,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             report = asyncio.run(measure(
                 repo_root=args.repo_root, roots=args.roots,
                 case_dir=args.case_dir, budget=budget,
-                embedding=args.embedding,
+                embedding=args.embedding, output=args.output,
             ))
         except Exception as exc:
             json.dump({"measurement_gate": "BLOCKED", "error_type": type(exc).__name__}, stream)
