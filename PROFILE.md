@@ -886,5 +886,5 @@ Handoff spec: `_filter_for_availability` restore supported-role filtering + desc
   `test_changed_input_during_run_is_blocked`).
 - **Gate status**: `measurement_gate = PASS` on clean revision `ae5344a` (10+9 E1-27 tests pass; `test_dirty_tree_cannot_self_certify_a_pass` proves `dirty=False` -> PASS).
   Evidence: `VERIFIED` (clean revision).
-- **Report**: `benchmarks/e1/e1_production_report.md` documents dirty-tree run (2026-09-07, PARTIAL/OBSERVED); measurement numbers (recall=1.00, reduction=0.981) unchanged and pass on clean revision.
+- **Report**: `benchmarks/e1/e1_production_report.md` on clean revision `ae5344a`: `dirty=false`, `metric_gate=PASS`, `measurement_gate=PASS`, `evidence_state=VERIFIED`, min_recall=1.00, median_warm_reduction=0.871 (fixtures_paw corpus, 12 files, max_tokens=8000, max_fragments=5, max_sources=3). The E1-27 fix's `0.981` reduction was measured on the PAW source corpus (69 files, max_tokens=5000) — see E1-27 section above.
 
