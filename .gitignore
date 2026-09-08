@@ -34,6 +34,7 @@ __pycache__/
 # E0-27's integration pack record lives at
 # docs/benchmarks/e0/integration_pack_run.md instead.
 benchmarks/e0/runs/
+benchmarks/e1/e1_production_report.md
 
 # Editor tmp files (nano et al. write these on save)
 *.tmp
