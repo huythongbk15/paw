@@ -1,80 +1,65 @@
-"""E2-02 — Canonical cognitive roles for ModelManifest (D0).
+"""E2-02 — minimum cognitive roles for the engineering loop (D0)."""
 
-Verifies that PAW defines the minimum cognitive roles as typed constants
-and that every canonical role has a documented definition. The set of
-keys in CANONICAL_MODEL_ROLES must match ModelRole exactly.
-"""
+from types import MappingProxyType
 
-import pytest
-from paw.core.models import (
-    CANONICAL_MODEL_ROLES,
-    ModelRole,
-    ModelManifest,
-    RoleDefinition,
-)
+from paw.core.models import ModelManifest, ModelRole
+from paw.core.reasoning_contracts import CANONICAL_ROLE_CONTRACTS
 
 
-def test_model_role_enum_has_seven_values():
-    """E0 cases use fast/reasoning/coding/tools/vision/embedding; fallback is catch-all."""
-    assert len(list(ModelRole)) == 7
-    assert ModelRole.FAST == "fast"
-    assert ModelRole.REASONING == "reasoning"
-    assert ModelRole.CODING == "coding"
-    assert ModelRole.TOOLS == "tools"
-    assert ModelRole.VISION == "vision"
-    assert ModelRole.EMBEDDING == "embedding"
-    assert ModelRole.FALLBACK == "fallback"
+EXPECTED_COGNITIVE_ROLES = {
+    ModelRole.FAST,
+    ModelRole.REASONING,
+    ModelRole.CODING,
+    ModelRole.TOOLS,
+}
 
 
-def test_canonical_roles_keys_match_enum():
-    """Every ModelRole value must have a RoleDefinition, and vice versa."""
-    enum_values = {r.value for r in ModelRole}
-    canonical_keys = set(CANONICAL_MODEL_ROLES.keys())
-    assert canonical_keys == enum_values
+def test_minimum_cognitive_roles_are_existing_router_roles() -> None:
+    assert set(CANONICAL_ROLE_CONTRACTS) == EXPECTED_COGNITIVE_ROLES
+    assert set(CANONICAL_ROLE_CONTRACTS).issubset(set(ModelRole))
 
 
-def test_role_definition_has_description():
-    """Every role definition must carry a human-readable description."""
-    for role, defn in CANONICAL_MODEL_ROLES.items():
-        assert isinstance(defn, RoleDefinition)
-        assert defn.role == role
-        assert defn.description, f"Role {role} missing description"
+def test_modalities_and_fallback_are_not_extra_cognitive_roles() -> None:
+    assert ModelRole.VISION not in CANONICAL_ROLE_CONTRACTS
+    assert ModelRole.EMBEDDING not in CANONICAL_ROLE_CONTRACTS
+    assert ModelRole.FALLBACK not in CANONICAL_ROLE_CONTRACTS
 
 
-def test_preferred_by_contains_scenario_tags():
-    """Each role should declare which scenario tags prefer it."""
-    for role, defn in CANONICAL_MODEL_ROLES.items():
-        assert isinstance(defn.preferred_by, list)
-        assert len(defn.preferred_by) > 0, f"Role {role} has no preferred_by tags"
+def test_role_registry_is_immutable() -> None:
+    assert isinstance(CANONICAL_ROLE_CONTRACTS, MappingProxyType)
 
 
-def test_reasoning_role_requires_evidence():
-    """REASONING role must flag requires_evidence since it produces traces."""
-    rd = CANONICAL_MODEL_ROLES[ModelRole.REASONING]
-    assert rd.requires_evidence is True
-    assert rd.uncertainty_handled is True
+def test_every_cognitive_role_has_engineering_scenarios() -> None:
+    for role, contract in CANONICAL_ROLE_CONTRACTS.items():
+        assert contract.role is role
+        assert contract.description
+        assert contract.scenario_tags
 
 
-def test_embedding_role_handles_uncertainty():
-    """EMBEDDING role should support uncertainty (confidence in vectors)."""
-    rd = CANONICAL_MODEL_ROLES[ModelRole.EMBEDDING]
-    assert rd.uncertainty_handled is True
-
-
-def test_model_manifest_roles_can_use_canonical():
-    """ModelManifest should accept canonical role strings."""
+def test_historical_manifest_roles_remain_compatible() -> None:
     manifest = ModelManifest(
         name="test-model",
         provider="local",
-        roles=["fast", "tools", "reasoning"],
+        roles=["fast", "tools", "reasoning", "embedding"],
     )
-    assert manifest.supports_role("fast")
-    assert manifest.supports_role("tools")
-    assert manifest.supports_role("reasoning")
-    assert not manifest.supports_role("vision")
+    assert manifest.supports_role(ModelRole.FAST)
+    assert manifest.supports_role(ModelRole.TOOLS)
+    assert manifest.supports_role(ModelRole.REASONING)
+    assert manifest.supports_role(ModelRole.EMBEDDING)
 
 
-def test_canonical_roles_are_stable():
-    """The set of canonical roles must not change without a deliberate review."""
-    expected = {"fast", "reasoning", "coding", "tools", "vision", "embedding", "fallback"}
-    assert set(CANONICAL_MODEL_ROLES.keys()) == expected
+def test_reasoning_contract_covers_research_and_architecture() -> None:
+    tags = CANONICAL_ROLE_CONTRACTS[ModelRole.REASONING].scenario_tags
+    assert {"research", "diagnosis", "architecture"}.issubset(tags)
+
+
+def test_coding_contract_covers_implementation_and_review() -> None:
+    tags = CANONICAL_ROLE_CONTRACTS[ModelRole.CODING].scenario_tags
+    assert {"implementation", "refactor", "review"}.issubset(tags)
+
+
+def test_e2_contracts_do_not_expand_paw_core_root() -> None:
+    import paw.core
+
+    assert "RoleContract" not in paw.core.__all__
+    assert "CANONICAL_ROLE_CONTRACTS" not in paw.core.__all__

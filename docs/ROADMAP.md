@@ -1,25 +1,24 @@
 # PAW Core Stabilization roadmap
 
-Current review — 2026-09-08: **PASS**, E1 measurement gate closed on
-clean revision `ae5344a`. The PAW-source metric gate passes with `VERIFIED`
-evidence: minimum cold/warm recall 1.00 and median warm context reduction
-0.981. On clean revision `ae5344a` the runner's `dirty=False` path
-(test_dirty_tree_cannot_self_certify_a_pass) transitions
-measurement_gate to PASS and evidence_state to VERIFIED. The
-report at benchmarks/e1/e1_production_report.md was generated on the
-dirty tree of 2026-09-07 and documents PARTIAL/OBSERVED for that
-run; its measurement numbers are unchanged. Clean D3 is closed: all 19 E1-27
-tests pass on ae5344a.
+Current review — 2026-09-08: **PARTIAL**. E1 was incorrectly promoted from a
+clean report at `c28d679` whose own `corpus_roots` value is
+`benchmarks/e1/fixtures_paw` (12 files, 6,128 bytes), not `src/paw`. That run
+does verify its synthetic-fixture metric, but it cannot close the representative
+project or overall E1 gate. A current dirty-tree run over `src/paw` (70 files,
+835,061 bytes) observes minimum cold/warm recall 1.00 and median warm context
+reduction 0.981, while correctly returning `PARTIAL`/`OBSERVED` because the tree
+is dirty and reviewed-fixture provenance is stale. E2 is blocked until this is
+frozen and the remaining E1 quality/privacy D3 evidence passes.
 
 | Current qualification | Result |
 |---|---|
-| E1 measurement | metric PASS, overall PASS on clean revision ae5344a |
-| E2-E3 and BETA | BLOCKED (no E2 work started) |
+| E1 | `PARTIAL`; real-source metric PASS is `OBSERVED` |
+| E2-E3 and BETA | `BLOCKED`; isolated E2 contract drafts have no runtime authority |
 
 This is the only active work sequence. Historical numbered phases describe how
 the repository grew; they do not determine what should be built next.
 
-Current track: **E1 — clean-revision qualification**.
+Current track: **E1 — representative clean-revision qualification**.
 Core Stabilization is `VERIFIED` on the frozen revision
 `f3ad4ef` (SX-14 verdict, 685/685 tests pass, D3 release check
 green, 8/8 minimum cases produce `SUCCESS` with
@@ -37,13 +36,13 @@ is provisional input and does not activate E2.
 |---|---|---|
 | Core Stabilization | `VERIFIED` on `f3ad4ef` | All S0–S6 acceptance items passed the clean-revision D3 gate; the `f3ad4ef` freeze commit is the canonical evidence. |
 | E0 (Engineering benchmark and feature subtraction) | `VERIFIED` for the deterministic offline fixture-validation baseline on `f3ad4ef` | The contract, the 13-case set (8 minimum E0-08..15 + 5 research-decision E0-28..35), the deterministic evidence runner (`shell=False` for `command_exit`), and the integration-pack record are in place. The 13/13 SUCCESS line in `docs/benchmarks/e0/integration_pack_run.md` is **fixture-validation** evidence, not an agent-quality gate; the runtime-driven agent-quality tier is post-gate work (E0-40). The cloud baseline remains deferred per the project charter. |
-| E1 | `VERIFIED` on `c28d679` | E1-27 measurement gate `PASS`/`VERIFIED` on clean revision `c28d679` (`dirty=false`, `measurement_gate=PASS`, `evidence_state=VERIFIED`, min_recall=1.0, median reduction=0.871; 19/19 E1-27 tests pass). Canonical tracked runner: `python -m paw.bench.e1_production`. Read-only E2-01 audit (`ba1a583`) provided provisional input but did not activate E2; that audit is now folded into the active E2 entry sequence. |
-| E2–E3 and BETA | `IN PROGRESS` (E2-01 audit complete, E2-02 readiness record scaffolded) | E0 + E1 `VERIFIED` gate is now satisfied. E2-01 (ModelRouter/Executor/ModelProvider Protocol audit, `ba1a583`) complete as provisional input. E2-02: scaffold the durable `ImplementationReadiness` schema (draft in `docs/benchmarks/e2/implementation_readiness.md`, tracked in `src/paw/core/` once the exit gate clears). |
+| E1 | `PARTIAL` | The clean `c28d679` report verifies only the 12-file synthetic-fixture metric (recall 1.0, median reduction 0.871). The current 70-file `src/paw` metric observation passes (recall 1.0, reduction 0.981) but is dirty and has stale fixture provenance. Overall privacy/quality/release evidence is not frozen. |
+| E2–E3 and BETA | `BLOCKED` | E2-01 is provisional audit input. E2-02..04 have isolated, tested value-contract drafts in `core/reasoning_contracts.py`, but no router, runtime, persistence or readiness wiring is authorized before E1 `VERIFIED`. |
 | E4 controlled adaptation | `BLOCKED`, optional | Requires E0–E3 and a verified dataset; it is not required for BETA. |
 
 The engineering-intelligence direction dated 2026-09-01 is recorded in the
-Product Charter and Architecture. It is a design constraint, not an active
-implementation track while this exit gate remains `BLOCKED` (E2-E3).
+Product Charter and Architecture. It is a design constraint, not proof that a
+blocked E2 capability is active.
 
 ## Sequencing rule
 
@@ -376,14 +375,14 @@ Entry conditions:
 
 - E0 + E1 are `VERIFIED` (the deterministic runner can
   score the local baseline; the project-intelligence
-  views are deterministic and source-backed);
-- the durable `ImplementationReadiness` schema is in
-  place — the E0 documentary readiness
-  (`NEEDS_RESEARCH` / `NEEDS_CLARIFICATION` /
-  `SPIKE_REQUIRED` / `READY` / `REJECTED`) was carried
-  by `paw.bench` cases in E0-28..35; E2 promotes that
-  documentary readiness to a *durable* record that
-  the runtime can gate on.
+  views are deterministic and source-backed).
+
+The durable `ImplementationReadiness` schema is an E2 deliverable, not an E2
+entry condition. E2 may define role/signal contracts after entry, but routing or
+mutating runtime integration remains internally blocked until the readiness
+owner, lifecycle and persistence contract pass E2-25..E2-28. The E0 documentary
+values (`NEEDS_RESEARCH` / `NEEDS_CLARIFICATION` / `SPIKE_REQUIRED` / `READY` /
+`REJECTED`) are fixture expectations, not a durable runtime record.
 
 Work:
 
@@ -534,11 +533,14 @@ appear complete.
 
 ## Next three safe tasks
 
-1. Review and commit the combined E1 repair without unrelated changes. Update
-   the `paw_context_compiler` fixture revision to the clean source commit whose
-   bytes were reviewed; never use a future or self-referential revision.
-2. Re-run the tracked PAW-source measurement, E1 privacy/quality proofs and the
-   D3 full test/lint/build/isolated-install gate on that exact clean revision.
-3. Record E1 `PASS` only if every acceptance condition passes. Then use the
-   provisional E2-01 audit as input to the first active E2 decision; otherwise
-   keep E2 blocked and repair the named failure.
+1. Review and freeze the current E1/E2 contract-repair tree without unrelated
+   changes. Rebind every `benchmarks/e1/cases/paw_*.yaml` fixture to a real
+   reviewed commit containing the exact measured bytes; never substitute the
+   small `fixtures_paw` corpus for `src/paw`.
+2. On that clean revision, run the canonical default PAW-source measurement,
+   the named E1 privacy/quality proofs and the scheduled D3
+   test/lint/build/isolated-install gate. Preserve the report's corpus, revision,
+   dirty flag and fixture-review rows as evidence.
+3. Record E1 `VERIFIED` only if every acceptance condition passes on that one
+   revision. Then re-approve E2-02..04 as active contracts and begin E2-05;
+   otherwise keep E2 blocked and repair the named E1 failure.

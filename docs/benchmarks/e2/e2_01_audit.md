@@ -242,16 +242,27 @@ should address. None are blockers for E2-01 itself.
 
 ### 5.1 Gaps
 
-1. ~~**No "minimum cognitive roles" doc**~~ ✅ FIXED by E2-02 — `RoleDefinition` dataclass + `CANONICAL_MODEL_ROLES` constant maps all 7 roles to metadata.
-2. ~~**No role/capability matrix**~~ — still open; `CANONICAL_MODEL_ROLES` provides partial coverage. E2-05 adds local eligibility matrix.
+1. **Minimum cognitive roles are a pre-gate draft** —
+   `core/reasoning_contracts.py` reuses the existing `ModelRole` vocabulary and
+   identifies FAST/REASONING/CODING/TOOLS as the minimum engineering roles.
+   VISION/EMBEDDING are modalities and FALLBACK is a routing marker. Activation
+   waits for E1 `VERIFIED`.
+2. **No role/capability eligibility matrix** — still open. E2-05 owns local
+   eligibility and explicit OOD conditions.
 3. **No novelty / OOD / impact signal** — `route()` consumes `goal`, `context_size`, `complexity`, `privacy_required`, `execution_profile`, `preferred_provider`; none carries a "novelty" or "OOD" signal. E2-04 territory.
 4. **No trajectory-aware re-evaluation** — `route()` is a single-shot decision. E2-10 introduces trajectory-aware routing.
 5. **No verifier-policy selection** — `route()` always picks the best-scoring model for the role. E2-18 introduces verifier-policy selection.
 6. **No retryable / capability-mismatch distinction** — `ModelExecutor.complete()` has no retry logic. E2-17 introduces the retryable-vs-mismatch distinction.
 7. **No cost / token ceilings in the router** — `prefer_cheap` boolean is the only cost signal. E2-15 introduces per-role ceilings.
-8. ~~**No role-specific output / evidence / uncertainty contract**~~ ✅ FIXED by E2-03 — `RoleContract` dataclass + `CANONICAL_ROLE_CONTRACTS` constant. REASONING requires evidence+citation with `escalate` mode at 0.5; CODING uses `ask` mode at 0.3.
+8. **Role output/evidence/uncertainty is a pre-gate draft** — one immutable
+   `RoleContract` registry requires evidence/citations for REASONING and CODING,
+   records a bounded confidence threshold and a typed low-confidence
+   disposition. It is not wired to provider output validation or escalation.
 9. **No model-side explainability hook** — `route_with_explain` returns per-candidate score list but `reason`/`fallback_chain` strings are not user-readable beyond raw scores. E2-23 introduces a richer explainability surface.
-10. **No integration with Ollama for embeddings** — the embedding path (Phase 12, `OllamaEmbeddingProvider`) is separate from the router; the router does not consume embeddings. E2-31 introduces embedding-aware routing (post-gate).
+10. **Embedding remains outside this E2 routing slice** — the optional E1
+    embedding re-ranker is separate from Model Router. E2-31 actually owns local
+    project reconnaissance before external research; it does not authorize
+    embedding-aware routing or another provider capability.
 
 ### 5.2 Risk inventory
 
@@ -335,13 +346,12 @@ registry.
 | Known gaps | 10 (catalogued for E2-02..E2-50) |
 | Open risks | 1 latent (race on first call); rest fixed/pinned |
 
-The router and executor are ready for E2-02..E2-50.
-
-**E2-02 and E2-03 completed** (commit `0e340e6`):
-1. E2-02: Canonical cognitive roles defined — `ModelRole` enum (existing) + `RoleDefinition` dataclass + `CANONICAL_MODEL_ROLES` constant mapping each role to metadata. Every role has description, `preferred_by` tags, `requires_evidence`, `uncertainty_handled`. Tests: `tests/test_e2_02_cognitive_roles.py` (9 tests, all PASS).
-2. E2-03: Role-specific contracts defined — `RoleContract` dataclass + `CANONICAL_ROLE_CONTRACTS` constant. Each contract carries `output_schema`, `requires_evidence`, `uncertainty_handled`, `allowed_evidence_types`, `escalation_confidence_threshold`, `escalation_mode`, `requires_citation`. REASONING requires evidence+citation with `escalate` mode at 0.5 threshold; CODING uses `ask` mode at 0.3. Tests: `tests/test_e2_03_role_contracts.py` (8 tests, all PASS).
-
-**Remaining E2 items**: E2-04 (novelty/impact/privacy/context-sufficiency/budget signals), E2-05 (local eligibility + OOD conditions), E2-06 (extend existing router decision), E2-07 (persist role/model/effort/budget/reason/fallback in ledger), E2-31 (embedding-aware routing; requires Ollama `nomic-embed-text`).
+The audited router/executor boundary is usable input to E2, but E2 is currently
+blocked because E1 is `PARTIAL`. Isolated E2-02..04 value-contract drafts exist
+and have focused tests; they do not make the router trajectory-aware and have no
+runtime/persistence/provider authority. After a real-source E1 freeze, the safe
+sequence is to re-ratify E2-02..04, define E2-05 eligibility/OOD conditions,
+then extend the existing router under E2-06 and add ledger evidence under E2-07.
 
 ---
 

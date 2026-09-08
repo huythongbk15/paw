@@ -6,6 +6,58 @@ changes.
 
 ## Audit baseline
 
+### E1 qualification and E2 contract repair — DEEP / READY (2026-09-08)
+
+Problem: E1 was promoted to `VERIFIED` from a clean report whose own
+`corpus_roots` value is `benchmarks/e1/fixtures_paw`, although the Roadmap says
+that report measured `src/paw`; the runner also states that its measurement gate
+is separate from overall E1 qualification. E2-02/E2-03 then enlarged the locked
+`paw.core` public surface and introduced two overlapping role registries. The
+uncommitted E2-04 change additionally defines `PrivacyLevel` beside the canonical
+`PrivacyClass`, defaults an unevaluated task to `FAST`, and implements E2-29
+classification before E2-04's signal contract is closed.
+
+Affected invariants: single contract, small public application surface,
+quality-preserving optimization, evidence before implementation, and roadmap
+gate ordering. Project evidence: `benchmarks/e1/e1_production_report.md` records
+12 fixture files / 6,128 bytes and reduction 0.871; a current dirty-tree run over
+`src/paw` records 70 files / 835,061 bytes, recall 1.0 and reduction 0.981, but is
+`PARTIAL`/`OBSERVED` because the tree is dirty and at least one reviewed fixture
+is stale. `tests/test_planning_contract.py` fails because `paw.core.__all__`
+contains more than the eleven ratified symbols. `core/privacy.py` is already the
+sole privacy-taxonomy owner.
+
+Options considered: (A) accept the clean synthetic-fixture report and continue
+E2 (rejected because it misstates the measured corpus and bypasses the entry
+gate); (B) remove all E2 work until a new clean E1 freeze (safe but discards
+useful contract work already committed); (C) restore E1/E2 status honesty,
+quarantine E2 as pre-gate contract repair, keep only one immutable role-contract
+registry, reuse `PrivacyClass`, define fail-closed task signals without routing
+or depth decisions, and restore the eleven-symbol surface (selected). Contrary
+evidence: the current real-source observation meets both numeric E1 thresholds,
+so the remaining E1 problem is provenance/freeze and the wider quality/privacy
+gate rather than retrieval performance. That is not enough to call E1
+`VERIFIED`.
+
+Research budget and stop condition: current source, contract tests, the two E1
+corpora/reports and canonical documents only; external research cannot change a
+PAW-owned status or ownership contract. Stop when the corpus mismatch, duplicate
+contracts, unsafe defaults and public-surface regression have falsifiable tests.
+Readiness: `READY` for this repair only. It does not authorize E2 router wiring,
+classification, persistence, provider expansion or runtime behavior.
+
+Implementation map: `core/reasoning_contracts.py` owns the bounded E2 role and
+task-signal value contracts; `core/models.py` retains the historical `ModelRole`
+enum and contains no second role registry; `core/privacy.py:PrivacyClass` remains
+the privacy owner; `core/__init__.py` remains exactly eleven symbols. Tests cover
+immutability, validation, fail-closed defaults, the minimum E2 role subset,
+absence of a second privacy enum and the root public surface. Canonical EN/VI
+documents must report E1 `PARTIAL`, E2 `BLOCKED`, and distinguish the synthetic
+clean metric observation from the dirty real-source observation. Acceptance:
+focused E1/E2/public/privacy tests and Ruff pass; document contracts and diff
+hygiene pass; E1 remains `PARTIAL` until a current reviewed `src/paw` revision
+passes the complete clean-revision gate.
+
 ### E1 real-project qualification repair — STANDARD / READY (2026-09-07)
 
 Problem: the synthetic corpus passes E1-27, while the reviewed PAW-source cases
@@ -973,6 +1025,7 @@ does not establish `VERIFIED` status for a frozen clean candidate:
 | Capability Router | `core/executor.py`: `CapabilityRouter`, `ExecutorRegistry` | `PawRuntime._execute_action` | `PASS`; every agent/graph action selects a compatible executor before invocation. |
 | Executor | Port/registry and `EffectIntent` in `core/executor.py`; local adapter in `executors/filesystem.py`; model providers in `core/model_executor.py` | `PawRuntime._execute_action` invokes or reconciles the capability-selected executor | `PASS` for the built-in adapter: skill body is context only, filesystem writes prepare a durable intent and restart never repeats a prepared effect blindly. |
 | Model Router | `core/model_router.py`: registry/router/provider registry; `core/model_executor.py` | Execution stage routes after the proposal gate | `PASS` for current gate ordering. `ModelRouter.score_model_for_task()` added as the canonical scoring entry point. **P1 Router fix (2026-09-07)**: `_filter_for_availability` local-fallback branch now (a) filters by `m.supports_role(role)` so wrong-role models do not leak; (b) re-scores via the canonical entry point; (c) sorts by score descending so registration order does not affect the final selection; (d) returns `[]` when no local model supports the role. 9 new contract tests in `tests/test_p1_router_filter_availability.py` pin every property. Post-gate escalation needs a side-effect-free cached selection path; live initialization/discovery cannot hide before the new proposal gate. |
+| E2 reasoning contracts | `core/reasoning_contracts.py`; historical routing vocabulary remains `core/models.py:ModelRole`; privacy remains `core/privacy.py:PrivacyClass` | Not wired into router/runtime while E1 is `PARTIAL` | Pre-gate contract repair only. One immutable registry covers the minimum FAST/REASONING/CODING/TOOLS role outputs; `TaskSignals` records fail-closed novelty/impact/privacy/context/budget inputs. It deliberately does not classify research depth, select a route or authorize escalation. |
 | Ledger | `core/ledger.py`; transaction coordinator in `core/runtime_persistence.py` | Used throughout runtime | `PASS` for local atomic evidence: observation/artifact/execution events and operation record commit together; terminal task/checkpoint/events roll back together under injected failures. |
 | Checkpoint/Resume | `core/checkpoint.py`: checkpoint, prepared/completed operation record, resume services | `run`/`run_agent`/`run_graph` restore durable state; executor restart consults prepared effects | `PASS` for committed stores, atomic checkpoint events, restored autonomy/context, stable idempotency IDs and filesystem reconciliation after close/reopen. |
 | Storage | `core/storage.py`: global database proxy and schema; runtime transaction grouping in `core/runtime_persistence.py` | Shared by nearly every service | `PASS` for centralized DDL, non-destructive migration, autocommit-safe legacy writes and explicit multi-record commit boundaries. |
@@ -993,6 +1046,7 @@ does not establish `VERIFIED` status for a frozen clean candidate:
 | Skill selection | canonical `AdvancedSkillSelector`; compatibility `SkillSelector` and `SemanticSkillSelector` | One lexical/semantic ranking owner. Legacy APIs delegate and adapt shapes; they do not call Policy. Removal waits for a major compatibility release after caller migration. |
 | Planning | `Planner`; pure `StructuredReasoner`; runtime proposer strategies; `TaskScheduler` | Responsibilities are separated: Plan creation/persistence, action proposal and DAG readiness/state respectively. |
 | Evidence/Citation | result models in `core/models.py`; stored records in `paw.knowledge`; boundary in `knowledge/normalization.py` | Roles remain distinct. `normalize_knowledge_result()` maps source/provenance IDs, orders citations and rejects broken links. |
+| E2 cognitive roles and signals | `core/reasoning_contracts.py`; `ModelRole` remains in `core/models.py`; `PrivacyClass` remains in `core/privacy.py` | One `RoleContract` registry; task signals reference the canonical privacy enum. No `PrivacyLevel`, duplicate role-definition registry, depth classifier or escalation decision is present. |
 
 `core/__init__.py` now exports only eleven runtime-contract symbols. Planner,
 scheduler, stores, adapters and compatibility helpers are imported from their
@@ -1086,10 +1140,13 @@ any Core Stabilization `PASS` claim.
 ## Next repair targets
 
 The F0 (SX + E0) work is closed. Core Stabilization is `VERIFIED` on the
-frozen revision `f3ad4ef` (SX-14 verdict). E0 is `IN PROGRESS` and the
-deterministic evidence runner + minimum case set + integration-pack record
-are in place (`docs/benchmarks/e0/integration_pack_run.md` is the gate
-record). The next track is E1.
+frozen revision `f3ad4ef`, and E0 has a verified deterministic
+fixture-validation baseline. The current repair target is E1 qualification:
+the `c28d679` clean report measured the small synthetic fixture corpus, while
+the current representative `src/paw` observation is numerically green but
+dirty and stale against reviewed fixture revisions. E2 remains blocked. The
+isolated E2 role/signal contracts are retained as pre-gate drafts only; the
+next executable E2 item is not authorized until E1 is frozen `VERIFIED`.
 
 ### E1 backlog items from the F0 review (added 2026-09-03)
 

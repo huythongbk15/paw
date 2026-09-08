@@ -1,166 +1,101 @@
-# E2-02 — Canonical Cognitive Roles
+# E2-02..04 — Cognitive roles and task-signal contracts
 
-**Date**: 2026-09-08
-**HEAD**: `5bb0226`
-**Prerequisite**: E0 `VERIFIED`, E1 `VERIFIED`
-**Scope**: `src/paw/core/models.py` (`ModelRole` enum, `RoleDefinition` dataclass, `CANONICAL_MODEL_ROLES` constant) + `src/paw/core/__init__.py` (exports) + `tests/test_e2_02_cognitive_roles.py` (9 tests).
-**Status**: IMPLEMENTED ✅ — 9 tests PASS, ruff clean.
+**Review date:** 2026-09-08  
+**Baseline:** `2c4a81f` plus the working tree  
+**Prerequisite:** E0 + E1 `VERIFIED` before activation  
+**Current result:** `PARTIAL` — value contracts are tested, E1 remains
+unverified, and there is no E2 runtime wiring.
 
----
+The historical filename is retained to avoid breaking references. This file
+does **not** define `ImplementationReadiness`; that lifecycle belongs to
+E2-25..E2-28 and E2-47. It also does not authorize routing, escalation,
+persistence or provider calls.
 
-## 1. Purpose
+## Ownership
 
-This document specifies the canonical cognitive roles that PAW uses
-to categorize model routing decisions. It closes gap #1 from the
-E2-01 audit (`docs/benchmarks/e2/e2_01_audit.md` §5.1): `roles` was a
-free-form `list[str]` per `ModelManifest` with no canonical list.
+| Concept | Canonical owner | Current boundary |
+|---|---|---|
+| Historical model-routing vocabulary | `paw.core.models.ModelRole` | Existing manifest compatibility; no new enum. |
+| E2 cognitive role contract | `paw.core.reasoning_contracts.RoleContract` | One immutable registry, imported explicitly from its owner. |
+| Privacy taxonomy | `paw.core.privacy.PrivacyClass` | Reused by task signals; there is no `PrivacyLevel`. |
+| E2 task signals | `paw.core.reasoning_contracts.TaskSignals` | Immutable value input only; no decision method. |
+| Research-depth classification | Future E2-29 owner | Not implemented by E2-04. |
+| Escalation decision | Runtime/Autonomy/Model Router split in Architecture | Not implemented by E2-04. |
 
-**Implementation**: `ModelRole` enum (already existed in `src/paw/core/models.py`) + `RoleDefinition` dataclass + `CANONICAL_MODEL_ROLES` constant mapping each role to metadata (description, preferred_by, requires_evidence, uncertainty_handled).
+`paw.core.__all__` remains the ratified eleven-symbol runtime surface. E2
+contracts are module-level expert APIs and do not widen the package root.
 
-**Entry conditions met**:
-- E0: `VERIFIED` (deterministic fixture-validation baseline on `f3ad4ef`)
-- E1: `VERIFIED` (E1-27 gate PASS/VERIFIED on clean revision `c28d679`, dirty=false, recall=1.0, reduction=0.871)
-- E2-01 audit: complete (`ba1a583`)
+## E2-02: minimum cognitive roles
 
----
+PAW reuses four existing `ModelRole` values for the minimum engineering loop:
 
-## 2. Schema
+| Role | Engineering use |
+|---|---|
+| `FAST` | Bounded classification and concise synthesis for low-risk work. |
+| `REASONING` | Research, diagnosis and architecture option assessment. |
+| `CODING` | Source-backed implementation or review proposals. |
+| `TOOLS` | Structured operation proposals; never execution authority. |
 
-```python
-# src/paw/core/implementation_readiness.py  (scaffold location)
+`VISION` and `EMBEDDING` are modalities/capabilities, not separate cognitive
+roles in this minimum set. `FALLBACK` is routing behavior, not a cognitive role.
+They remain valid historical `ModelManifest.roles` values for compatibility.
 
-class ReadinessState(str, Enum):
-    """State of a readiness decision record."""
-    DRAFT = "draft"           # in-progress, not yet final
-    FINAL = "final"           # approved, authoritative
-    STALE = "stale"           # superseded by source revision or invalidation
-    SUPERSEDED = "superseded" # replaced by a later FINAL record
+## E2-03: output, evidence and uncertainty
 
-class DecisionOutcome(str, Enum):
-    """The documentary readiness outcome (carried from E0-28..35)."""
-    NEEDS_RESEARCH = "needs_research"
-    NEEDS_CLARIFICATION = "needs_clarification"
-    SPIKE_REQUIRED = "spike_required"
-    READY = "ready"
-    REJECTED = "rejected"
+Each selected role has one frozen `RoleContract` containing:
 
-@dataclass(frozen=True)
-class ImplementationReadiness:
-    """Durable record of an implementation-readiness decision.
+- role description and benchmark/application tags;
+- typed output-schema identifier;
+- whether evidence and citations are mandatory;
+- allowed evidence categories;
+- whether uncertainty is reported and a bounded minimum confidence;
+- the required low-confidence disposition: `STOP`, `ASK` or `ESCALATE`.
 
-    Invariants:
-      - Only one FINAL record per (task_id, project_revision, scope_key).
-      - A DRAFT record may be superseded by a FINAL record for the same key.
-      - A FINAL record becomes STALE when project_revision changes.
-      - A REJECTED record blocks all mutating proposals under the same scope_key.
-    """
-    id: str                        # deterministic hash of (task_id, project_revision, scope_key)
-    task_id: str                   # existing Task.id (never create a parallel task)
-    project_revision: str          # git SHA-1 (project revision at decision time)
-    scope_key: str                 # e.g. "router_filter_availability" or "privacy_hard_gate"
-    outcome: DecisionOutcome
-    state: ReadinessState = ReadinessState.DRAFT
-    plan_purpose: PlanPurpose | None = None  # see §3
-    options_compared: list[str] = ()          # at least 2 for STANDARD/DEEP
-    contrary_evidence: list[str] = ()
-    research_stop_budget: str = "unbounded"   # default; must be explicit for STANDARD/DEEP
-    verified_by: list[str] = ()              # test names / gate ids
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    finalized_at: datetime | None = None
-    invalid_at: datetime | None = None
-    invalidation_reason: str = ""
-    superseded_by: str = ""                   # id of the FINAL replacement (if STALE/SUPERSEDED)
-    evidence_trace: list[str] = ()            # source_hash references / ledger event IDs
+The reasoning role returns a `reasoning_assessment`, not hidden chain-of-thought.
+The assessment is expected to expose evidence references, option conclusions,
+important uncertainty and a proposed next action. It cannot authorize a tool or
+project mutation. Coding output is an `implementation_proposal` and requires
+project/test/decision evidence plus citations.
+
+The registry is a `MappingProxyType`, the contracts are frozen dataclasses, and
+construction rejects invalid thresholds, citations without evidence, or an
+evidence-requiring role without allowed evidence types.
+
+## E2-04: task signals
+
+`TaskSignals` records the inputs later E2 items may consume:
+
+- novelty: `UNKNOWN`, `ROUTINE`, `FAMILIAR`, `NOVEL`, `UNPRECEDENTED`;
+- impact: `UNKNOWN`, `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`;
+- privacy: canonical `PrivacyClass`;
+- context sufficiency: `UNKNOWN`, `SUFFICIENT`, `PARTIAL`, `INSUFFICIENT`;
+- remaining budget: `UNKNOWN`, `WITHIN_LIMIT`, `NEAR_LIMIT`, `EXHAUSTED`;
+- optional uncertainty score in `[0, 1]` and non-negative token estimate.
+
+Unknown defaults are deliberate. Missing reconnaissance must not look like a
+routine, public, low-impact task. `TaskSignals.complete` reports only whether
+all inputs are present; it does not classify `FAST`/`STANDARD`/`DEEP`, request
+escalation or select a model. Those behaviors remain E2-29, E2-11 and E2-06.
+
+## Acceptance evidence
+
+The focused contract set is:
+
+```bash
+python -m pytest -q \
+  tests/test_e2_02_cognitive_roles.py \
+  tests/test_e2_03_role_contracts.py \
+  tests/test_e2_04_task_signals.py \
+  tests/test_planning_contract.py \
+  tests/test_e1_03_privacy_contract.py
+python -m ruff check \
+  src/paw/core/reasoning_contracts.py \
+  src/paw/core/models.py src/paw/core/__init__.py \
+  tests/test_e2_02_cognitive_roles.py \
+  tests/test_e2_03_role_contracts.py \
+  tests/test_e2_04_task_signals.py
 ```
 
-### 2.1 SQLite storage (migration from existing schema)
-
-The `decision_events` table (already on `storage.py` schema) gains:
-- `scope_key TEXT NOT NULL`
-- `outcome TEXT NOT NULL` (enum string)
-- `state TEXT NOT NULL DEFAULT 'draft'`
-- `plan_purpose_json TEXT` (JSON-encoded `PlanPurpose`)
-- `options_compared_json TEXT`
-- `contrary_evidence_json TEXT`
-- `research_stop_budget TEXT DEFAULT 'unbounded'`
-- `finalized_at TEXT` (nullable)
-- `invalid_at TEXT` (nullable)
-- `invalidation_reason TEXT DEFAULT ''`
-- `superseded_by TEXT DEFAULT ''`
-- `evidence_trace_json TEXT`
-- `project_revision TEXT`
-- `task_id TEXT NOT NULL`
-
-All columns are ADD COLUMN (additive, no row rewrite).
-
-### 2.2 Readiness lookup
-
-`ImplementationReadinessStore.get_current(task_id, project_revision, scope_key) -> ImplementationReadiness | None`
-- Returns the latest FINAL record matching the key.
-- If a FINAL record exists but `project_revision` differs from the current HEAD, returns STALE state.
-- If only DRAFT records exist, returns None (no actionable decision yet).
-
----
-
-## 3. PlanPurpose (extends existing Plan)
-
-The existing `Plan` dataclass gains:
-```python
-class PlanPurpose(str, Enum):
-    RESEARCH = "research"      # SPIKE / investigation; never mutates the project
-    IMPLEMENTATION = "implementation"  # mutates; requires READY decision
-    EVALUATION = "evaluation"  # benchmark / measurement; read-only
-    VERIFICATION = "verification"     # gate check; read-only
-
-# In Plan dataclass:
-purpose: PlanPurpose = PlanPurpose.RESEARCH  # default: never implement without explicit purpose
-```
-
-**Constraint**: a Plan with `purpose=IMPLEMENTATION` MUST reference an
-existing Task.id and a current `READY` decision for the same
-`(task_id, project_revision, scope_key)`. This is enforced at
-`Plan.__post_init__` and by `PawRuntime.run()` before dispatch.
-
----
-
-## 4. Stop / Ask semantics
-
-The runtime consumes readiness outcomes:
-- `READY` → Autonomy may proceed to `CONTINUE` (subject to budget + Policy)
-- `REJECTED` → `STOP(REJECTION)` — typed reason; never executes
-- `NEEDS_RESEARCH` → `STOP(SPIKE_SCHEDULED)` — scheduling-only; no implementation
-- `NEEDS_CLARIFICATION` → `ASK(CLARIFICATION_REQUIRED)` — user-facing question
-- `SPIKE_REQUIRED` → `STOP(SPIKE_REQUIRED)` — bounded investigation first
-
-These map directly to the existing `StopReason` enum; the runtime
-checks `ImplementationReadinessStore.get_current()` before any
-`Purpose=IMPLEMENTATION` plan is dispatched.
-
----
-
-## 5. Acceptance criteria (E2-02)
-
-| # | Criterion | Verification |
-|---|-----------|--------------|
-| A1 | `ImplementationReadiness` has 4 states (DRAFT/FINAL/STALE/SUPERSEDED) | `test_e2_02_readiness_schema.py` |
-| A2 | `DecisionOutcome` carries 5 values (NEEDS_RESEARCH/CLARIFICATION/SPIKE_REQUIRED/READY/REJECTED) | same |
-| A3 | STANDARD/DEEP decisions require ≥2 options + contrary_evidence | same |
-| A4 | `PlanPurpose` enforces research vs implementation separation | `test_e2_02_plan_purpose.py` |
-| A5 | REJECTED readiness blocks mutating proposals | `test_e2_02_rejected_blocks.py` |
-| A6 | Stale (revision mismatch) readiness blocks execution | `test_e2_02_stale_blocks.py` |
-| A7 | SQLite migration is additive (no DROP, no row rewrite) | `test_schema_migration.py` |
-| A8 | `get_current()` returns STALE for revision mismatch | `test_e2_02_get_current.py` |
-
----
-
-## 6. Boundary
-
-- **Owns**: decision state machine, DRAFT→FINAL transition, STALE detection
-- **Owned by** runtime: Plan dispatch gating (`PawRuntime.run()` checks readiness)
-- **Owned by** E2-50 (future): model-assisted option scoring (E2-03) and novelty detection (E2-04)
-- **Does NOT own**: Plan creation itself (that stays with the existing Plan dataclass); model provider selection (that's E2-31)
-
----
-
-*Spec drafted 2026-09-08 on clean revision `c28d679`. Awaiting code
-implementation window (Đại ca direction on src/ constraints).*
+Passing this set makes only the isolated value-contract repair `PASS`. E2-02,
+E2-03 and E2-04 remain unchecked in the execution tracker until E1 is
+`VERIFIED` and the contracts are re-approved on that revision.

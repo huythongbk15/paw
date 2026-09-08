@@ -253,6 +253,24 @@ privacy, cost, latency or a proven narrow capability favors local processing.
 Saving tokens is subordinate to retaining the evidence needed for a correct
 answer.
 
+### Cognitive-role and task-signal boundary
+
+**`[CURRENT]`** `ModelRole` is the historical routing vocabulary accepted by
+model manifests. The isolated `core/reasoning_contracts.py` module defines one
+immutable pre-gate contract registry for the minimum engineering cognitive roles
+(`FAST`, `REASONING`, `CODING`, `TOOLS`) and one immutable `TaskSignals` value
+object. `VISION`/`EMBEDDING` remain modalities and `FALLBACK` remains routing
+behavior; none is promoted into a second cognitive-role registry. Task signals
+reuse `core/privacy.py:PrivacyClass` and default unevaluated novelty, impact,
+context sufficiency and budget to explicit unknown values.
+
+**`[CURRENT]`** These value contracts have no runtime authority while E1 is
+`PARTIAL`. They do not classify `FAST`/`STANDARD`/`DEEP`, decide escalation,
+select a model, persist routing evidence or invoke a provider. The reasoning
+output contract asks for an evidence-backed assessment and uncertainty, not
+hidden chain-of-thought. E2-05 onward may consume these values only after the E2
+entry gate is satisfied and the contracts are re-approved on that revision.
+
 In this post-gate target, every local or cloud inference is a typed
 `model.inference` operation. Its context manifest, privacy class, estimated
 budget, selected role and escalation reason are recorded before invocation. A
@@ -587,7 +605,6 @@ before entering runtime state.
 | What context is sent? | Context Compiler | Enforces budget, selection reason and provenance. |
 | Which skills are relevant? | `AdvancedSkillSelector` | Owns lexical/semantic ranking; legacy selectors only adapt result shapes and never authorize execution. |
 | Which skill version may be active? | `SkillFabric` | Owns reviewed lifecycle transitions; selection considers only `ACTIVE` versions. |
-| Is implementation ready? | Application runtime using `ImplementationReadiness` | Consumes the source-backed decision artifact; does not replace Policy, Autonomy or task state. |
 | Did an acceptance check pass? | Application runtime applying `VerificationSpec` | Converts exact observations into `VerificationRecord`; executor success alone is insufficient. | **`[CURRENT]`** for the contract (`paw.bench.verification`); **`[RATIFIED TARGET]`** for the runner that consumes it. |
 | Does reasoning require a stronger route? | Application runtime applying recorded role thresholds | Produces the escalation transition; Autonomy limits another attempt and Model Router selects it. | **`[CURRENT]`** for the protocol; **`[RATIFIED TARGET]`** for the non-terminal `ESCALATE` (the current controller still treats it as a stopped outcome; E2 promotes it to a non-terminal control transition). |
 | How is a goal decomposed? | Planner | Creates and persists canonical `Plan`/`TaskNode` records; decomposition helpers are pure strategies. |

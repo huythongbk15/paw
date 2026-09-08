@@ -1,10 +1,13 @@
 # PAW system documents
 
-Current audit (2026-09-08, `ba1a583` plus the working tree): **PARTIAL**.
-The representative PAW-source E1 measurement now meets its metric targets, but
-the result is `OBSERVED`: the tree is dirty, one reviewed fixture changed, and
-the integrated clean-revision gate has not run. E2 remains blocked. See the
-current decision and execution record in `IMPLEMENTATION_MAP.md`.
+Current audit (2026-09-08, `2c4a81f` plus the working tree): **PARTIAL**.
+The real `src/paw` E1 observation meets its numeric targets, but E1 is not
+`VERIFIED`: the clean report previously used for that claim measured the small
+`benchmarks/e1/fixtures_paw` corpus, while the current real-source run is dirty
+and has stale reviewed-fixture provenance. E2 remains blocked. The isolated
+E2 role/task-signal value contracts are pre-gate repair work, not active router
+or readiness implementation. See the current decision and evidence record in
+`IMPLEMENTATION_MAP.md`.
 
 This directory is the canonical documentation set for PAW. It exists to keep
 the product boundary, architecture, implementation reality and work sequence
@@ -14,9 +17,9 @@ The recorded post-stabilization direction specializes PAW in code, systems and
 software architecture: local control/context/memory supports selectively gated
 cloud reasoning, and bounded source-backed research must produce a readiness
 decision before implementation planning. This is a documented target, not
-implemented status; Core Stabilization is the only track with a verified
-freeze, E0 has shipped its fixture-validation baseline, and E1–E4 / BETA
-remain unblocked by the E0 gate.
+implemented status; Core Stabilization has a verified freeze, E0 has shipped
+its fixture-validation baseline, E1 qualification is active, and E2–E4 / BETA
+remain gated by the ordered roadmap.
 
 Current gate result:
 
@@ -24,11 +27,11 @@ Current gate result:
 |---|---|---|
 | Core Stabilization | **`VERIFIED`** on `f3ad4ef` | S0–S6 acceptance passed the clean-revision D3 gate; the freeze commit is the canonical evidence. |
 | E0 (fixture-validation baseline) | **`VERIFIED`** for deterministic offline | The contract, 13 cases (8 minimum + 5 research-decision), the deterministic evidence runner, and the integration-pack record are in place. The 13/13 SUCCESS line is **fixture-validation**, not an agent-quality gate; the runtime-driven agent-quality tier is post-gate work (E0-40). |
-| E1 (Local project intelligence) | `PARTIAL`; metric gate `PASS` is `OBSERVED` | On six reviewed PAW-source cases, cold/warm recall is 1.00 and median warm context reduction is 0.981. Freshness now checks fixture Git blobs, current hashes, all measurement inputs, tree state and revision. A clean freeze plus D3 remains required. |
-| E2, E3, BETA | `BLOCKED` | E2 requires E0 + E1 `VERIFIED`; an E2 audit written early is only provisional input. |
+| E1 (Local project intelligence) | `PARTIAL`; real-source metric `PASS` is `OBSERVED` | The current 70-file `src/paw` run has cold/warm recall 1.00 and median warm context reduction 0.981. The clean 12-file synthetic-fixture report at `c28d679` is not representative-project evidence. A reviewed real-source freeze plus the remaining quality/privacy D3 gate is required. |
+| E2, E3, BETA | `BLOCKED` | E2 requires E0 + E1 `VERIFIED`. The E2-01 audit and isolated E2-02..04 value contracts are provisional and have no runtime authority. |
 | E4 (controlled adaptation) | `BLOCKED`, optional | Requires E0–E3 and a verified dataset; not required for BETA. |
 
-Audit baseline: Core Stabilization freeze `f3ad4ef`, current HEAD `ba1a583`, and
+Audit baseline: Core Stabilization freeze `f3ad4ef`, current HEAD `2c4a81f`, and
 the working tree inspected on 2026-09-08. Historical counts are not current
 gate evidence.
 

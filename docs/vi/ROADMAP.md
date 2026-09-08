@@ -1,30 +1,31 @@
 # Lộ trình Core Stabilization của PAW
 
-Review 2026-09-08: **PASS**, E1 measurement gate đóng trên
-clean revision `1747ea0`. Metric PAW-source đạt `VERIFIED` evidence:
-recall cold/warm tối thiểu 1,00 và median giảm context warm 0,981.
-Trên clean revision `1747ea0`, runner dirty=False path (test_dirty_tree_cannot_self_certify_a_pass)
-chuyển measurement_gate -> PASS, evidence_state -> VERIFIED. Report tại
-benchmarks/e1/e1_production_report.md được generate trên dirty tree 2026-09-07,
-ghi nhận PARTIAL/OBSERVED; só liệu measurement không thay đổi. Chưa triển khai E2.
+Review 2026-09-08: **PARTIAL**. Báo cáo sạch tại `c28d679` có
+`corpus_roots=benchmarks/e1/fixtures_paw` (12 file, 6.128 byte), không phải
+`src/paw`; vì vậy nó chỉ xác minh metric của fixture tổng hợp, không đóng gate
+E1 đại diện cho dự án thật. Lượt chạy hiện tại trên `src/paw` (70 file, 835.061
+byte) quan sát recall cold/warm tối thiểu 1,00 và median giảm context warm 0,981,
+nhưng trả về `PARTIAL`/`OBSERVED` vì cây dirty và fixture review đã stale. E2
+bị chặn cho tới khi E1 được freeze sạch và qua D3 privacy/chất lượng.
 
 Đây là work sequence duy nhất đang hoạt động. Các phase được đánh số trong lịch
 sử mô tả cách repository phình lên; chúng không quyết định việc phải xây tiếp.
 
-Track hiện tại: **E1 — CLOSED**. Core Stabilization, E0, E1 đã `VERIFIED`.
-Audit E2-01 có sẵn chỉ là input tạm thời; nó không kích hoạt E2.
+Track hiện tại: **E1 — qualification trên revision sạch của source thật**.
+Core Stabilization và E0 đã `VERIFIED`; E1 vẫn `PARTIAL`. Audit E2-01 và các
+contract E2-02..04 độc lập chỉ là input trước gate, không kích hoạt E2.
 
 | Phạm vi | Kết quả hiện tại | Ý nghĩa |
 |---|---|---|
 | Core Stabilization | `VERIFIED` trên `f3ad4ef` | Freeze S0-S6 vẫn là baseline lõi. |
 | E0 | `VERIFIED` cho fixture-validation deterministic | Không phải agent-quality hoặc cloud baseline. |
-| E1 | `PASS` trên `1747ea0` | Runner tracked đã đạt recall/reduction; metric PASS; clean D3 PASS. |
-| E2-E3 và BETA | `BLOCKED` | E2 cần E0 + E1 `VERIFIED`. |
+| E1 | `PARTIAL` | Clean report `c28d679` chỉ đo fixture tổng hợp; metric source thật đang `OBSERVED`, chưa có freeze/D3 cùng revision. |
+| E2-E3 và BETA | `BLOCKED` | E2 cần E0 + E1 `VERIFIED`; contract draft không có quyền runtime. |
 | E4 controlled adaptation | `BLOCKED`, tùy chon | Cần E0-E3 và dataset verified; không bắt buộc cho BETA. |
 
-Huong engineering intelligence ngày 2026-09-01 đã được ghi trong Product
-Charter và Architecture. Đây là ràng buộc thiết kế, chưa phải track triển khai
-đang hoạt động khi exit gate còn `BLOCKED` (E2-E3).
+Hướng engineering intelligence ngày 2026-09-01 đã được ghi trong Product
+Charter và Architecture. Đây là ràng buộc thiết kế, không phải bằng chứng rằng
+một capability E2 đang bị chặn đã hoạt động.
 
 ## Quy tắc trình tự
 
@@ -261,6 +262,13 @@ bề mặt sản phẩm.
 **Mục tiêu:** chọn phương án triển khai tốt nhất có đủ bằng chứng trước khi đổi
 production; chỉ dùng độ sâu cloud khi quyết định cần và PAW vẫn giữ quyền điều khiển.
 
+**Điều kiện vào:** E0 và E1 đều `VERIFIED`. Schema
+`ImplementationReadiness` bền vững là deliverable của E2, không phải điều kiện
+vào E2. Sau khi E2 được mở, role/signal contract có thể được ratify trước; việc
+nối router/runtime hoặc mutation vẫn bị chặn nội bộ cho tới khi owner, lifecycle
+và persistence readiness qua E2-25..E2-28. Readiness trong fixture E0 chỉ là kỳ
+vọng benchmark, chưa phải record runtime bền vững.
+
 **Công việc:**
 
 - phân loại goal thành `FAST`, `STANDARD` hoặc `DEEP` theo độ mới, tác động, bất
@@ -394,9 +402,12 @@ tài liệu, không được hạ để biến implementation kém thành hoàn 
 
 ## Ba task an toàn tiếp theo
 
-1. Review và commit repair E1 kết hợp, không trộn thay đổi không liên quan. Cập
-   nhật revision fixture `paw_context_compiler` tới commit source sạch đã review.
-2. Trên đúng revision sạch đó, chạy lại measurement PAW-source, proof
-   privacy/quality và gate D3 gồm test, lint, build, cài wheel cô lập.
-3. Chỉ ghi E1 `PASS` nếu toàn bộ acceptance đạt. Khi đó mới dùng audit E2-01 làm
-   input cho quyết định E2 đầu tiên; nếu không, giữ E2 bị chặn và sửa lỗi có tên.
+1. Review và freeze cây sửa contract E1/E2 hiện tại, không trộn thay đổi không
+   liên quan. Gắn mọi fixture `paw_*.yaml` vào commit thật chứa đúng byte đã
+   review; không dùng corpus `fixtures_paw` thay cho `src/paw`.
+2. Trên đúng revision sạch đó, chạy measurement PAW-source mặc định, proof
+   privacy/quality và gate D3 gồm test, lint, build, cài wheel cô lập. Giữ nguyên
+   corpus, revision, dirty flag và fixture-review rows trong evidence.
+3. Chỉ ghi E1 `VERIFIED` nếu toàn bộ acceptance đạt trên cùng revision. Khi đó
+   mới ratify E2-02..04 và bắt đầu E2-05; nếu không, giữ E2 bị chặn và sửa failure
+   có tên.

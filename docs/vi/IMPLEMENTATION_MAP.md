@@ -6,6 +6,37 @@ cập nhật tài liệu này.
 
 ## Baseline audit
 
+### Sửa qualification E1 và contract E2 — DEEP / READY (2026-09-08)
+
+Vấn đề: E1 bị nâng lên `VERIFIED` từ báo cáo sạch có
+`corpus_roots=benchmarks/e1/fixtures_paw`, dù Roadmap ghi là `src/paw`; runner
+cũng nói measurement gate tách khỏi qualification E1 tổng thể. E2-02/E2-03 sau
+đó mở rộng `paw.core` vượt contract 11 symbol và tạo hai registry role chồng
+lấn. Thay đổi E2-04 chưa commit còn tạo `PrivacyLevel` cạnh owner canonical
+`PrivacyClass`, mặc định task chưa đánh giá thành `FAST`, và làm sớm phần
+classification thuộc E2-29.
+
+Invariant bị ảnh hưởng: một contract mỗi concept, public surface nhỏ, tối ưu
+không giảm chất lượng, evidence trước implementation và thứ tự gate Roadmap.
+Evidence: clean report `c28d679` chỉ có 12 file / 6.128 byte, reduction 0,871;
+lượt chạy dirty trên `src/paw` có 70 file / 835.061 byte, recall 1,0 và reduction
+0,981 nhưng là `PARTIAL`/`OBSERVED` do tree dirty và fixture review stale. Test
+public surface tái hiện lỗi vì `paw.core.__all__` vượt 11 symbol.
+
+Ba phương án: A chấp nhận report fixture và tiếp tục E2 — loại vì sai corpus;
+B xóa toàn bộ E2 — an toàn nhưng bỏ contract work hữu ích; C sửa trạng thái E1,
+giữ E2 ở dạng contract trước gate, hợp nhất thành một registry role bất biến,
+tái dùng `PrivacyClass`, dùng default unknown fail-closed và trả `paw.core` về 11
+symbol — được chọn. Bằng chứng ngược: metric source thật hiện đã qua số học, nên
+vấn đề còn lại là provenance/freeze và gate privacy/chất lượng chứ không phải
+retrieval. Điều này vẫn chưa đủ để gọi E1 `VERIFIED`.
+
+Readiness: `READY` chỉ cho repair này; không cho phép wiring router,
+classification, persistence hay provider E2. Owner mới
+`core/reasoning_contracts.py` chỉ chứa value contract role/task-signal; privacy
+vẫn thuộc `core/privacy.py`, `ModelRole` lịch sử vẫn thuộc `core/models.py`, root
+`paw.core` giữ đúng 11 export.
+
 ### Sửa qualification E1 trên dự án thật — STANDARD / READY (2026-09-07)
 
 Vấn đề: corpus synthetic đạt E1-27 nhưng các case trên source PAW không tìm đủ
@@ -228,6 +259,7 @@ candidate đã đóng băng:
 | Capability Router | `core/executor.py`: `CapabilityRouter`, `ExecutorRegistry` | `PawRuntime._execute_action` | `PASS`; action nào cũng chọn executor tương thích trước invoke. |
 | Executor | port/registry và `EffectIntent` ở `core/executor.py`; adapter file ở `executors/filesystem.py` | `_execute_action` invoke hoặc reconcile executor đã chọn | `PASS` cho adapter built-in; write prepare intent bền vững và restart không replay mù effect. |
 | Model Router | `core/model_router.py`; provider registry | Execution stage sau gate | `PASS` cho gate ordering hiện tại. Escalation hậu gate cần selection cached không side effect; live init/discovery không được ẩn trước proposal gate mới. |
+| Contract suy luận E2 | `core/reasoning_contracts.py`; `ModelRole` lịch sử ở `core/models.py`; `PrivacyClass` ở `core/privacy.py` | Chưa nối router/runtime khi E1 còn `PARTIAL` | Chỉ là repair contract trước gate. Một registry bất biến mô tả FAST/REASONING/CODING/TOOLS; `TaskSignals` ghi input novelty/impact/privacy/context/budget fail-closed, không tự phân loại, route hoặc authorize escalation. |
 | Ledger | `core/ledger.py`; coordinator ở `core/runtime_persistence.py` | Dùng xuyên runtime | `PASS`; observation/artifact/execution event và operation record commit cùng nhau; terminal task/checkpoint/event rollback cùng nhau. |
 | Checkpoint/Resume | `core/checkpoint.py` | Các mode restore state; restart executor đọc prepared effect | `PASS` cho checkpoint atomic, state/idempotency restore và filesystem reconciliation sau close/reopen. |
 | Storage | `core/storage.py`; transaction group ở `core/runtime_persistence.py` | Dùng chung hầu hết service | `PASS` cho DDL tập trung, migration không phá dữ liệu và multi-record boundary tường minh. |
@@ -248,6 +280,7 @@ candidate đã đóng băng:
 | Skill selection | `AdvancedSkillSelector` canonical; `SkillSelector` và `SemanticSkillSelector` tương thích | Một owner ranking lexical/semantic. API legacy chỉ delegate/đổi shape, không gọi Policy; chỉ xóa ở major release sau migrate caller. |
 | Planning | `Planner`; `StructuredReasoner` thuần; runtime proposer; `TaskScheduler` | Đã tách rõ tạo/lưu Plan, đề xuất action và DAG readiness/state. |
 | Evidence/Citation | result model trong `core/models.py`, stored record trong `paw.knowledge`, boundary ở `knowledge/normalization.py` | `normalize_knowledge_result()` map source/provenance, sắp citation và từ chối link hỏng. |
+| Cognitive role và task signal E2 | `core/reasoning_contracts.py`; `ModelRole` ở `core/models.py`; `PrivacyClass` ở `core/privacy.py` | Một registry `RoleContract`; task signal tham chiếu privacy enum canonical. Không còn `PrivacyLevel`, role-definition registry thứ hai, depth classifier hoặc escalation decision. |
 
 `core/__init__.py` chỉ export 11 symbol của runtime contract. Planner, scheduler,
 store, adapter và helper tương thích phải import từ module sở hữu; contract test

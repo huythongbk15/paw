@@ -1,163 +1,95 @@
-"""E2-04 — Novelty, impact, privacy, context-sufficiency and budget signals (D1).
+"""E2-04 — task-signal value contracts, without routing decisions (D1)."""
 
-Verifies that TaskSignals bundles the five signal dimensions and that
-classify_task() produces consistent FAST/STANDARD/DEEP classifications.
-"""
+from dataclasses import FrozenInstanceError
 
 import pytest
-from paw.core.models import (
+from paw.core.privacy import PrivacyClass
+from paw.core.reasoning_contracts import (
     BudgetLevel,
-    CANONICAL_MODEL_ROLES,
-    CANONICAL_ROLE_CONTRACTS,
-    classify_task,
     ContextSufficiencyLevel,
-    DEFAULT_TASK_SIGNALS,
     ImpactLevel,
-    ModelRole,
     NoveltyLevel,
-    PrivacyLevel,
     TaskSignals,
 )
 
 
-def test_novelty_enum_has_four_values():
-    """ROUTINE, FAMILIAR, NOVEL, UNPRECEDENTED."""
-    assert len(list(NoveltyLevel)) == 4
-    assert NoveltyLevel.ROUTINE == "routine"
-    assert NoveltyLevel.NOVEL == "novel"
-    assert NoveltyLevel.UNPRECEDENTED == "unprecedented"
+def test_signal_taxonomies_include_fail_closed_unknown_values() -> None:
+    assert NoveltyLevel.UNKNOWN == "unknown"
+    assert ImpactLevel.UNKNOWN == "unknown"
+    assert ContextSufficiencyLevel.UNKNOWN == "unknown"
+    assert BudgetLevel.UNKNOWN == "unknown"
 
 
-def test_impact_enum_has_four_values():
-    """LOW, MEDIUM, HIGH, CRITICAL."""
-    assert len(list(ImpactLevel)) == 4
-    assert ImpactLevel.LOW == "low"
-    assert ImpactLevel.CRITICAL == "critical"
-
-
-def test_privacy_enum_has_four_values():
-    """PUBLIC, INTERNAL, WORKSPACE, SECRET."""
-    assert len(list(PrivacyLevel)) == 4
-    assert PrivacyLevel.PUBLIC == "public"
-    assert PrivacyLevel.SECRET == "secret"
-
-
-def test_context_sufficiency_enum_has_four_values():
-    """SUFFICIENT, PARTIAL, INSUFFICIENT, UNKNOWN."""
-    assert len(list(ContextSufficiencyLevel)) == 4
-    assert ContextSufficiencyLevel.SUFFICIENT == "sufficient"
-    assert ContextSufficiencyLevel.INSUFFICIENT == "insufficient"
-
-
-def test_budget_enum_has_five_values():
-    """UNLIMITED, LOW, MEDIUM, HIGH, CONSTRAINED."""
-    assert len(list(BudgetLevel)) == 5
-    assert BudgetLevel.UNLIMITED == "unlimited"
-    assert BudgetLevel.CONSTRAINED == "constrained"
-
-
-def test_task_signals_defaults_to_routine():
-    """Default TaskSignals should represent a routine task."""
+def test_task_signal_defaults_do_not_claim_fast_path_evidence() -> None:
     signals = TaskSignals()
-    assert signals.novelty == NoveltyLevel.ROUTINE
-    assert signals.impact == ImpactLevel.LOW
-    assert signals.privacy == PrivacyLevel.PUBLIC
-    assert signals.context_sufficiency == ContextSufficiencyLevel.SUFFICIENT
-    assert signals.budget == BudgetLevel.UNLIMITED
-    assert signals.uncertainty_score == 0.0
-    assert signals.estimated_tokens == 0
+    assert signals.novelty is NoveltyLevel.UNKNOWN
+    assert signals.impact is ImpactLevel.UNKNOWN
+    assert signals.privacy is PrivacyClass.INTERNAL
+    assert signals.context_sufficiency is ContextSufficiencyLevel.UNKNOWN
+    assert signals.budget is BudgetLevel.UNKNOWN
+    assert signals.uncertainty_score is None
+    assert signals.estimated_tokens is None
+    assert signals.complete is False
 
 
-def test_task_signals_is_frozen():
-    """TaskSignals is a frozen dataclass — cannot be mutated after creation."""
+def test_task_signals_reuse_the_canonical_privacy_contract() -> None:
+    signals = TaskSignals(privacy=PrivacyClass.SECRET)
+    assert signals.privacy is PrivacyClass.SECRET
+
+    import paw.core.models as models
+
+    assert not hasattr(models, "PrivacyLevel")
+
+
+def test_complete_signals_are_recordable_without_classifying_the_task() -> None:
+    signals = TaskSignals(
+        novelty=NoveltyLevel.FAMILIAR,
+        impact=ImpactLevel.MEDIUM,
+        privacy=PrivacyClass.WORKSPACE,
+        context_sufficiency=ContextSufficiencyLevel.SUFFICIENT,
+        budget=BudgetLevel.WITHIN_LIMIT,
+        uncertainty_score=0.2,
+        estimated_tokens=2048,
+    )
+    assert signals.complete is True
+    assert not hasattr(signals, "goal_classification")
+    assert not hasattr(signals, "is_escalation_required")
+
+
+def test_task_signals_are_frozen() -> None:
     signals = TaskSignals()
-    with pytest.raises(AttributeError):
+    with pytest.raises(FrozenInstanceError):
         signals.novelty = NoveltyLevel.NOVEL  # type: ignore[misc]
 
 
-def test_default_signals_classify_as_fast():
-    """Default (routine, low impact, public, sufficient, unlimited) → FAST."""
-    assert DEFAULT_TASK_SIGNALS.goal_classification() == "FAST"
+@pytest.mark.parametrize("score", [-0.01, 1.01])
+def test_uncertainty_score_is_bounded(score: float) -> None:
+    with pytest.raises(ValueError, match="between"):
+        TaskSignals(uncertainty_score=score)
 
 
-def test_classify_raises_on_unknown_task_signals():
-    """classify_task delegates to TaskSignals.goal_classification()."""
-    signals = TaskSignals(
-        novelty=NoveltyLevel.NOVEL,
-        impact=ImpactLevel.HIGH,
-        privacy=PrivacyLevel.SECRET,
-    )
-    assert classify_task(signals) == "DEEP"
+def test_negative_token_estimate_is_rejected() -> None:
+    with pytest.raises(ValueError, match="non-negative"):
+        TaskSignals(estimated_tokens=-1)
 
 
-def test_routine_low_public_sufficient_is_fast():
-    """Routine task with all minimal signals is FAST."""
-    signals = TaskSignals(
-        novelty=NoveltyLevel.ROUTINE,
-        impact=ImpactLevel.LOW,
-        privacy=PrivacyLevel.PUBLIC,
-        context_sufficiency=ContextSufficiencyLevel.SUFFICIENT,
-        budget=BudgetLevel.UNLIMITED,
-        uncertainty_score=0.1,
-    )
-    assert classify_task(signals) == "FAST"
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("novelty", "routine"),
+        ("impact", "low"),
+        ("privacy", "internal"),
+        ("context_sufficiency", "sufficient"),
+        ("budget", "within_limit"),
+    ],
+)
+def test_untyped_signal_values_are_rejected(field: str, value: str) -> None:
+    with pytest.raises(TypeError, match=field):
+        TaskSignals(**{field: value})  # type: ignore[arg-type]
 
 
-def test_novel_or_high_impact_is_deep():
-    """Novel or high-impact task is DEEP."""
-    novel = TaskSignals(novelty=NoveltyLevel.NOVEL)
-    high_impact = TaskSignals(impact=ImpactLevel.HIGH)
-    assert classify_task(novel) == "DEEP"
-    assert classify_task(high_impact) == "DEEP"
+def test_e2_04_does_not_implement_later_depth_or_router_work() -> None:
+    import paw.core.reasoning_contracts as contracts
 
-
-def test_secret_privacy_is_deep():
-    """Secret privacy task is DEEP regardless of other signals."""
-    signals = TaskSignals(privacy=PrivacyLevel.SECRET)
-    assert classify_task(signals) == "DEEP"
-
-
-def test_context_insufficient_is_deep():
-    """Insufficient context task is DEEP."""
-    signals = TaskSignals(
-        context_sufficiency=ContextSufficiencyLevel.INSUFFICIENT
-    )
-    assert classify_task(signals) == "DEEP"
-
-
-def test_constrained_budget_is_deep():
-    """Constrained budget task is DEEP."""
-    signals = TaskSignals(budget=BudgetLevel.CONSTRAINED)
-    assert classify_task(signals) == "DEEP"
-
-
-def test_uncertainty_0_5_is_escalation_required():
-    """uncertainty_score >= 0.5 triggers escalation."""
-    signals = TaskSignals(uncertainty_score=0.5)
-    assert signals.is_escalation_required() is True
-
-
-def test_uncertainty_0_4_not_escalation():
-    """uncertainty_score < 0.5 does not trigger escalation alone."""
-    signals = TaskSignals(uncertainty_score=0.4)
-    assert signals.is_escalation_required() is False
-
-
-def test_all_signal_values_are_in_ranges():
-    """Every signal enum value must be a valid string."""
-    for level in NoveltyLevel:
-        assert isinstance(level.value, str)
-    for level in ImpactLevel:
-        assert isinstance(level.value, str)
-    for level in PrivacyLevel:
-        assert isinstance(level.value, str)
-    for level in ContextSufficiencyLevel:
-        assert isinstance(level.value, str)
-    for level in BudgetLevel:
-        assert isinstance(level.value, str)
-
-
-def test_canonical_roles_and_contracts_still_present():
-    """E2-04 must not break E2-02/E2-03 constants."""
-    assert len(CANONICAL_MODEL_ROLES) == 7
-    assert len(CANONICAL_ROLE_CONTRACTS) == 7
+    assert not hasattr(contracts, "classify_task")
+    assert not hasattr(contracts, "DEFAULT_TASK_SIGNALS")

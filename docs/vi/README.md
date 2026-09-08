@@ -1,10 +1,12 @@
 # Tài liệu hệ thống PAW — tiếng Việt
 
-Audit hiện tại (2026-09-08, `ba1a583` cộng working tree): **PARTIAL**. Phép đo
-E1 trên chính source PAW đã đạt ngưỡng metric, nhưng evidence mới ở trạng thái
-`OBSERVED`: cây còn dirty, một fixture đã khác revision được review và gate D3
-trên revision sạch chưa chạy. E2 vẫn bị chặn. Xem quyết định và execution record
-trong `IMPLEMENTATION_MAP.md`.
+Audit hiện tại (2026-09-08, `2c4a81f` cộng working tree): **PARTIAL**. Báo cáo
+sạch trước đây dùng để nâng E1 lên `VERIFIED` thực tế đo corpus nhỏ
+`benchmarks/e1/fixtures_paw`, không phải `src/paw` như Roadmap đã ghi. Lượt đo
+70 file source PAW hiện tại đạt recall 1,00 và median giảm context 0,981, nhưng
+vẫn là `PARTIAL`/`OBSERVED` vì cây dirty và provenance fixture đã stale. E2 vẫn
+bị chặn; các contract role/task-signal E2 độc lập mới chỉ là sửa contract trước
+gate, chưa có quyền runtime. Xem quyết định trong `IMPLEMENTATION_MAP.md`.
 
 Đây là bộ tài liệu tiếng Việt tương ứng với bộ tài liệu hệ thống PAW hiện tại.
 Mỗi tài liệu trong thư mục này bám theo tài liệu tiếng Anh cùng tên ở thư mục
@@ -19,11 +21,11 @@ triển khai; Core Stabilization vẫn là track duy nhất đang hoạt động
 
 Kết quả hiện tại: Core Stabilization và baseline E0 đã `VERIFIED`; E1 là
 `PARTIAL`; E2/E3/BETA và E4 tùy chọn vẫn `BLOCKED` theo thứ tự gate. Sáu case
-PAW-source hiện có recall cold/warm 1,00 và median giảm context warm 0,981.
-Freshness kiểm Git blob của fixture, hash input, revision và tree state; kết quả
-dirty không được tự chứng nhận `PASS`.
+PAW-source hiện có metric recall cold/warm 1,00 và median giảm context warm
+0,981 ở trạng thái `OBSERVED`. Freshness kiểm Git blob của fixture, hash input,
+revision và tree state; kết quả dirty không được tự chứng nhận `PASS`.
 
-Baseline audit gồm freeze `f3ad4ef`, HEAD `ba1a583` và working tree kiểm tra
+Baseline audit gồm freeze `f3ad4ef`, HEAD `2c4a81f` và working tree kiểm tra
 ngày 2026-09-08. Setup tái lập dùng lock riêng của PAW:
 
 ```bash
@@ -46,6 +48,8 @@ uv sync --locked --extra dev
    lượng được dẫn xuất từ Roadmap; file này không được đổi scope, thứ tự hoặc gate.
 7. [Tham chiếu API](api.md) và [ví dụ](examples.md) — cách dùng thực tế của
    runtime và CLI chat.
+8. [Contract role/task-signal E2](benchmarks/e2/e2_02_implementation_readiness.md)
+   — bản dịch của contract pre-gate E2-02..04; chưa phải runtime đã kích hoạt.
 
 ## Thứ tự ưu tiên khi tài liệu không khớp
 

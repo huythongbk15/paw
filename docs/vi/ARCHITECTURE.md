@@ -150,6 +150,23 @@ sâu suy luận vượt năng lực local đã được đánh giá. PAW có th�
 privacy, chi phí, latency hoặc capability hẹp đã được chứng minh phù hợp hơn.
 Tiết kiệm token phải đứng sau việc giữ đủ bằng chứng để trả lời đúng.
 
+### Boundary cognitive role và task signal
+
+`ModelRole` là từ vựng routing lịch sử mà model manifest chấp nhận. Module độc
+lập `core/reasoning_contracts.py` định nghĩa một registry contract bất biến cho
+bốn cognitive role kỹ thuật tối thiểu (`FAST`, `REASONING`, `CODING`, `TOOLS`)
+và một value object `TaskSignals` bất biến. `VISION`/`EMBEDDING` vẫn là modality;
+`FALLBACK` vẫn là hành vi routing. Task signal tái dùng
+`core/privacy.py:PrivacyClass` và mặc định novelty, impact, context sufficiency,
+budget chưa đánh giá thành giá trị unknown tường minh.
+
+Các value contract này chưa có quyền runtime khi E1 còn `PARTIAL`: chúng không
+phân loại `FAST`/`STANDARD`/`DEEP`, quyết định escalation, chọn model, persist
+routing evidence hoặc gọi provider. Contract reasoning yêu cầu assessment có
+bằng chứng và uncertainty, không yêu cầu hidden chain-of-thought. Chỉ E2-05 trở
+đi mới được dùng các value này sau khi entry gate E2 đạt và contract được review
+lại trên revision đó.
+
 Trong đích sau gate này, mọi inference local hoặc cloud đều là operation
 `model.inference` có kiểu. Context manifest, privacy class, budget ước tính,
 role đã chọn và lý do escalation được ghi trước invocation. Model response có

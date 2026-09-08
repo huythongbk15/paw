@@ -1,12 +1,14 @@
 # PAW execution checklist
 
 Review correction — 2026-09-08: E1 is **PARTIAL**; E2 is **BLOCKED**.
-The tracked production runner now measures the PAW source tree, not only a
-synthetic corpus. Its current dirty-tree observation meets both metric targets
-(recall 1.00; median warm reduction 0.981), but cannot self-certify E1. Fixture
-Git-blob freshness, all measurement-input hashes and mid-run tree/revision
-stability are now enforced. Remaining gate work: clean fixture review/freeze
-and D3 quality, privacy, lint, build and isolated-install verification.
+The clean report at `c28d679` measured the 12-file
+`benchmarks/e1/fixtures_paw` corpus, not `src/paw`, so it cannot establish the
+representative-project or overall E1 gate. A current dirty-tree run over 70 PAW
+source files observes recall 1.00 and median warm reduction 0.981, but has stale
+reviewed-fixture provenance and correctly returns `PARTIAL`/`OBSERVED`.
+Remaining gate work: reviewed real-source freeze and D3 quality, privacy, lint,
+build and isolated-install verification. The isolated E2-02..04 contracts are
+pre-gate repair evidence only; they do not unblock E2 runtime work.
 
 This is the atomic execution tracker derived from `ROADMAP.md`. The Roadmap
 remains the sole authority for scope, ordering and acceptance gates. This file
@@ -95,7 +97,9 @@ Execute in order; every checkbox requires current command evidence:
     - `python3 -m ruff check src/paw/core/runtime.py tests/test_runtime_privacy_proof.py` → All checks passed!
     - `bash skills/bootstrap-canonical-docs/scripts/contract-checks.sh` → CONTRACT PASSED
   - Remaining conditions:
-    - E1-27 measurement gate **PASS** on clean revision `1747ea0` (recall=1.00; reduction=0.981 on PAW source).
+    - E1-27 real-source metric is `OBSERVED` on the current dirty tree
+      (recall=1.00; reduction=0.981); the earlier clean report measured the
+      synthetic fixture corpus and does not close E1.
     - E0-20/21 cloud baseline BLOCKED-BY-CHARTER.
     - E2/E3/BETA/E4 BLOCKED (E1 = PASS, no E2 work started).
   - Diff scan: no duplicate owners, no weakened recall, no scope drift.
@@ -316,7 +320,7 @@ gate. They live here so the E1 reviewer sees them early.
 - [x] `E1-35` End-to-end recall contract: real fixture repo → full PAW pipeline → evidence recall >= 95%. `(1d, D1)` — PASS: Real fixture repo (payment/order), real git, real SQLite, real `KnowledgeChunkStore` + `ContextCompiler` + `gate_remote_disclosure`. No monkeypatch, no fake measurements, no injected answers. Recall >= 95% verified (refund_payment content found in knowledge chunks). `tests/test_e1_35_e2e_recall_contract.py` (10 D1 tests) all pass.
 - [x] `E1-36` Adversarial runtime tests: pure runtime/adversarial/measurable counter-pattern to E1 contract tests. `(0.5d, D1)` — PASS: 12 tests covering 4 layers — Invariant (ASK/DENY → STOP, budget enforced), Runtime wiring (PolicyGuard → AutonomyController → STOP, Knowledge pipeline wired), Adversarial (path traversal blocked, stale source blocks, budget overflow tracked), Measurable (budget respects, checkpoint persists, usage tracked). Uses REAL subsystems, no mocks. `tests/test_e1_36_adversarial_runtime.py` (12 tests) all pass.
 - [x] `E1-26 retrofitted` 9 adversarial tests added to existing 5 contract tests. Adversarial pattern: stale source cannot bypass privacy gate, manipulation cannot bypass, multiple sources blocked, Policy DENY stops execution, ASK stops execution, budget tracked, null byte/absolute path blocked. `tests/test_e1_26_negative_controls_contract.py` (14 tests: 5 contract + 9 adversarial) all pass.
-- [x] `E1-27` Run the E1 integration pack once and record the gate decision. `(1d, D3)` — **metric `PASS`, overall `PASS` on clean revision `1747ea0`**. The canonical tracked runner is `paw.bench.e1_production`; ignored scripts are historical diagnostics and no tracked test depends on them. On 6 reviewed PAW-source cases × cold/warm, recall is 1.00 and median warm context reduction is 0.981 against the all-indexed-chunks + builtin-skill baseline. Deterministic Python symbol chunking and identifier-aware lexical ranking close the former real-source recall defect without requiring embeddings. The runner records HEAD/dirty state, hashes all PAW measurement code/corpus/cases, validates each fixture against a real reviewed Git blob, uses exclusive output creation and returns `BLOCKED` if inputs/revision/tree change during the run. Optional local embedding re-ranking is bounded, model-scoped and not needed for the metric result. Clean D3 run on clean revision `ae5344a` (post-commit): `measurement_gate=PASS`, `evidence_state=VERIFIED`, `dirty=false`. The runner (`paw.bench.e1_production`) checks `git status` before writing the report; adding `benchmarks/e1/e1_production_report.md` to `.gitignore` prevents the freshly-created report from itself triggering `dirty=true`. `test_dirty_tree_cannot_self_certify_a_pass` proves `dirty=False` → `PASS`. The previous dirty-tree report (`2026-09-07`) documented `PARTIAL`/`OBSERVED`; its measurement numbers (recall=1.00, reduction=0.981) are unchanged. Evidence: `benchmarks/e1/e1_production_report.md` (PASS/VERIFIED on `ae5344a`), `tests/test_run_e1_production.py` (10 passed), `tests/test_e1_knowledge_retrieval.py` (9 passed).
+- [ ] `E1-27` Run the E1 integration pack once and record the gate decision. `(1d, D3)` — **PARTIAL**. The canonical tracked runner is `paw.bench.e1_production`. The clean report at `c28d679` is reproducible metric evidence for `benchmarks/e1/fixtures_paw` only (12 files, 6,128 bytes, recall=1.0, reduction=0.871); it was incorrectly described as a PAW-source qualification. A 2026-09-08 run over `src/paw` and the six reviewed PAW cases observes 70 files / 835,061 bytes, recall=1.0 and reduction=0.981, but returns `PARTIAL`/`OBSERVED` because the tree is dirty and at least one fixture no longer matches its reviewed Git blob. The runner records HEAD/tree/input hashes, uses exclusive output creation and blocks mid-run changes. Remaining acceptance: bind the six fixtures to exact reviewed current bytes, freeze one clean revision, then run the real-source measurement plus E1 privacy/quality and D3 release checks on that same revision. Focused runner tests are supporting evidence, not the overall gate.
 
 Gate: token reduction alone cannot pass E1. If recall stays below 95%, fix
 project understanding before starting E2.
@@ -331,9 +335,9 @@ baseline. Estimated 34–45 days.
 ### Roles and routing evidence
 
 - [x] `E2-01` Inventory current Model Router inputs, outputs and all callers. `(2h, D0)` — READ-ONLY audit complete at `ba1a583`; `docs/benchmarks/e2/e2_01_audit.md`
-- [ ] `E2-02` Define the minimum cognitive roles needed by E0 cases. `(3h, D0)`
-- [ ] `E2-03` Define role-specific output, evidence and uncertainty contracts. `(0.5d, D1)`
-- [ ] `E2-04` Define novelty, impact, privacy, context-sufficiency and budget signals. `(0.5d, D1)`
+- [ ] `E2-02` Define the minimum cognitive roles needed by E0 cases. `(3h, D0)` — PRE-GATE DRAFT: `core/reasoning_contracts.py` reuses the existing `ModelRole` vocabulary and identifies only FAST/REASONING/CODING/TOOLS as the minimum engineering cognitive roles. VISION/EMBEDDING remain modalities and FALLBACK remains a routing marker. The draft is immutable and does not expand `paw.core`; activation waits for E1 `VERIFIED`.
+- [ ] `E2-03` Define role-specific output, evidence and uncertainty contracts. `(0.5d, D1)` — PRE-GATE DRAFT: one frozen `RoleContract` registry defines typed output schema, evidence/citation requirements, confidence boundary and low-confidence disposition. It does not request or expose hidden chain-of-thought and has no runtime authority. Focused contract tests pass; activation waits for E1.
+- [ ] `E2-04` Define novelty, impact, privacy, context-sufficiency and budget signals. `(0.5d, D1)` — PRE-GATE DRAFT: `TaskSignals` reuses canonical `PrivacyClass`, defaults missing reconnaissance to explicit unknown values, validates uncertainty/token ranges and deliberately does not classify FAST/STANDARD/DEEP or trigger escalation (owned by E2-29/E2-11). Focused contract tests pass; activation waits for E1.
 - [ ] `E2-05` Define local eligibility and explicit out-of-distribution conditions per role. `(0.5d, D0)`
 - [ ] `E2-06` Extend the existing router decision; do not introduce a parallel router. `(1d, D2)`
 - [ ] `E2-07` Persist role, model, effort, budget, reason and fallback in the ledger. `(0.5d, D2)`
@@ -502,8 +506,8 @@ gate-progress view, not permission to call observed implementation `DONE`.
 |---|---|---:|---|---|---|
 | SX | `VERIFIED` | 14/14 | none | `SX-14` closed | `f3ad4ef` (548 passed in 303.72s) |
 | E0 | `IN PROGRESS` | 44/44 items marked [x] or DEFERRED (deterministic baseline gate; E0-20/21 are charter-deferred for cloud baseline) | none (E0-20/21 deferred-by-charter; E0-17/18/19/22 covered by current run; E0-26..42 features dispositions done) | re-open any E0-17..42 if a follow-up review needs it | `f3ad4ef` (777 passed, ruff clean); re-verified at `08a8806` |
-| E1 | `VERIFIED` | 37/37 core + 13/13 backlog PASS + E1-23/24/25/35/36 + E1-26 retrofit + 9 E1-27 tests; **E1-27 gate: PASS/VERIFIED** (clean revision `c28d679`, dirty=false, recall=1.0, reduction=0.871) | E1-27 gate PASS; 2 pre-existing ruff errors remain in `src/paw/bench/__init__.py` and `tests/test_e1_bl2_bench_exports_contract.py` (not introduced by docs-only work) | `1747ea0` (19 E1-27 tests pass) |
-| E2 | `IN PROGRESS` | E2-01 audit complete (`ba1a583`); E2-02 spec scaffolded | E0+E1 VERIFIED gate satisfied | `ba1a583` |
+| E1 | `PARTIAL` | Earlier focused items pass; E1-27 representative clean-revision gate remains open. Current real-source metric observation: recall=1.0, reduction=0.981. | Dirty tree, stale reviewed-fixture provenance, and no same-revision quality/privacy D3 evidence. The clean `c28d679` report measured only the synthetic fixture corpus. | Review/freeze real-source fixtures, then E1-27 D3. | `2c4a81f` + working tree (`OBSERVED`) |
+| E2 | `BLOCKED` | E2-01 audit complete; E2-02..04 isolated contract drafts have focused tests but remain unchecked. | E1 is not `VERIFIED`; no E2 runtime/persistence/router wiring is authorized. | After E1 passes, ratify E2-02..04, then E2-05. | — |
 | E3 | `BLOCKED` | 0/25 | E2 gate | `E3-01` | — |
 | BETA | `BLOCKED` | 0/14 | E3 gate | `B-01` | — |
 | E4 | `BLOCKED` | 0/22 | E3 gate and verified dataset | `E4-01` | — |
