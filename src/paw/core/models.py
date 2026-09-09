@@ -73,6 +73,7 @@ class TaskEventType(StrEnum):
     CONTEXT_BUILT = "context_built"
     EXECUTOR_SELECTED = "executor_selected"
     MODEL_SELECTED = "model_selected"
+    MODEL_RESELECTED = "model_reselected"
     POLICY_CHECKED = "policy_checked"
     EXECUTION_STARTED = "execution_started"
     TOOL_CALLED = "tool_called"

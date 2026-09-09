@@ -1,6 +1,6 @@
 # PAW execution checklist
 
-Latest verification, 2026-09-08 (`649ded9`): **E1 = VERIFIED**.
+Latest verification, 2026-09-09 (`10642af`): **E1 = VERIFIED**. E2-06 and E2-07 committed and pushed.
 The real-source measurement at `benchmarks/e1/real_measurement_local.json`
 (HEAD `649ded9`, dirty=false, fixtures_fresh=true) ran the full 71-file /
 839,006-byte PAW production corpus (`src/paw`) against the six reviewed
@@ -353,13 +353,13 @@ baseline. Estimated 34–45 days.
 - [x] `E2-03` Define role-specific output, evidence and uncertainty contracts. `(0.5d, D1)` — PRE-GATE DRAFT: one frozen `RoleContract` registry defines typed output schema, evidence/citation requirements, confidence boundary and low-confidence disposition. It does not request or expose hidden chain-of-thought and has no runtime authority. 8 tests pass; activation waits for E1.
 - [x] `E2-04` Define novelty, impact, privacy, context-sufficiency and budget signals. `(0.5d, D1)` — PRE-GATE DRAFT: `TaskSignals` reuses canonical `PrivacyClass`, defaults missing reconnaissance to explicit unknown values, validates uncertainty/token ranges and deliberately does not classify FAST/STANDARD/DEEP or trigger escalation (owned by E2-29/E2-11). 18 tests pass; activation waits for E1.
 - [x] `E2-05` Define local eligibility and explicit out-of-distribution conditions per role. `(0.5d, D0)` — `core/reasoning_contracts.py`: `ProviderKind`, `OODCondition` (closed 9-value enum), `OOD_CONDITIONS`, `EligibilityRule`, `CANONICAL_ELIGIBILITY_RULES`, `EligibilityResult`, `evaluate_local_eligibility()`. 17 tests pass.
-- [ ] `E2-06` Extend the existing router decision; do not introduce a parallel router. `(1d, D2)`
-- [ ] `E2-07` Persist role, model, effort, budget, reason and fallback in the ledger. `(0.5d, D2)`
+- [x] `E2-06` Extend the existing router decision; do not introduce a parallel router. `(1d, D2)` — `ModelRouter.route()` gains optional `task_signals` parameter (default `None`, backward-compatible); `_filter_for_availability` restored role filtering + descending score; 17 tests pass; ruff clean.
+- [x] `E2-07` Persist role, model, effort, budget, reason and fallback in the ledger. `(0.5d, D2)` — `PawRuntime.task_signals` param + `_execute_action` passes it to `route()`; `MODEL_SELECTED` ledger record now includes `reason`/`budget`/`signals_summary`/`score`/`fallback_chain`; `log_model_selected` helper extended; 12 tests pass (invariant/runtime/adversarial/measurable), ruff clean.
 
 ### Trajectory-aware escalation
 
 - [ ] `E2-08` Define a bounded local reconnaissance result from project evidence. `(0.5d, D1)`
-- [ ] `E2-09` Gate reconnaissance inference as `model.inference`. `(0.5d, D2)`
+- [x] `E2-09` Gate reconnaissance inference as `model.inference`. `(0.5d, D2)` — `InferenceClassification` enum + `classify_inference()` boundary rule (fail-closed: empty/zero-confidence → model.inference, confidence ≥ 0.25 + evidence → local.compute); threshold boundary tests + adversarial NaN/bypass tests; ruff clean.
 - [ ] `E2-10` Re-evaluate routing after reconnaissance rather than only from the initial prompt. `(1d, D2)`
 - [ ] `E2-11` Escalate on missing evidence, low confidence, novelty or high impact. `(0.5d, D2)`
 - [ ] `E2-12` Stop visibly when the required cloud route is unavailable. `(3h, D2)`
@@ -521,7 +521,9 @@ gate-progress view, not permission to call observed implementation `DONE`.
 | SX | `VERIFIED` | 14/14 | none | `SX-14` closed | `f3ad4ef` (548 passed in 303.72s) |
 | E0 | `IN PROGRESS` | 44/44 items marked [x] or DEFERRED (deterministic baseline gate; E0-20/21 are charter-deferred for cloud baseline) | none (E0-20/21 deferred-by-charter; E0-17/18/19/22 covered by current run; E0-26..42 features dispositions done) | re-open any E0-17..42 if a follow-up review needs it | `f3ad4ef` (777 passed, ruff clean); re-verified at `08a8806` |
 | E1 | `VERIFIED` | All focused items pass; E1-27 D3 gate closed on clean revision `649ded9`. Real-source measurement: recall=1.0, reduction=0.9847, 71 files / 839,006 bytes, `LocalEmbeddingProvider` enabled, `measurement_gate=PASS`, `evidence_state=VERIFIED`. | None outstanding. The earlier `c28d679` report measured only the synthetic `fixtures_paw` corpus; the dirty-tree `037f9b9` run had stale fixture provenance. Both are superseded by the `649ded9` clean-revision report. | E1 is closed. Next: E2-06 (extend existing router) or E1-23/24/25 reopen for further adversarial hardening. | `649ded9` (`VERIFIED`) |
-| E2 | `RATIFIED` | E2-01 audit complete; E2-02..05 value contracts have focused tests; E2-06 extends `ModelRouter.route()` to consume E2-02..05 value contracts — 17 contract tests pass, ruff clean. | E1 is `VERIFIED`; gate ratified on `76013fb`. | E2-07 (persist role/budget/reason in ledger) next. | `76013fb` |
+| E2 | `RATIFIED` | E2-01 audit complete; E2-02..05 value contracts have focused tests; E2-06 extends `ModelRouter.route()` to consume E2-02..05 value contracts — 17 contract tests pass, ruff clean. | E1 is `VERIFIED`; gate ratified on `76013fb`. | E2-06 (extend router) complete. | `76013fb` |
+| E2-06 | `PASS` | `ModelRouter.route()` gains `task_signals` param; `_filter_for_availability` restored role filter + descending score. 17 tests pass. | `10642af` |
+| E2-07 | `PASS` | `PawRuntime.task_signals` + `_execute_action` passes to `route()`; `MODEL_SELECTED` ledger record includes `reason`/`budget`/`signals_summary`/`score`/`fallback_chain`; `log_model_selected` helper extended. 12 tests pass. | `10642af` |
 | E3 | `BLOCKED` | 0/25 | E2 gate | `E3-01` | — |
 | BETA | `BLOCKED` | 0/14 | E3 gate | `B-01` | — |
 | E4 | `BLOCKED` | 0/22 | E3 gate and verified dataset | `E4-01` | — |

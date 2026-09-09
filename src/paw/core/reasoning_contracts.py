@@ -7,8 +7,9 @@ remain with the owners named in the architecture and later E2 work items.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from types import MappingProxyType
 
@@ -323,6 +324,91 @@ CANONICAL_ELIGIBILITY_RULES: Mapping[ModelRole, EligibilityRule] = MappingProxyT
 )
 
 
+
+
+class InferenceClassification(StrEnum):
+    """Gate for whether the next reasoning step is a model inference call
+    (subject to the remote-disclosure privacy gate from E1-03) or can be
+    satisfied by local compute.
+
+    E2-09 defines the *boundary rule*. E2-10/E2-11 consume the classification.
+    """
+
+    MODEL_INFERENCE = "model.inference"
+    LOCAL_COMPUTE = "local.compute"
+
+
+def classify_inference(reco: ReconnaissanceResult) -> InferenceClassification:
+    """Classify whether the next step requires model inference or can stay local.
+
+    Boundary rule (single authority, fail-closed):
+      * If reconnaissance found *no* local evidence (``is_empty``) or the
+        evidence confidence falls below the threshold, the step requires
+        ``model.inference`` -- local compute cannot proceed safely.
+      * Otherwise, the step is classified as ``local.compute``.
+
+    The confidence threshold defaults to 0.25: below that, local evidence
+    is too sparse to justify skipping a model call.
+    """
+    threshold = 0.25
+    if reco.is_empty():
+        return InferenceClassification.MODEL_INFERENCE
+    if reco.evidence_confidence < threshold:
+        return InferenceClassification.MODEL_INFERENCE
+    return InferenceClassification.LOCAL_COMPUTE
+
+
+@dataclass(frozen=True)
+class ReconnaissanceResult:
+    """Bounded, local-first evidence gathered about a task before any
+    model is invoked.
+
+    E2-08 defines the *shape* of reconnaissance output only. The actual
+    gathering (symbols, git changes, test associations) is deferred to the
+    runtime/consumers; E2-09 gates any further inference as ``model.inference``.
+
+    Every field is optional so that partial reconnaissance (e.g. a non-git
+    repo) still produces a usable, deterministic result. Empty collections
+    are explicit "no evidence found" -- never "haven't looked".
+    """
+
+    task_goal: str = ""
+    # Bounded local evidence -- counts only, never raw content (privacy).
+    symbol_count: int = 0
+    symbol_kinds: tuple[tuple[str, int], ...] = field(default_factory=tuple)
+    recent_change_count: int = 0
+    recent_changed_files: tuple[str, ...] = field(default_factory=tuple)
+    test_association_count: int = 0
+    knowledge_source_count: int = 0
+    privacy_class: PrivacyClass = PrivacyClass.INTERNAL
+    # Bounded confidence in local evidence (0.0-1.0). Absent -> 0.0.
+    evidence_confidence: float = 0.0
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.recent_changed_files, tuple):
+            raise TypeError("recent_changed_files must be a tuple")
+        if isinstance(self.symbol_kinds, Mapping):
+            object.__setattr__(
+                self, "symbol_kinds",
+                MappingProxyType(self.symbol_kinds),
+            )
+        if math.isnan(self.evidence_confidence) or self.evidence_confidence < 0.0 or self.evidence_confidence > 1.0:
+            raise ValueError("evidence_confidence must be between 0.0 and 1.0")
+        if self.symbol_count < 0 or self.recent_change_count < 0:
+            raise ValueError("counts must be non-negative")
+        if self.test_association_count < 0 or self.knowledge_source_count < 0:
+            raise ValueError("counts must be non-negative")
+
+    def is_empty(self) -> bool:
+        """True when no local evidence was found at all."""
+        return (
+            self.symbol_count == 0
+            and self.recent_change_count == 0
+            and self.test_association_count == 0
+            and self.knowledge_source_count == 0
+        )
+
+
 def evaluate_local_eligibility(
     role: ModelRole,
     observed_conditions: frozenset[OODCondition],
@@ -359,10 +445,14 @@ __all__ = [
     "EligibilityResult",
     "EligibilityRule",
     "ImpactLevel",
+    "InferenceClassification",
     "NoveltyLevel",
     "OODCondition",
     "ProviderKind",
+    "ReconnaissanceResult",
     "RoleContract",
     "TaskSignals",
     "UncertaintyDisposition",
+    "classify_inference",
+    "evaluate_local_eligibility",
 ]

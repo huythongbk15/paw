@@ -581,6 +581,7 @@ class PawRuntime:
         preferred_provider: str | None = None,
         execution_profile: Any | None = None,
         task_signals: Any | None = None,
+        project_root: str | None = None,
     ):
         self.autonomy = autonomy
         self.proposer = proposer or ActionProposer()
@@ -604,6 +605,8 @@ class PawRuntime:
         # E2-07: task reconnaissance signals (novelty/impact/privacy etc.)
         # carried into the model-routing decision and persisted in the ledger.
         self.task_signals = task_signals
+        # E2-10: project root for reconnaissance evidence gathering.
+        self._project_root = project_root
 
         self._max_iterations = max_iterations
 
@@ -1609,6 +1612,139 @@ class PawRuntime:
     # Action execution (the "do" half of the agent loop)
     # ------------------------------------------------------------------
 
+    # ------------------------------------------------------------------
+    # Action execution (the "do" half of the agent loop)
+    # ------------------------------------------------------------------
+
+    async def _gather_reconnaissance(
+        self,
+        task_id: str,
+        task_goal: str,
+    ) -> Any:
+        """Gather bounded local evidence about the task from the project.
+
+        Delegates to the E1 evidence pipeline (symbols, recent changes, test
+        associations, knowledge sources) when a project root is configured.
+        On any error returns an empty ``ReconnaissanceResult`` — never raises.
+        """
+        from paw.core.reasoning_contracts import ReconnaissanceResult
+        symbol_count = 0
+        symbol_kinds: dict[str, int] = {}
+        recent_change_count = 0
+        recent_changed_files: tuple[str, ...] = ()
+        test_association_count = 0
+        knowledge_source_count = 0
+        evidence_confidence = 0.0
+
+        from pathlib import Path
+
+        project_root_str = getattr(self, "_project_root", None)
+        project_root: Path | None = (
+            Path(project_root_str) if project_root_str else None
+        )
+
+        # --- Symbols (E1-10): count functions/classes per file ---
+        try:
+            from paw.knowledge.symbols import extract_symbols
+
+            if project_root is not None:
+                py_files = [
+                    p for p in project_root.rglob("*.py")
+                    if not any(part in ("__pycache__", ".git", ".venv", "node_modules")
+                               for part in p.parts)
+                ]
+                if py_files:
+                    rel_files = [
+                        str(p.relative_to(project_root)) for p in py_files
+                    ]
+                    symbols = extract_symbols(rel_files, str(project_root))
+                    symbol_count = len(symbols)
+                    for sym in symbols:
+                        kind = sym.kind if hasattr(sym, "kind") else "function"
+                        symbol_kinds[kind] = symbol_kinds.get(kind, 0) + 1
+        except Exception as exc:
+            logger.debug("recon_symbols_skipped", error=str(exc))
+
+        # --- Recent changes (E1-12): git history ---
+        try:
+            from paw.knowledge.changes import recent_changes
+
+            if project_root is not None:
+                changes = await recent_changes(
+                    root=str(project_root), max_count=10
+                )
+                recent_change_count = len(changes)
+                recent_changed_files = tuple(c.file for c in changes)
+        except Exception as exc:
+            logger.debug("recon_changes_skipped", error=str(exc))
+
+        # --- Test associations (E1-11) ---
+        try:
+            from paw.knowledge.associations import associate_tests
+
+            if project_root is not None:
+                source_files = [
+                    str(p.relative_to(project_root))
+                    for p in project_root.rglob("*.py")
+                    if "test" not in p.name
+                    and not any(part in ("__pycache__", ".git", ".venv", "node_modules")
+                                for part in p.parts)
+                ]
+                test_files = [
+                    str(p.relative_to(project_root))
+                    for p in project_root.rglob("test_*.py")
+                    if not any(part in ("__pycache__", ".git", ".venv", "node_modules")
+                               for part in p.parts)
+                ]
+                if source_files and test_files:
+                    links = associate_tests(
+                        test_files, source_files, str(project_root)
+                    )
+                    test_association_count = len(links)
+        except Exception as exc:
+            logger.debug("recon_tests_skipped", error=str(exc))
+
+        # --- Knowledge sources (E1-02/03): count ingested sources ---
+        try:
+            from paw.knowledge.source import get_knowledge_source
+
+            ksm = get_knowledge_source()
+            knowledge_source_count = len(await ksm.list(limit=1000))
+        except Exception as exc:
+            logger.debug("recon_knowledge_skipped", error=str(exc))
+
+        # Derive bounded evidence confidence from the evidence gathered.
+        # More signals → higher confidence. This is a heuristic, not a
+        # model call — the classification boundary rule (E2-09) still gates
+        # whether inference is needed.
+        evidence_signals = sum(
+            1 for v in (symbol_count, recent_change_count,
+                        test_association_count, knowledge_source_count)
+            if v > 0
+        )
+        evidence_confidence = min(1.0, evidence_signals * 0.25)
+
+        # Derive a privacy class from the task goal keywords.
+        from paw.core.privacy import PrivacyClass
+        privacy_class = PrivacyClass.INTERNAL
+        goal_lower = task_goal.lower()
+        if any(kw in goal_lower for kw in ("secret", "private", "credential", "password")):
+            privacy_class = PrivacyClass.SECRET
+        elif any(kw in goal_lower for kw in ("workspace", "team", "project")):
+            privacy_class = PrivacyClass.WORKSPACE
+
+        return ReconnaissanceResult(
+            task_goal=task_goal,
+            symbol_count=symbol_count,
+            symbol_kinds=symbol_kinds,
+            recent_change_count=recent_change_count,
+            recent_changed_files=recent_changed_files,
+            test_association_count=test_association_count,
+            knowledge_source_count=knowledge_source_count,
+            privacy_class=privacy_class,
+            evidence_confidence=evidence_confidence,
+        )
+
     async def _execute_action(
         self,
         task_id: str,
@@ -1635,6 +1771,11 @@ class PawRuntime:
         needs_model = Capability.MODEL_INFERENCE in proposed.capabilities
         if needs_model and self.model_router is not None:
             token_count = _token_count_from_context(proposed.context)
+            # E2-10: gather real reconnaissance from the project (symbols,
+            # recent changes, test associations, knowledge sources) and pass
+            # it to route() so the routing decision is re-evaluated after
+            # reconnaissance rather than only from the initial prompt.
+            recon = await self._gather_reconnaissance(task_id, proposed.goal)
             try:
                 selection = await self.model_router.route(
                     task_id,
@@ -1646,9 +1787,36 @@ class PawRuntime:
                     execution_profile=self.execution_profile,
                     preferred_provider=self.preferred_provider,
                     task_signals=self.task_signals,
+                    reconnaissance=recon,
                 )
                 if selection.model_name:
                     selected_model_name = selection.model_name
+                    # E2-10: re-evaluate routing after reconnaissance.
+                    # If the recon result changes the inference classification
+                    # (e.g. local evidence is now sufficient), the router
+                    # re-routes from the initial selection.
+                    re_evaluated = await self.model_router.re_evaluate_routing(
+                        task_id, selection, recon,
+                    )
+                    if re_evaluated.model_name != selection.model_name:
+                        selection = re_evaluated
+                        selected_model_name = selection.model_name
+                        await TaskLedger.record(
+                            task_id,
+                            TaskEventType.MODEL_RESELECTED,
+                            {
+                                "prev_model": re_evaluated.reason,
+                                "model": selection.model_name,
+                                "role": selection.role,
+                                "reason": selection.reason,
+                                "score": selection.score,
+                                "stage": "reconnaissance_re_evaluation",
+                            },
+                        )
+                    # E2-09: classify whether this step required model
+                    # inference or could have been satisfied by local compute.
+                    from .reasoning_contracts import classify_inference
+                    inference_class = classify_inference(recon)
                     # E2-07: persist the routing decision metadata
                     # (reason/budget/signals) in the ledger for traceability.
                     signals_summary = {}
@@ -1678,6 +1846,7 @@ class PawRuntime:
                             "fallback_chain": selection.fallback_chain,
                             "budget": budget_summary,
                             "signals_summary": signals_summary,
+                            "inference_classification": inference_class.value,
                             "stage": "execution",
                         },
                     )

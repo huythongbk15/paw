@@ -25,7 +25,12 @@ from .models import (
     ModelRole,
     ModelSelection,
 )
-from .reasoning_contracts import TaskSignals, evaluate_local_eligibility
+from .reasoning_contracts import (
+    ReconnaissanceResult,
+    TaskSignals,
+    classify_inference,
+    evaluate_local_eligibility,
+)
 from .storage import db
 
 logger = get_logger(__name__)
@@ -657,8 +662,18 @@ class ModelRouter:
         execution_profile: ExecutionProfile | None = None,
         preferred_provider: str | None = None,
         task_signals: TaskSignals | None = None,
+        reconnaissance: ReconnaissanceResult | None = None,
     ) -> ModelSelection:
-        """Route a task to the best model using multi-dimensional scoring."""
+        """Route a task to the best model using multi-dimensional scoring.
+
+        When ``reconnaissance`` is supplied (E2-10), the router re-evaluates
+        the initial single-shot routing: if local evidence is sufficient
+        (``classify_inference`` → ``LOCAL_COMPUTE``), local models are
+        preferred so a cheaper/faster local provider is chosen when it can
+        serve the role; when local evidence is insufficient, the role may be
+        escalated to a more capable tier (e.g. ``fast`` → ``reasoning``) so a
+        stronger model is selected.
+        """
         # Phase 15: initialize providers (so availability is known) BEFORE
         # discovering their models. Without this, discover_models sees
         # provider.available == False (not yet initialized) and silently skips
@@ -763,6 +778,8 @@ class ModelRouter:
                 (manifest, score)
                 for manifest, score in scored
                 if manifest.provider == preferred_provider
+                # E2-10: skip preferred model from a provider that is down
+                and (available is None or manifest.provider in available)
             ]
             if preferred:
                 scored = preferred
@@ -817,6 +834,7 @@ class ModelRouter:
         privacy_required: bool = False,
         prefer_cheap: bool = True,
         task_signals: TaskSignals | None = None,
+        reconnaissance: ReconnaissanceResult | None = None,
     ) -> tuple[ModelSelection, list[ModelScore]]:
         """Route with full explainability (all scores returned)."""
         if self._provider_registry is not None:
@@ -895,6 +913,159 @@ class ModelRouter:
         await self.persist_selection(task_id, selection)
 
         return selection, [s for _, s in scored]
+
+    async def re_evaluate_routing(
+        self,
+        task_id: str,
+        prev_selection: ModelSelection,
+        reconnaissance: ReconnaissanceResult,
+    ) -> ModelSelection:
+        """Re-evaluate the routing decision after reconnaissance (E2-10).
+
+        Instead of routing blindly from the initial prompt, this method
+        closes the trajectory-aware loop: a ``ReconnaissanceResult`` gathered
+        from the project (E2-08 symbols/changes/tests/knowledge) is fed back
+        into the routing decision so the selected model tracks the *real*
+        information state of the task.
+
+        Boundary rules (single authority — ``classify_inference``):
+          * ``LOCAL_COMPUTE`` + non-empty evidence → prefer local models
+            (a cheaper/faster local provider can serve the role); the previous
+            cloud selection is downgraded to local when a local model
+            supports the role.
+          * ``MODEL_INFERENCE`` → keep the previous selection unchanged
+            (a model call is still required); but if reconnaissance shows
+            novel / high-impact / low-confidence evidence, escalate the role
+            so a stronger model is chosen on the next ``route()`` call.
+
+        Returns the (possibly updated) ``ModelSelection``. The original
+        selection is returned as-is when the recon result does not change
+        the decision (idempotent re-evaluation).
+        """
+        # Classify whether local evidence justifies skipping a model call.
+        inference_class = classify_inference(reconnaissance)
+
+        # If local evidence is sufficient AND the previous selection was a
+        # non-local provider, try to downgrade to a local model for this role.
+        if (
+            inference_class.value == "local.compute"
+            and reconnaissance.privacy_class.value
+            in ("public", "internal", "workspace")
+        ):
+            local_candidates = await self._select_local_for_role(
+                task_id,
+                prev_selection.role,
+                context_size=0,
+                complexity="medium",
+                privacy_required=False,
+                prefer_cheap=True,
+            )
+            if local_candidates:
+                local_manifest, local_score = local_candidates[0]
+                upgraded = ModelSelection(
+                    model_name=local_manifest.name,
+                    model_manifest=local_manifest,
+                    role=prev_selection.role,
+                    reason=f"E2-10 re-evaluated: local evidence sufficient "
+                           f"(inference={inference_class.value}, "
+                           f"symbols={reconnaissance.symbol_count}, "
+                           f"changes={reconnaissance.recent_change_count}); "
+                           f"downgraded from {prev_selection.model_name}",
+                    fallback_chain=[prev_selection.model_name] + [
+                        m.name for m, _ in local_candidates[1:]
+                    ],
+                    score=local_score.score,
+                )
+                self._selections[task_id] = upgraded
+                await self.persist_selection(task_id, upgraded)
+                logger.info(
+                    "model_rerouted_local_downgrade",
+                    task_id=task_id,
+                    prev=prev_selection.model_name,
+                    new=local_manifest.name,
+                )
+                return upgraded
+
+        # If inference is required and the recon shows the task is OOD
+        # (novel / high-impact / low-confidence), escalate the role to
+        # ``reasoning`` so a stronger model is selected next time.
+        if inference_class.value == "model.inference":
+            from .reasoning_contracts import (
+                BudgetLevel,
+                ContextSufficiencyLevel,
+                ImpactLevel,
+                NoveltyLevel,
+                OODCondition,
+                TaskSignals,
+            )
+            ood: set[OODCondition] = set()
+            if (
+                reconnaissance.recent_change_count == 0
+                and reconnaissance.symbol_count == 0
+            ):
+                ood.add(OODCondition.MISSING_EVIDENCE)
+            if reconnaissance.evidence_confidence < 0.25:
+                ood.add(OODCondition.LOW_CONFIDENCE)
+            if reconnaissance.recent_change_count > 0:
+                ood.add(OODCondition.NOVEL_TASK)
+            if not ood:
+                # No escalation signal — keep the previous selection.
+                return prev_selection
+            # Escalate from "fast" or "tools" to "reasoning" when OOD.
+            escalated_role = prev_selection.role
+            if prev_selection.role in ("fast", "tools"):
+                escalated_role = "reasoning"
+            logger.info(
+                "model_rerouted_role_escalation",
+                task_id=task_id,
+                prev_role=prev_selection.role,
+                new_role=escalated_role,
+                conditions=sorted(c.value for c in ood),
+            )
+            ts = TaskSignals(
+                novelty=NoveltyLevel.NOVEL
+                if OODCondition.NOVEL_TASK in ood
+                else NoveltyLevel.ROUTINE,
+                impact=ImpactLevel.HIGH
+                if OODCondition.HIGH_IMPACT in ood
+                else ImpactLevel.LOW,
+                context_sufficiency=ContextSufficiencyLevel.INSUFFICIENT
+                if OODCondition.MISSING_EVIDENCE in ood
+                else ContextSufficiencyLevel.SUFFICIENT,
+                budget=BudgetLevel.WITHIN_LIMIT,
+                uncertainty_score=reconnaissance.evidence_confidence,
+                estimated_tokens=reconnaissance.symbol_count,
+            )
+            return await self.route(
+                task_id,
+                reconnaissance.task_goal or "",
+                role=escalated_role,
+                task_signals=ts,
+            )
+
+        # Default: no change.
+        return prev_selection
+
+    async def _select_local_for_role(
+        self,
+        task_id: str,
+        role: str,
+        context_size: int = 0,
+        complexity: str = "medium",
+        privacy_required: bool = False,
+        prefer_cheap: bool = True,
+    ) -> list[tuple[ModelManifest, ModelScore]]:
+        """Return local models that support ``role``, re-scored and sorted desc."""
+        self.registry.register_defaults()
+        local_scored = [
+            (m, self.score_model_for_task(
+                m, role, context_size, complexity, privacy_required, prefer_cheap,
+            ))
+            for m in self.registry.list_enabled()
+            if m.provider == "local" and m.supports_role(role)
+        ]
+        local_scored.sort(key=lambda x: x[1].score, reverse=True)
+        return local_scored
 
     def get_scores(self, task_id: str) -> list[ModelScore] | None:
         """Retrieve scores for a task."""
