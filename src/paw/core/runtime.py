@@ -580,6 +580,7 @@ class PawRuntime:
         privacy_required: bool = False,
         preferred_provider: str | None = None,
         execution_profile: Any | None = None,
+        task_signals: Any | None = None,
     ):
         self.autonomy = autonomy
         self.proposer = proposer or ActionProposer()
@@ -600,6 +601,9 @@ class PawRuntime:
         self.privacy_required = privacy_required
         self.preferred_provider = preferred_provider
         self.execution_profile = execution_profile or None
+        # E2-07: task reconnaissance signals (novelty/impact/privacy etc.)
+        # carried into the model-routing decision and persisted in the ledger.
+        self.task_signals = task_signals
 
         self._max_iterations = max_iterations
 
@@ -1641,17 +1645,39 @@ class PawRuntime:
                     privacy_required=self.privacy_required,
                     execution_profile=self.execution_profile,
                     preferred_provider=self.preferred_provider,
+                    task_signals=self.task_signals,
                 )
                 if selection.model_name:
                     selected_model_name = selection.model_name
+                    # E2-07: persist the routing decision metadata
+                    # (reason/budget/signals) in the ledger for traceability.
+                    signals_summary = {}
+                    if self.task_signals is not None:
+                        for field in ("novelty", "impact", "privacy",
+                                      "context_sufficiency", "budget"):
+                            val = getattr(self.task_signals, field, None)
+                            if val is not None:
+                                signals_summary[field] = (
+                                    val.value if hasattr(val, "value") else str(val)
+                                )
+                    budget_summary = {}
+                    if self.execution_profile is not None:
+                        for key in ("max_model_calls", "max_tool_calls",
+                                    "max_total_tokens", "max_wall_time_seconds"):
+                            budget_summary[key] = getattr(
+                                self.execution_profile, key, None
+                            )
                     await TaskLedger.record(
                         task_id,
                         TaskEventType.MODEL_SELECTED,
                         {
                             "model": selection.model_name,
                             "role": selection.role,
+                            "reason": selection.reason,
                             "score": selection.score,
                             "fallback_chain": selection.fallback_chain,
+                            "budget": budget_summary,
+                            "signals_summary": signals_summary,
                             "stage": "execution",
                         },
                     )

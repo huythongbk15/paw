@@ -159,8 +159,33 @@ async def log_executor_selected(task_id: ID, executor: str, model: str) -> None:
     await TaskLedger.record(task_id, TaskEventType.EXECUTOR_SELECTED, {"executor": executor, "model": model})
 
 
-async def log_model_selected(task_id: ID, model: str, role: str) -> None:
-    await TaskLedger.record(task_id, TaskEventType.MODEL_SELECTED, {"model": model, "role": role})
+async def log_model_selected(
+    task_id: ID,
+    model: str,
+    role: str,
+    *,
+    reason: str = "",
+    score: float = 0.0,
+    fallback_chain: list[str] | None = None,
+    budget: dict[str, Any] | None = None,
+    signals_summary: dict[str, Any] | None = None,
+    stage: str = "execution",
+) -> None:
+    """Persist a model-routing decision with E2-07 provenance metadata."""
+    await TaskLedger.record(
+        task_id,
+        TaskEventType.MODEL_SELECTED,
+        {
+            "model": model,
+            "role": role,
+            "reason": reason,
+            "score": score,
+            "fallback_chain": fallback_chain or [],
+            "budget": budget or {},
+            "signals_summary": signals_summary or {},
+            "stage": stage,
+        },
+    )
 
 
 async def log_policy_checked(task_id: ID, capability: str, decision: str) -> None:
