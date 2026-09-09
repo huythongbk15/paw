@@ -600,6 +600,47 @@ RESEARCH_DEPTH_ACTIONS: MappingProxyType[DecisionLevel, str] = MappingProxyType(
     DecisionLevel.DEEP: "continue",
 })
 
+@dataclass(frozen=True)
+class RoleCeiling:
+    role: ModelRole
+    max_tokens: int
+    max_cost_usd: float
+
+    def __post_init__(self) -> None:
+        if self.max_tokens < 0:
+            raise ValueError("max_tokens must be non-negative")
+        if self.max_cost_usd < 0:
+            raise ValueError("max_cost_usd must be non-negative")
+
+ROLE_CEILINGS: MappingProxyType[ModelRole, RoleCeiling] = MappingProxyType({
+    ModelRole.FAST: RoleCeiling(role=ModelRole.FAST, max_tokens=2048, max_cost_usd=0.01),
+    ModelRole.REASONING: RoleCeiling(role=ModelRole.REASONING, max_tokens=8192, max_cost_usd=0.05),
+    ModelRole.CODING: RoleCeiling(role=ModelRole.CODING, max_tokens=8192, max_cost_usd=0.05),
+    ModelRole.TOOLS: RoleCeiling(role=ModelRole.TOOLS, max_tokens=8192, max_cost_usd=0.05),
+    ModelRole.VISION: RoleCeiling(role=ModelRole.VISION, max_tokens=32768, max_cost_usd=0.20),
+    ModelRole.EMBEDDING: RoleCeiling(role=ModelRole.EMBEDDING, max_tokens=2048, max_cost_usd=0.00),
+    ModelRole.FALLBACK: RoleCeiling(role=ModelRole.FALLBACK, max_tokens=2048, max_cost_usd=0.01),
+})
+
+_DEFAULT_CEILING = ROLE_CEILINGS[ModelRole.FALLBACK]
+
+def check_role_ceiling(
+    role: ModelRole,
+    requested_tokens: int,
+    estimated_cost_usd: float,
+) -> str | None:
+    """Return the overflow reason if the role ceiling is exceeded, else None.
+
+    Unknown roles fall back to FALLBACK ceilings (fail-closed).
+    """
+    ceiling = ROLE_CEILINGS.get(role, _DEFAULT_CEILING)
+    if requested_tokens > ceiling.max_tokens:
+        return "token_limit"
+    if estimated_cost_usd > ceiling.max_cost_usd:
+        return "cost_limit"
+    return None
+
+
 def research_depth_action(depth: DecisionLevel) -> str:
     """Return the explicit action for a research depth (fail-closed).
 
@@ -613,6 +654,7 @@ __all__ = [
     "CANONICAL_ROLE_CONTRACTS",
     "OOD_CONDITIONS",
     "RESEARCH_DEPTH_ACTIONS",
+    "ROLE_CEILINGS",
     "BudgetLevel",
     "ContextSufficiencyLevel",
     "DecisionLevel",
@@ -627,10 +669,12 @@ __all__ = [
     "ReconnaissanceResult",
     "ResearchBudget",
     "ResearchStopReason",
+    "RoleCeiling",
     "RoleContract",
     "TaskSignals",
     "UncertaintyDisposition",
     "check_research_budget",
+    "check_role_ceiling",
     "classify_decision_level",
     "classify_inference",
     "classify_research_depth",

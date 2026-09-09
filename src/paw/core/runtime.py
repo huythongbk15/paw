@@ -86,7 +86,7 @@ from .models import (
 )
 from .policy import RequestVerdict
 from .privacy import RemoteDisclosureRefusedError
-from .reasoning_contracts import check_research_budget
+from .reasoning_contracts import check_research_budget, check_role_ceiling
 from .runtime_persistence import RuntimePersistence
 from .task import TaskManager
 from .task_scheduler import TaskScheduleStatus
@@ -1804,6 +1804,23 @@ class PawRuntime:
         needs_model = Capability.MODEL_INFERENCE in proposed.capabilities
         if needs_model and self.model_router is not None:
             token_count = _token_count_from_context(proposed.context)
+            # E2-32: enforce per-role token/cost ceiling before inference.
+            estimated_cost = proposed.estimated_cost.total_cost() if proposed.estimated_cost else 0.0
+            ceiling_reason = check_role_ceiling(self.default_role, token_count, estimated_cost)
+            if ceiling_reason is not None:
+                await log_autonomy_gate_evaluated(
+                    task_id,
+                    proposed.operation_id,
+                    f"ROLE_{ceiling_reason.upper()}",
+                    ceiling_reason,
+                )
+                return ExecutionObservation(
+                    step_id=proposed.operation_id,
+                    action_id=proposed.operation_id,
+                    success=False,
+                    error=f"role_ceiling_exceeded:{ceiling_reason}",
+                    resources_used=ResourceUsage(),
+                )
             # E2-10: gather real reconnaissance from the project (symbols,
             # recent changes, test associations, knowledge sources) and pass
             # it to route() so the routing decision is re-evaluated after
