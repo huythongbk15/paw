@@ -584,6 +584,7 @@ class PawRuntime:
         execution_profile: Any | None = None,
         task_signals: Any | None = None,
         project_root: str | None = None,
+        readiness: str = "READY",
     ):
         self.autonomy = autonomy
         self.proposer = proposer or ActionProposer()
@@ -607,6 +608,7 @@ class PawRuntime:
         # E2-07: task reconnaissance signals (novelty/impact/privacy etc.)
         # carried into the model-routing decision and persisted in the ledger.
         self.task_signals = task_signals
+        self.readiness = readiness
         # E2-10: project root for reconnaissance evidence gathering.
         self._project_root = project_root
 
@@ -1783,6 +1785,22 @@ class PawRuntime:
         # This is the execution-side model routing (distinct from the proposer's
         # planning-side model call) and is logged for both brain and proposer
         # paths so the ledger always records which model executed a step.
+        # E2-36: block mutating proposals unless readiness is READY.
+        if proposed.is_mutating and self.readiness != "READY":
+            await log_autonomy_gate_evaluated(
+                task_id,
+                proposed.operation_id,
+                "READY_NOT_MET",
+                self.readiness,
+            )
+            return ExecutionObservation(
+                step_id=proposed.operation_id,
+                action_id=proposed.operation_id,
+                success=False,
+                error=f"readiness_not_ready:{self.readiness}",
+                resources_used=ResourceUsage(),
+            )
+
         # E2-30: enforce research budget before any local research operation.
         if self.task_signals is not None and getattr(self.task_signals, "research_budget", None) is not None:
             stop_reason = check_research_budget(self.task_signals.research_budget)

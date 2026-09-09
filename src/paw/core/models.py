@@ -513,6 +513,8 @@ class ProposedAction(BaseModel):
     idempotency_key: str | None = None
     # Estimated cost for autonomy budget pre-check
     estimated_cost: ResourceUsage = Field(default_factory=ResourceUsage)
+    # E2-36: mutating proposals require READY readiness artifact
+    is_mutating: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         return self.model_dump(mode="json")
