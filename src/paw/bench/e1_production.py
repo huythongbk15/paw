@@ -202,10 +202,15 @@ async def measure(
     # is not part of the source tree under review, so exclude it from the
     # dirty check. Everything else that appears in ``git status`` between
     # the before/after snapshots is treated as a dirty-tree signal.
-    _output_rel = output.relative_to(repo_root).as_posix() if output.is_absolute() else str(output)
+    _output_rel: str | None = None
+    if output is not None and output.is_absolute():
+        try:
+            _output_rel = output.relative_to(repo_root).as_posix()
+        except ValueError:
+            _output_rel = None  # output is outside repo; nothing to exclude
     _non_output = [
         line for line in tree_state_before.splitlines()
-        if not line.strip().endswith(_output_rel)
+        if _output_rel is None or not line.strip().endswith(_output_rel)
     ]
     dirty = bool(_non_output)
     corpus, cases, owned_inputs = _measurement_inputs(repo_root, roots, case_dir)
