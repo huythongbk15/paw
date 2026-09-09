@@ -53,6 +53,10 @@ class ExecutionProfile:
     privacy_preference: PrivacyPreference = PrivacyPreference.LOCAL_FIRST
     cost_priority: float = 0.5          # 0 = ignore cost, 1 = minimize cost
     latency_priority: float = 0.5       # 0 = ignore latency, 1 = minimize latency
+    # E2-15: per-role token and cost ceilings (hard-stop when exceeded).
+    # Empty dict = no ceiling (use profile default behavior).
+    role_token_ceil: dict[str, int] = field(default_factory=dict)
+    role_cost_ceil: dict[str, float] = field(default_factory=dict)  # USD estimate
 
     # --- Skill selection ---
     skill_categories: list[str] = field(default_factory=list)  # empty = all
@@ -93,6 +97,8 @@ class ExecutionProfile:
             "privacy_preference": self.privacy_preference.value,
             "cost_priority": self.cost_priority,
             "latency_priority": self.latency_priority,
+            "role_token_ceil": self.role_token_ceil,
+            "role_cost_ceil": self.role_cost_ceil,
             "skill_categories": self.skill_categories,
             "skill_risk_tolerance": self.skill_risk_tolerance.value,
             "skill_confidence_threshold": self.skill_confidence_threshold,
@@ -132,6 +138,8 @@ class ExecutionProfile:
             privacy_preference=privacy,
             cost_priority=data.get("cost_priority", 0.5),
             latency_priority=data.get("latency_priority", 0.5),
+            role_token_ceil=data.get("role_token_ceil", {}),
+            role_cost_ceil=data.get("role_cost_ceil", {}),
             skill_categories=data.get("skill_categories", []),
             skill_risk_tolerance=risk,
             skill_confidence_threshold=data.get("skill_confidence_threshold", 0.0),

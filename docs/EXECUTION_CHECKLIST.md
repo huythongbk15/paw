@@ -356,7 +356,7 @@ baseline. Estimated 34–45 days.
 
 ### Cost, fallback and verification
 
-- [ ] `E2-15` Define per-role token/cost ceilings and hard-stop behavior. `(0.5d, D1)`
+- [x] `E2-15` Define per-role token/cost ceilings and hard-stop behavior. `(0.5d, D1)` — added `role_token_ceil` and `role_cost_ceil` fields to ExecutionProfile; route() and route_with_explain() check the best model against the ceiling for the selected role and return a visible stop when exceeded (via getattr for defense against fake profiles); `_model_estimated_cost` helper added; 46 E2 tests pass; ruff clean.
 - [ ] `E2-16` Record observed usage once without double accounting. `(0.5d, D2)`
 - [ ] `E2-17` Define retryable provider failure separately from capability mismatch. `(0.5d, D1)`
 - [ ] `E2-18` Select verifier policy independently from executor capability selection. `(0.5d, D1)`

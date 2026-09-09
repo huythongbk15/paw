@@ -36,6 +36,20 @@ from .storage import db
 logger = get_logger(__name__)
 
 
+def _model_estimated_cost(manifest: ModelManifest) -> float:
+    """Estimate a model's per-call cost in USD from its cost metadata.
+
+    Returns 0.0 for local/free models. Uses a small lookup table of
+    known provider pricing tiers; unknown tiers default to 0.10.
+    """
+    cost = manifest.cost or {}
+    monetary = cost.get("monetary", "free")
+    if monetary in ("free", "local", ""):
+        return 0.0
+    tier_costs = {"free": 0.0, "low": 0.002, "medium": 0.01, "variable": 0.05}
+    return tier_costs.get(monetary, 0.0)
+
+
 def _observed_ood_conditions(
     signals: TaskSignals, privacy_required: bool,
 ) -> frozenset:
@@ -881,6 +895,41 @@ class ModelRouter:
                         role=role,
                     )
 
+        # E2-15: Per-role token/cost ceiling hard-stop.
+        # When the execution profile defines a ceiling for this role and the
+        # best model exceeds it, stop visibly rather than silently routing.
+        if execution_profile is not None:
+            _ceil_tokens = getattr(execution_profile, "role_token_ceil", None)
+            _ceil_cost = getattr(execution_profile, "role_cost_ceil", None)
+            _ceil_tokens = _ceil_tokens.get(role) if _ceil_tokens else None
+            _ceil_cost = _ceil_cost.get(role) if _ceil_cost else None
+            if _ceil_tokens is not None and scored[0][0].max_context_tokens > _ceil_tokens:
+                logger.warning("token_ceiling_exceeded", role=role,
+                               task_id=task_id, ceiling=_ceil_tokens,
+                               model=scored[0][0].name)
+                return ModelSelection(
+                    model_name="",
+                    reason=(
+                        f"E2-15: model '{scored[0][0].name}' exceeds "
+                        f"token ceiling {_ceil_tokens} for role '{role}'."
+                    ),
+                    role=role,
+                )
+            if _ceil_cost is not None:
+                _model_cost = _model_estimated_cost(scored[0][0])
+                if _model_cost > _ceil_cost:
+                    logger.warning("cost_ceiling_exceeded", role=role,
+                                   task_id=task_id, ceiling=_ceil_cost,
+                                   model=scored[0][0].name, cost=_model_cost)
+                    return ModelSelection(
+                        model_name="",
+                        reason=(
+                            f"E2-15: model '{scored[0][0].name}' exceeds "
+                            f"cost ceiling ${_ceil_cost:.4f} for role '{role}'."
+                        ),
+                        role=role,
+                    )
+
         # Store all scores for this task
         self._scores[task_id] = [s for _, s in scored]
 
@@ -915,6 +964,7 @@ class ModelRouter:
         prefer_cheap: bool = True,
         task_signals: TaskSignals | None = None,
         reconnaissance: ReconnaissanceResult | None = None,
+        execution_profile: ExecutionProfile | None = None,
     ) -> tuple[ModelSelection, list[ModelScore]]:
         """Route with full explainability (all scores returned)."""
         if self._provider_registry is not None:
@@ -1034,6 +1084,33 @@ class ModelRouter:
                     ),
                     role=role,
                 ), []
+
+        # E2-15: Per-role token/cost ceiling hard-stop (route_with_explain).
+        if execution_profile is not None:
+            _ceil_tokens = getattr(execution_profile, "role_token_ceil", None)
+            _ceil_cost = getattr(execution_profile, "role_cost_ceil", None)
+            _ceil_tokens = _ceil_tokens.get(role) if _ceil_tokens else None
+            _ceil_cost = _ceil_cost.get(role) if _ceil_cost else None
+            if _ceil_tokens is not None and scored[0][0].max_context_tokens > _ceil_tokens:
+                return ModelSelection(
+                    model_name="",
+                    reason=(
+                        f"E2-15: model '{scored[0][0].name}' exceeds "
+                        f"token ceiling {_ceil_tokens} for role '{role}'."
+                    ),
+                    role=role,
+                ), []
+            if _ceil_cost is not None:
+                _model_cost = _model_estimated_cost(scored[0][0])
+                if _model_cost > _ceil_cost:
+                    return ModelSelection(
+                        model_name="",
+                        reason=(
+                            f"E2-15: model '{scored[0][0].name}' exceeds "
+                            f"cost ceiling ${_ceil_cost:.4f} for role '{role}'."
+                        ),
+                        role=role,
+                    ), []
 
         if not scored:
             return ModelSelection(model_name="", reason="No models available", role=role), []
