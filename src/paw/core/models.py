@@ -382,12 +382,31 @@ class ModelSelection(BaseModel):
     reason: str = ""
     fallback_chain: list[str] = Field(default_factory=list)
     score: float = 0.0
-    # E2-17: structured failure classification for retry decisions.
-    # None = success (model selected).
-    # "retryable" = provider/model temporarily unavailable, retry later.
-    # "capability_mismatch" = no model supports the required role/caps.
-    # "budget_exceeded" = token/cost ceiling exceeded.
     failure_kind: str | None = None
+
+    def inspect(self) -> dict[str, Any]:
+        """Return a human-readable summary of the routing decision.
+
+        E2-23: Publishes the routing reason and escalation summary so that
+        operators and debuggers can see *why* a model was selected (or why
+        routing was refused).
+        """
+        return {
+            "model_name": self.model_name,
+            "role": self.role,
+            "score": self.score,
+            "reason": self.reason,
+            "escalation_summary": {
+                "escalated": "E2-11" in (self.reason or ""),
+                "role_escalated": bool(self.model_manifest) and
+                    self.role == "reasoning",
+                "failure_kind": self.failure_kind,
+            },
+            "failure_kind": self.failure_kind,
+            "fallback_chain": list(self.fallback_chain),
+            "manifest_provider": self.model_manifest.provider if self.model_manifest else None,
+            "manifest_max_tokens": self.model_manifest.max_context_tokens if self.model_manifest else None,
+        }
 
 
 class CapabilityManifest(BaseModel):

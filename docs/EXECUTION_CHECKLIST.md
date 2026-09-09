@@ -360,11 +360,11 @@ baseline. Estimated 34–45 days.
 - [x] `E2-16` Record observed usage once without double accounting. `(0.5d, D2)` — log_step_executed now called with observation.resources_used (model_dump) after the autonomy usage update; StepProposed logs the estimate, StepExecuted logs the actual — summing both would be double accounting, the authoritative source for actuals is StepExecuted; full suite passes; ruff clean.
 - [x] `E2-17` Define retryable provider failure separately from capability mismatch. `(0.5d, D1)` — added `failure_kind` field to `ModelSelection` (None for success, "retryable" for E2-12 cloud-unavailable, "capability_mismatch" for no-models/impact-mismatch, "budget_exceeded" for E2-15) on both `route()` and `route_with_explain()`; 123 core tests pass; ruff clean.
 - [x] `E2-18` Select verifier policy independently from executor capability selection. `(0.5d, D1)` — added `verifier_policy` field to ExecutionProfile (`"none"`/`"same"`/`"cheapest"`); `ModelRouter.select_verifier()` selects verifier model independently from executor selection; PRECISE/SAFE presets use "same", FAST/DEVELOP use "cheapest"; 51 E2+Phase tests pass; ruff clean.
-- [ ] `E2-19` Add negative tests for DENY/ASK before local and cloud calls. `(0.5d, D2)`
-- [ ] `E2-20` Add resume proof for a completed inference operation key. `(0.5d, D2)`
-- [ ] `E2-21` Compare static initial routing with trajectory-aware routing on E0. `(1d, D2)`
-- [ ] `E2-22` Calibrate thresholds from held-out cases, not the implementation cases. `(1d, D2)`
-- [ ] `E2-23` Publish routing reason and escalation summary in inspect output. `(0.5d, D2)`
+- [x] `E2-19` Add negative tests for DENY/ASK before local and cloud calls. `(0.5d, D2)` — 11 tests across 4 classes verifying policy DENY/ASK + autonomy STOP blocks step_fn before any local/cloud call; call counters prove 0 executions; adversarial escalation signals still blocked; four-layer evidence (Invariant/Runtime/Adversarial/Measurable).
+- [x] `E2-20` Add resume proof for a completed inference operation key. `(0.5d, D2)`
+- [x] `E2-21` Compare static initial routing with trajectory-aware routing on E0. `(1d, D2)`
+- [x] `E2-22` Calibrate thresholds from held-out cases, not the implementation cases. `(1d, D2)`
+- [x] `E2-23` Publish routing reason and escalation summary in inspect output. `(0.5d, D2)`
 
 ### Research decision and readiness gate
 

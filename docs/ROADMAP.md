@@ -1,29 +1,16 @@
 # PAW Core Stabilization roadmap
 
-Latest review — 2026-09-08, `74b563e` + working tree: **PARTIAL**.
-This supersedes the earlier measurement snapshot below. Fixture provenance
-was refreshed in `7d0cc7e`; its clean source measurement passed. The latest
-source run measures 71 files / 836,732 bytes, recall 1.0 and median reduction
-0.981366, with fresh fixtures but a dirty tree. The local-manifest inference
-bug and stale status assertion are repaired; 41 affected tests, full Ruff and
-installed-wheel chat pass. E1 still requires a new clean D3 qualification.
-E2-02..05 source contracts remain provisional regardless of checked boxes;
-they acquire no runtime authority before the E1 gate passes.
-
-Earlier review — 2026-09-08: **PARTIAL**. E1 was incorrectly promoted from a
-clean report at `c28d679` whose own `corpus_roots` value is
-`benchmarks/e1/fixtures_paw` (12 files, 6,128 bytes), not `src/paw`. That run
-does verify its synthetic-fixture metric, but it cannot close the representative
-project or overall E1 gate. A current dirty-tree run over `src/paw` (70 files,
-835,061 bytes) observes minimum cold/warm recall 1.00 and median warm context
-reduction 0.981, while correctly returning `PARTIAL`/`OBSERVED` because the tree
-is dirty and reviewed-fixture provenance is stale. E2 is blocked until this is
-frozen and the remaining E1 quality/privacy D3 evidence passes.
-
-| Current qualification | Result |
-|---|---|
-| E1 | `PARTIAL`; real-source metric PASS is `OBSERVED` |
-| E2-E3 and BETA | `BLOCKED`; isolated E2 contract drafts have no runtime authority |
+Review — 2026-09-09, source HEAD `fd8a8c8` with an existing uncommitted
+router change: **E1 PARTIAL; E2–E3/BETA BLOCKED at the acceptance gate**.
+The tracked report `benchmarks/e1/real_measurement_local.json` records
+a clean **measurement-only** PASS/VERIFIED at `649ded9`: 71 source files,
+839,006 bytes, recall 1.0, estimated warm-context reduction 0.9847.
+Its scope explicitly excludes overall E1 qualification. It is historical
+measurement evidence, not a current-revision D3, engineering-quality or
+provider-token claim. E2-06..11 code is already present, including runtime
+routing/reconnaissance wiring; this is OBSERVED implementation ahead of
+accepted prerequisites, not permission to expand. Preserve it for review.
+See the 2026-09-09 decision in `IMPLEMENTATION_MAP.md`.
 
 This is the only active work sequence. Historical numbered phases describe how
 the repository grew; they do not determine what should be built next.
@@ -46,8 +33,8 @@ is provisional input and does not activate E2.
 |---|---|---|
 | Core Stabilization | `VERIFIED` on `f3ad4ef` | All S0–S6 acceptance items passed the clean-revision D3 gate; the `f3ad4ef` freeze commit is the canonical evidence. |
 | E0 (Engineering benchmark and feature subtraction) | `VERIFIED` for the deterministic offline fixture-validation baseline on `f3ad4ef` | The contract, the 13-case set (8 minimum E0-08..15 + 5 research-decision E0-28..35), the deterministic evidence runner (`shell=False` for `command_exit`), and the integration-pack record are in place. The 13/13 SUCCESS line in `docs/benchmarks/e0/integration_pack_run.md` is **fixture-validation** evidence, not an agent-quality gate; the runtime-driven agent-quality tier is post-gate work (E0-40). The cloud baseline remains deferred per the project charter. |
-| E1 | `PARTIAL` | The clean `c28d679` report verifies only the 12-file synthetic-fixture metric (recall 1.0, median reduction 0.871). The current 70-file `src/paw` metric observation passes (recall 1.0, reduction 0.981) but is dirty and has stale fixture provenance. Overall privacy/quality/release evidence is not frozen. |
-| E2–E3 and BETA | `BLOCKED` | E2-01 is provisional audit input. E2-02..05 have isolated, tested value-contract drafts in `core/reasoning_contracts.py` (`RoleContract`, `TaskSignals`, `OODCondition`/`EligibilityRule`), but no router, runtime, persistence or readiness wiring is authorized before E1 `VERIFIED`. |
+| E1 | `PARTIAL` | `649ded9` verifies historical representative-source metrics only. Same-revision privacy/quality/D3 and cloud-baseline acceptance remain to be evidenced or explicitly resolved. |
+| E2–E3 and BETA | `BLOCKED` | E2-06..11 source includes runtime wiring ahead of accepted prerequisites. Preserve and audit it; source presence is not gate authorization. |
 | E4 controlled adaptation | `BLOCKED`, optional | Requires E0–E3 and a verified dataset; it is not required for BETA. |
 
 The engineering-intelligence direction dated 2026-09-01 is recorded in the
@@ -60,6 +47,50 @@ Complete tracks in order. Work may move within a track, but a later track does
 not start while an earlier safety or durability acceptance item fails. A user
 may explicitly reprioritize work; record the resulting risk and update this
 roadmap rather than silently branching into another plan.
+
+
+## Execution dependencies — existing IDs, not new phases
+
+Numeric checklist order is not dependency order. This table refines the
+existing E2 internal readiness prerequisite; it does not authorize E2 entry.
+
+| Order | Existing items | Acceptance before proceeding |
+|---|---|---|
+| 1. Qualify E1 | E1-23..27, E1-33..36 as applicable | Reviewed measurement, privacy/quality evidence and D3 on the named clean candidate; no metric-only promotion. |
+| 2. Establish E2 owners and durable contracts | E2-01..05, E2-25..28, E2-45..47 | One Task/Plan identity, decision owner, immutable lifecycle, centralized migration and close/reopen proof. |
+| 3. Bound research and readiness | E2-08, E2-29..44 | Deterministic reconnaissance first; alternatives, contrary evidence, budget and revision-bound READY; negative matrix blocks mutation. |
+| 4. Integrate selective inference | E2-06..07, E2-09..20, E2-48..50 | Runtime threshold detection, cached router selection, exact proposal, Policy once, Autonomy/budget, actual-payload privacy, invocation and durable observation. |
+| 5. Evaluate the complete engineering case | E2-18, E2-21..24, E2-43..44, E2-50 | Reviewed research → decision → plan → approved change → declared verification → inspect/restart chain, plus rejection paths and held-out routing comparison; then D3. |
+
+Contracts needed by several rows may be designed together, but runtime behavior
+must not be enabled before its prerequisites. Existing E2-06..11 commits need
+a conformance audit, not reimplementation or automatic rollback. Deterministic
+reconnaissance does not become model inference merely because its evidence is
+weak; any resulting inference is a separate gated proposal. E2-29 owns research
+depth classification, E2-31 local-before-external research; neither means
+"embedding-aware routing".
+
+Keep Runtime as orchestrator: Knowledge supplies source evidence, ContextCompiler
+owns context/manifests, ModelRouter selects admitted models, Policy decides
+permission, Autonomy consumes the verdict and budget, existing persistence
+owners commit records. Do not add a second planner/router/research store.
+
+### E1 acceptance evidence matrix
+
+| Claim | Required evidence | Current limitation / owning work |
+|---|---|---|
+| Required-evidence recall ≥95% | Reviewed versioned cases, hashes, configuration, per-case results on representative source | `649ded9` supplies historical six-case measurement; rebind/review changed inputs for E1-23/27. |
+| Warm token reduction ≥30% | Same-scope baseline and measurement; distinguish estimator from provider usage | Current report estimates selected context vs all indexed chunks plus skill bodies. It does not measure actual cloud input tokens (E1-24/27). |
+| No quality/safety regression | Named paired task outcomes and privacy negative controls, including actual submitted payload, local/remote calls and failed/resumed operations | Link the quality/privacy checks and outcomes at the qualification revision; a green metric or full test count alone is insufficient (E1-25/27/36). |
+| Freshness and release | Reviewed fixture/source identity, unchanged run inputs, clean candidate, full test/lint/build and isolated-wheel smoke results | Historical report freshness does not certify current HEAD; E1-27 records the complete command pack. |
+
+The Roadmap's cloud-token target and the charter's deferred cloud baseline
+cannot be reconciled by relabelling token estimates. Before closing E1-27,
+record either approved paired cloud evidence using existing adapters, or an
+explicit reviewed Charter/Roadmap decision narrowing the *offline* qualification
+and assigning the cloud claim to E2-21/24. Until that decision/evidence exists,
+retain E1 PARTIAL. This document does not weaken the numeric target, authorize
+provider spending or add an integration.
 
 Atomic work is tracked in `EXECUTION_CHECKLIST.md`. Each item uses the smallest
 risk-based verification level that can falsify its invariant. Full-suite and
@@ -270,7 +301,7 @@ Expansion work may be proposed only when:
 After the exit gate, evaluate one adapter or feature at a time against the
 product change test. Do not revive automatic phase advancement.
 
-## Approved post-gate sequence — not yet active
+## Approved post-core sequence — per-track gates apply
 
 This sequence narrows PAW to engineering problem solving. It may start only
 after the Core Stabilization exit gate passes on one clean revision. The tracks
@@ -543,15 +574,12 @@ appear complete.
 
 ## Next three safe tasks
 
-1. Review and freeze the current E1/E2 contract-repair tree without unrelated
-   changes. Rebind every `benchmarks/e1/cases/paw_*.yaml` fixture to a real
-   reviewed commit containing the exact measured bytes; never substitute the
-   small `fixtures_paw` corpus for `src/paw`.
-2. On that clean revision, run the canonical default PAW-source measurement,
-   the named E1 privacy/quality proofs and the scheduled D3
-   test/lint/build/isolated-install gate. Preserve the report's corpus, revision,
-   dirty flag and fixture-review rows as evidence.
-3. Record E1 `VERIFIED` only if every acceptance conditions passes on that one
-   revision. Then re-approve E2-02..05 as active contracts and continue with
-   E2-06 (extend the existing router decision); otherwise keep E2 blocked and
-   repair the named E1 failure.
+1. Reconcile E1-27 with the evidence matrix above: retain the clean measurement
+   report, identify the missing quality/privacy/D3 records and explicitly resolve
+   the cloud-baseline qualification boundary. Do not reuse old counts as evidence.
+2. Review the existing E2-06..11 wiring against E2-25..28/45..47 and E2-49;
+   list gaps in the Implementation Map, preserving the user's router changes.
+   Do not continue feature integration by numeric checklist order.
+3. After the agreed repairs, freeze a reviewed candidate and run the relevant
+   E1 measurement/quality/privacy and scheduled D3 once. Promote E1 only when
+   every declared condition passes; then follow the E2 dependency table.

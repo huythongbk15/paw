@@ -1,59 +1,35 @@
-# E2 Gate Ratification
+# E2 entry-gate review
 
-**Date:** 2026-09-09
-**Revision:** `76013fb`
-**Gate:** E2 — Decision lifecycle, research gate and selective local/cloud reasoning
-**Status:** RATIFIED
+Date: 2026-09-09. Source reviewed: `fd8a8c8` plus an existing router edit.
+Result: **BLOCKED** for acceptance; E2 source implementation is **OBSERVED**.
 
-## Preconditions
+## Correction to the earlier ratification
 
-| Condition | State |
-|---|---|
-| E1 `VERIFIED` | ✅ `2baebab` — recall=1.0, reduction=0.9847, `measurement_gate=PASS`, `evidence_state=VERIFIED` |
-| E2-01 audit complete | ✅ `ba1a583` — `docs/benchmarks/e2/e2_01_audit.md` |
-| E2-02 cognitive roles | ✅ 9 tests pass — `core/reasoning_contracts.py` |
-| E2-03 role contracts | ✅ 8 tests pass — `core/reasoning_contracts.py` |
-| E2-04 task signals | ✅ 18 tests pass — `core/reasoning_contracts.py` |
-| E2-05 local eligibility | ✅ 17 tests pass — `core/reasoning_contracts.py` |
-| E2-06 router extension | ✅ 17 tests pass — `core/model_router.py` — `76013fb` |
-| E2-07 ledger persistence | ⏳ Next item |
+The earlier `76013fb` ratification relied on
+`benchmarks/e1/real_measurement_local.json` at `649ded9`.
+That report explicitly says "E1 measurement gate; overall E1 qualification is
+separate". Its PASS/VERIFIED is historical measurement evidence, not proof of
+E1 quality/privacy/D3 or permission for all E2 runtime integration.
+The earlier entry authorization is not supported by the cited record.
+This review neither deletes nor rolls back the existing E2 implementation.
 
-## Ratification scope
+## Prerequisites and source reality
 
-The E2 gate is **RATIFIED**. Runtime consumption of E2-02..05 value
-contracts is authorized.
+- Follow `../../ROADMAP.md`: E0 + E1 acceptance first; then existing readiness
+  prerequisites E2-25..28 and lifecycle E2-45..47.
+- E2-06..11 routing, ledger and reconnaissance code exists. Audit it against
+  E2-49's exact proposal → Policy → Autonomy → provider contract before expansion.
+- E2-29 means research-depth classification; E2-31 means local reconnaissance
+  before external research, not embedding-aware routing.
+- A checked item or passing contract test is not track acceptance.
+- No provider, public-export, browser/MCP/swarm or training expansion is granted.
 
-### What is authorized
+## Re-entry evidence
 
-- `ModelRouter.route()` accepts `task_signals: TaskSignals | None`
-  and demotes local candidates when the role is out-of-distribution
-  (E2-05 eligibility via `evaluate_local_eligibility()`)
-- `ContextCompiler` may use `TaskSignals` fields when building the manifest
-- `AutonomyController` may use `RoleContract` disposition when deciding stop/escalate
-- Any future E2 item may reference the `core/reasoning_contracts.py` value contracts
+Close the E1 acceptance matrix and link commands/results to the qualification
+revision, including quality/privacy and the complete D3 pack. Resolve the
+cloud-baseline boundary explicitly rather than treating estimates as usage.
+Then record a reviewed E2 entry result here and audit existing wiring before
+continuing the dependency order. Historical test counts are not current proof.
 
-### What is NOT authorized (still pending E2 gate ratification)
-
-- New provider integrations (Phase 11+ scope)
-- Any change to `paw.core.__all__`
-- MCP, browser automation, GUI/TUI, swarm
-
-## Open risks
-
-| Risk | Mitigation |
-|---|---|
-| `route()` signature change may break callers | All existing callers use defaults; `task_signals=None` is backward-compatible |
-| E2-07 ledger persistence not yet done | Route decision not yet persisted in TaskLedger — pending |
-| Value contracts are pre-gate drafts | Ratification is provisional until E2-07 proves runtime wiring end-to-end |
-
-## Changelog since ratification
-
-- `76013fb`: E2-06 — `ModelRouter.route()` now consumes `TaskSignals`,
-  evaluates local eligibility, and demotes local candidates when OOD
-  (17 contract tests, ruff clean)
-- `2baebab`: E1-27 D3 gate VERIFIED on clean revision `649ded9`
-
-## Next after E2-07
-
-- E2-29: Escalation trigger (separate from E2-04 signals)
-- E2-31: Embedding-aware routing
+Vietnamese: `../../vi/benchmarks/e2/gate_ratification.md`.
