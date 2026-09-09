@@ -1,19 +1,16 @@
 # Tài liệu hệ thống PAW — tiếng Việt
 
-Kiểm chứng mới nhất (2026-09-08, `74b563e` + working tree): **PARTIAL**;
-thay thế snapshot cũ bên dưới. Phép đo 71 file / 836.732 byte đạt recall 1,0,
-median reduction 0,981366; fixture fresh, input/tree ổn định, nhưng cây dirty.
-Đã sửa local inference khi có manifest: 41 test liên quan, full Ruff và CLI từ
-wheel cài riêng đều pass. Chưa có D3 hoàn chỉnh trên revision này; E2 vẫn chờ
-gate E1. Xem record mới nhất trong `IMPLEMENTATION_MAP.md`.
-
-Audit hiện tại (2026-09-08, `2c4a81f` cộng working tree): **PARTIAL**. Báo cáo
-sạch trước đây dùng để nâng E1 lên `VERIFIED` thực tế đo corpus nhỏ
-`benchmarks/e1/fixtures_paw`, không phải `src/paw` như Roadmap đã ghi. Lượt đo
-70 file source PAW hiện tại đạt recall 1,00 và median giảm context 0,981, nhưng
-vẫn là `PARTIAL`/`OBSERVED` vì cây dirty và provenance fixture đã stale. E2 vẫn
-bị chặn; các contract role/task-signal E2 độc lập mới chỉ là sửa contract trước
-gate, chưa có quyền runtime. Xem quyết định trong `IMPLEMENTATION_MAP.md`.
+Rà soát ngày 2026-09-09, HEAD source `fd8a8c8` và thay đổi router chưa
+commit có sẵn: **E1 PARTIAL; gate nghiệm thu E2–E3/BETA BLOCKED**.
+Báo cáo tracked `benchmarks/e1/real_measurement_local.json` ghi
+**chỉ phép đo** PASS/VERIFIED trên revision sạch `649ded9`: 71 file source,
+839.006 byte, recall 1,0, giảm context warm ước tính 0,9847.
+Báo cáo tự loại trừ qualification toàn E1. Đây là bằng chứng đo lịch sử,
+không phải D3 revision hiện tại, chất lượng engineering hay token provider.
+Source E2-06..11 đã tồn tại, gồm wiring routing/reconnaissance trong runtime:
+ghi nhận OBSERVED, chưa đồng nghĩa đã đạt điều kiện nghiệm thu.
+Giữ code để rà soát, không tự mở rộng. Xem quyết định 2026-09-09 trong
+`IMPLEMENTATION_MAP.md`.
 
 Đây là bộ tài liệu tiếng Việt tương ứng với bộ tài liệu hệ thống PAW hiện tại.
 Mỗi tài liệu trong thư mục này bám theo tài liệu tiếng Anh cùng tên ở thư mục
@@ -24,16 +21,10 @@ Hướng sau ổn định hóa đã ghi nhận chuyên PAW vào code, hệ thố
 phần mềm: control/context/memory ở local hỗ trợ suy luận cloud được gate có chọn
 lọc, và nghiên cứu có nguồn, có giới hạn phải tạo readiness decision trước kế
 hoạch triển khai. Đây là đích đã ghi trong tài liệu, chưa phải trạng thái đã
-triển khai; Core Stabilization vẫn là track duy nhất đang hoạt động.
+triển khai; E1 qualification là track nghiệm thu đang hoạt động.
 
-Kết quả hiện tại: Core Stabilization và baseline E0 đã `VERIFIED`; E1 là
-`PARTIAL`; E2/E3/BETA và E4 tùy chọn vẫn `BLOCKED` theo thứ tự gate. Sáu case
-PAW-source hiện có metric recall cold/warm 1,00 và median giảm context warm
-0,981 ở trạng thái `OBSERVED`. Freshness kiểm Git blob của fixture, hash input,
-revision và tree state; kết quả dirty không được tự chứng nhận `PASS`.
-
-Baseline audit gồm freeze `f3ad4ef`, HEAD `2c4a81f` và working tree kiểm tra
-ngày 2026-09-08. Setup tái lập dùng lock riêng của PAW:
+Kết quả và số đo hiện tại nằm trong phần rà soát đầu tài liệu; không suy ra
+trạng thái gate từ checkbox hay lịch sử test. Setup dùng lock riêng của PAW:
 
 ```bash
 uv lock --check

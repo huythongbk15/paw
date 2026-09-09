@@ -1,22 +1,16 @@
 # PAW system documents
 
-Latest verification (2026-09-08, `74b563e` + working tree): **PARTIAL**.
-This supersedes the earlier numeric/status snapshot below. The current
-71-file source run has recall 1.0, median reduction 0.981366, fresh fixtures
-and unchanged inputs/tree; measurement remains PARTIAL because the tree is
-dirty. Local inference with a manifest is repaired: 41 affected tests pass,
-full Ruff passes, and a source-matched installed wheel passes local CLI chat.
-Full D3 has not passed on this revision; E2 activation remains blocked.
-See the latest verification record in `IMPLEMENTATION_MAP.md`.
-
-Earlier audit (2026-09-08, `2c4a81f` plus the working tree): **PARTIAL**.
-The real `src/paw` E1 observation meets its numeric targets, but E1 is not
-`VERIFIED`: the clean report previously used for that claim measured the small
-`benchmarks/e1/fixtures_paw` corpus, while the current real-source run is dirty
-and has stale reviewed-fixture provenance. E2 remains blocked. The isolated
-E2 role/task-signal value contracts are pre-gate repair work, not active router
-or readiness implementation. See the current decision and evidence record in
-`IMPLEMENTATION_MAP.md`.
+Review — 2026-09-09, source HEAD `fd8a8c8` with an existing uncommitted
+router change: **E1 PARTIAL; E2–E3/BETA BLOCKED at the acceptance gate**.
+The tracked report `benchmarks/e1/real_measurement_local.json` records
+a clean **measurement-only** PASS/VERIFIED at `649ded9`: 71 source files,
+839,006 bytes, recall 1.0, estimated warm-context reduction 0.9847.
+Its scope explicitly excludes overall E1 qualification. It is historical
+measurement evidence, not a current-revision D3, engineering-quality or
+provider-token claim. E2-06..11 code is already present, including runtime
+routing/reconnaissance wiring; this is OBSERVED implementation ahead of
+accepted prerequisites, not permission to expand. Preserve it for review.
+See the 2026-09-09 decision in `IMPLEMENTATION_MAP.md`.
 
 This directory is the canonical documentation set for PAW. It exists to keep
 the product boundary, architecture, implementation reality and work sequence
@@ -36,13 +30,12 @@ Current gate result:
 |---|---|---|
 | Core Stabilization | **`VERIFIED`** on `f3ad4ef` | S0–S6 acceptance passed the clean-revision D3 gate; the freeze commit is the canonical evidence. |
 | E0 (fixture-validation baseline) | **`VERIFIED`** for deterministic offline | The contract, 13 cases (8 minimum + 5 research-decision), the deterministic evidence runner, and the integration-pack record are in place. The 13/13 SUCCESS line is **fixture-validation**, not an agent-quality gate; the runtime-driven agent-quality tier is post-gate work (E0-40). |
-| E1 (Local project intelligence) | `PARTIAL`; real-source metric `PASS` is `OBSERVED` | The current 70-file `src/paw` run has cold/warm recall 1.00 and median warm context reduction 0.981. The clean 12-file synthetic-fixture report at `c28d679` is not representative-project evidence. A reviewed real-source freeze plus the remaining quality/privacy D3 gate is required. |
-| E2, E3, BETA | `BLOCKED` | E2 requires E0 + E1 `VERIFIED`. The E2-01 audit and isolated E2-02..05 value contracts (`RoleContract`, `TaskSignals`, `OODCondition`/`EligibilityRule`) are provisional and have no runtime authority. |
+| E1 (Local project intelligence) | `PARTIAL` | Historical source measurement at `649ded9` passes its own scope. Remaining quality/privacy/release acceptance must be linked on the qualification revision. |
+| E2, E3, BETA | `BLOCKED` | E2 source wiring exists ahead of accepted prerequisites; no overall E1 gate evidence is established by the measurement report. |
 | E4 (controlled adaptation) | `BLOCKED`, optional | Requires E0–E3 and a verified dataset; not required for BETA. |
 
-Audit baseline: Core Stabilization freeze `f3ad4ef`, current HEAD `2c4a81f`, and
-the working tree inspected on 2026-09-08. Historical counts are not current
-gate evidence.
+Audit baseline: historical Core freeze `f3ad4ef`; source review `fd8a8c8`
+on 2026-09-09. Historical counts are not current gate evidence.
 
 Vietnamese readers: see the synchronized [bộ tài liệu tiếng Việt](vi/README.md).
 The English files remain the canonical contract text; the source code and tests

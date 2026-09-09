@@ -63,8 +63,26 @@ def _make_runtime(task_signals=None, execution_profile=None):
     from paw.core.autonomy import AutonomyController, AutonomyBudget
     from paw.core.runtime import PawRuntime
     from paw.core.model_executor import ModelExecutor
-    from paw.core.model_router import ModelRouter
+    from paw.core.model_router import ModelRouter, ModelRegistry
+    from paw.core.models import ModelManifest, ModelCapability
     router = ModelRouter(providers=[_MockProvider()])
+    # Register a non-local mock model that supports both fast and reasoning
+    # roles, so E2-11 escalation (fast→reasoning) finds a real model rather
+    # than stopping via E2-12.
+    router.registry.register(ModelManifest(
+        name="mock-fast-reasoning",
+        provider="mockp",
+        roles=["fast", "reasoning"],
+        model_capabilities={
+            ModelCapability.REASONING: 5.0,
+            ModelCapability.CODING: 4.0,
+        },
+        cost={"compute": "low"},
+        features={"streaming": True},
+        max_context_tokens=4096,
+        latency_tier="low",
+        enabled=True,
+    ))
     exec_ = ModelExecutor(provider_registry=router._provider_registry)
     autonomy = AutonomyController(
         budget=AutonomyBudget(max_iterations=3, max_decisions=10),

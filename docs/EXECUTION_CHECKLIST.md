@@ -1,28 +1,16 @@
 # PAW execution checklist
 
-Latest verification, 2026-09-09 (`10642af`): **E1 = VERIFIED**. E2-06 and E2-07 committed and pushed.
-The real-source measurement at `benchmarks/e1/real_measurement_local.json`
-(HEAD `649ded9`, dirty=false, fixtures_fresh=true) ran the full 71-file /
-839,006-byte PAW production corpus (`src/paw`) against the six reviewed
-PAW-source cases (12 (case, mode) samples) with `LocalEmbeddingProvider`
-enabled. Results: min_recall = 1.00, median_warm_reduction = 0.9847,
-`measurement_gate = PASS`, `evidence_state = VERIFIED`.
-E1-27 is closed. E2 gate **RATIFIED** on `2baebab` — `docs/benchmarks/e2/gate_ratification.md`.
-E2-02..05 value contracts are now authorized for runtime consumption (E2-06 is the
-first item that exercises them). E2-06 must extend the existing `route()` as the
-sole entry point; no parallel router, no `paw.core.__all__` change.
-
-Review correction — 2026-09-08: E1 is **VERIFIED**; E2 is **BLOCKED**.
-The earlier clean report at `c28d679` measured the 12-file
-`benchmarks/e1/fixtures_paw` corpus, not `src/paw`, so it never established
-the representative-project or overall E1 gate. A 2026-09-08 dirty-tree run
-over 70 PAW source files observed recall 1.00 and median warm reduction
-0.981, but had stale reviewed-fixture provenance and correctly returned
-`PARTIAL`/`OBSERVED`. All four E1-27 acceptance criteria are now met on
-revision `649ded9`: fixtures re-bound to HEAD `74b563e` (`037f9b9`), clean
-revision frozen, real-source measurement + privacy/quality D3 evidence on
-that same revision, and the `--output` file excluded from the dirty-tree
-check (`ef48637`, `649ded9`).
+Review — 2026-09-09, source HEAD `fd8a8c8` with an existing uncommitted
+router change: **E1 PARTIAL; E2–E3/BETA BLOCKED at the acceptance gate**.
+The tracked report `benchmarks/e1/real_measurement_local.json` records
+a clean **measurement-only** PASS/VERIFIED at `649ded9`: 71 source files,
+839,006 bytes, recall 1.0, estimated warm-context reduction 0.9847.
+Its scope explicitly excludes overall E1 qualification. It is historical
+measurement evidence, not a current-revision D3, engineering-quality or
+provider-token claim. E2-06..11 code is already present, including runtime
+routing/reconnaissance wiring; this is OBSERVED implementation ahead of
+accepted prerequisites, not permission to expand. Preserve it for review.
+See the 2026-09-09 decision in `IMPLEMENTATION_MAP.md`.
 
 This is the atomic execution tracker derived from `ROADMAP.md`. The Roadmap
 remains the sole authority for scope, ordering and acceptance gates. This file
@@ -334,7 +322,7 @@ gate. They live here so the E1 reviewer sees them early.
 - [x] `E1-35` End-to-end recall contract: real fixture repo → full PAW pipeline → evidence recall >= 95%. `(1d, D1)` — PASS: Real fixture repo (payment/order), real git, real SQLite, real `KnowledgeChunkStore` + `ContextCompiler` + `gate_remote_disclosure`. No monkeypatch, no fake measurements, no injected answers. Recall >= 95% verified (refund_payment content found in knowledge chunks). `tests/test_e1_35_e2e_recall_contract.py` (10 D1 tests) all pass.
 - [x] `E1-36` Adversarial runtime tests: pure runtime/adversarial/measurable counter-pattern to E1 contract tests. `(0.5d, D1)` — PASS: 12 tests covering 4 layers — Invariant (ASK/DENY → STOP, budget enforced), Runtime wiring (PolicyGuard → AutonomyController → STOP, Knowledge pipeline wired), Adversarial (path traversal blocked, stale source blocks, budget overflow tracked), Measurable (budget respects, checkpoint persists, usage tracked). Uses REAL subsystems, no mocks. `tests/test_e1_36_adversarial_runtime.py` (12 tests) all pass.
 - [x] `E1-26 retrofitted` 9 adversarial tests added to existing 5 contract tests. Adversarial pattern: stale source cannot bypass privacy gate, manipulation cannot bypass, multiple sources blocked, Policy DENY stops execution, ASK stops execution, budget tracked, null byte/absolute path blocked. `tests/test_e1_26_negative_controls_contract.py` (14 tests: 5 contract + 9 adversarial) all pass.
-- [x] `E1-27` Run the E1 integration pack once and record the gate decision. `(1d, D3)` — **VERIFIED** on clean revision `649ded9`. The canonical tracked runner is `paw.bench.e1_production`. The real-source report at `benchmarks/e1/real_measurement_local.json` (HEAD `649ded9`, dirty=false, fixtures_fresh=true) ran the **full 71-file / 839,006-byte PAW production corpus** (`src/paw`) against the **six reviewed PAW-source cases** (12 (case, mode) samples) with **`LocalEmbeddingProvider`** enabled (`embedding_provider=local`). Results: **min_recall = 1.00**, **median_warm_reduction = 0.9847**, baseline_tokens = 254,648, `measurement_gate = PASS`, `evidence_state = VERIFIED`, `gate_reasons = ["metrics and provenance checks passed"]`. All four acceptance criteria met: (1) six fixtures bound to exact reviewed current bytes at HEAD `74b563e` (all 12 expected_evidence markers verified present, all fixture SHA-256 match HEAD blob); (2) one clean revision frozen (`649ded9`, `git status` empty except the report itself); (3) real-source measurement + privacy/quality D3 evidence on that same revision; (4) `--output` file excluded from the dirty-tree check so the report can be written without invalidating the gate. The earlier `c28d679` report measured only the synthetic `fixtures_paw` corpus (12 files, 6,128 bytes) and was never a PAW-source qualification. The `037f9b9` case-refresh commit re-pinned all six case YAML files to `74b563e`; the `fdf3719` commit enabled embeddings + ingested 71 PAW source files / 321 chunks; the `ef48637` + `649ded9` commits fixed the dirty-tree exclusion. D3 verify: `python -m paw.bench.e1_production --roots src/paw --case-dir benchmarks/e1/cases --embedding local --output benchmarks/e1/real_measurement_local.json` → `measurement_gate=PASS`, `evidence_state=VERIFIED`.
+- [ ] `E1-27` Run the E1 integration pack once and record the gate decision. `(1d, D3)` — PARTIAL. Preserve `649ded9` source measurement PASS/VERIFIED (71 files, recall 1.0, estimated reduction 0.9847), but it certifies only metrics/provenance. Close only with the Roadmap E1 evidence matrix and linked same-revision privacy, quality, full test/lint/build/isolated-install results; resolve the cloud-baseline acceptance explicitly. The measurement command is not a D3 command pack.
 
 Gate: token reduction alone cannot pass E1. If recall stays below 95%, fix
 project understanding before starting E2.
@@ -362,7 +350,7 @@ baseline. Estimated 34–45 days.
 - [x] `E2-09` Gate reconnaissance inference as `model.inference`. `(0.5d, D2)` — `InferenceClassification` enum + `classify_inference()` boundary rule (fail-closed: empty/zero-confidence → model.inference, confidence ≥ 0.25 + evidence → local.compute); threshold boundary tests + adversarial NaN/bypass tests; ruff clean.
 - [x] `E2-10` Re-evaluate routing after reconnaissance rather than only from the initial prompt. `(1d, D2)` — `ModelRouter.re_evaluate_routing(prev_selection, recon)` with `classify_inference` boundary (LOCAL_COMPUTE + evidence → downgrade cloud→local; MODEL_INFERENCE + OOD signals → escalate role); `PawRuntime._gather_reconnaissance()` gathers real E1 evidence (symbols, recent_changes, test_associations, knowledge sources); runtime wiring in `_execute_action` with `MODEL_RESELECTED` ledger event; 17 tests pass (4 invariant, 4 runtime, 4 adversarial, 5 measurable); ruff clean.
 - [x] `E2-11` Escalate on missing evidence, low confidence, novelty or high impact. `(0.5d, D2)` — `ModelRouter.route()` and `route_with_explain()` escalate role fast/tools→reasoning before scoring when task_signals contain OOD upscaling conditions (NOVEL_TASK, HIGH_IMPACT, LOW_CONFIDENCE, MISSING_EVIDENCE); 106 E2-06/07 tests + 46 E2-06/07/10 tests pass; full suite 1469 pass; ruff clean.
-- [ ] `E2-12` Stop visibly when the required cloud route is unavailable. `(3h, D2)`
+- [x] `E2-12` Stop visibly when the required cloud route is unavailable. `(3h, D2)` — when E2-11 escalation fires and only `local` provider models are available, route() returns empty ModelSelection with visible reason; non-local providers proceed normally; full suite 1469+ pass; ruff clean.
 - [ ] `E2-13` Reject silent downgrade to a weaker model for high-impact work. `(3h, D2)`
 - [ ] `E2-14` Preserve the same proposal/policy/execution path after escalation. `(0.5d, D2)`
 
@@ -513,17 +501,16 @@ deterministic/local retrieval, personal skills and gated cloud reasoning.
 
 ## Current progress snapshot
 
-Update this table only from evidence on the exact stated revision/tree. It is a
-gate-progress view, not permission to call observed implementation `DONE`.
+Checkboxes retain item-level implementation history, not track acceptance.
+A checked item still requires re-review when its dependencies were not accepted,
+its revision changed or its proof covers only an isolated contract. Read the
+Roadmap execution dependency order before choosing the next item.
 
-| Track | Status | Completed/total | Current blocker | Next item | Evidence revision |
-|---|---|---:|---|---|---|
-| SX | `VERIFIED` | 14/14 | none | `SX-14` closed | `f3ad4ef` (548 passed in 303.72s) |
-| E0 | `IN PROGRESS` | 44/44 items marked [x] or DEFERRED (deterministic baseline gate; E0-20/21 are charter-deferred for cloud baseline) | none (E0-20/21 deferred-by-charter; E0-17/18/19/22 covered by current run; E0-26..42 features dispositions done) | re-open any E0-17..42 if a follow-up review needs it | `f3ad4ef` (777 passed, ruff clean); re-verified at `08a8806` |
-| E1 | `VERIFIED` | All focused items pass; E1-27 D3 gate closed on clean revision `649ded9`. Real-source measurement: recall=1.0, reduction=0.9847, 71 files / 839,006 bytes, `LocalEmbeddingProvider` enabled, `measurement_gate=PASS`, `evidence_state=VERIFIED`. | None outstanding. The earlier `c28d679` report measured only the synthetic `fixtures_paw` corpus; the dirty-tree `037f9b9` run had stale fixture provenance. Both are superseded by the `649ded9` clean-revision report. | E1 is closed. Next: E2-06 (extend existing router) or E1-23/24/25 reopen for further adversarial hardening. | `649ded9` (`VERIFIED`) |
-| E2 | `RATIFIED` | E2-01 audit complete; E2-02..05 value contracts have focused tests; E2-06 extends `ModelRouter.route()` to consume E2-02..05 value contracts — 17 contract tests pass, ruff clean. | E1 is `VERIFIED`; gate ratified on `76013fb`. | E2-06 (extend router) complete. | `76013fb` |
-| E2-06 | `PASS` | `ModelRouter.route()` gains `task_signals` param; `_filter_for_availability` restored role filter + descending score. 17 tests pass. | `10642af` |
-| E2-07 | `PASS` | `PawRuntime.task_signals` + `_execute_action` passes to `route()`; `MODEL_SELECTED` ledger record includes `reason`/`budget`/`signals_summary`/`score`/`fallback_chain`; `log_model_selected` helper extended. 12 tests pass. | `10642af` |
-| E3 | `BLOCKED` | 0/25 | E2 gate | `E3-01` | — |
-| BETA | `BLOCKED` | 0/14 | E3 gate | `B-01` | — |
-| E4 | `BLOCKED` | 0/22 | E3 gate and verified dataset | `E4-01` | — |
+| Track | Gate result | Evidence scope / next action |
+|---|---|---|
+| SX | `PASS` (historical) | Core freeze `f3ad4ef`; not a current-tree re-verification. |
+| E0 | `PASS` (offline scope) | Reviewed fixture-validation baseline; cloud/agent quality remains separate. |
+| E1 | `PARTIAL` | Reopened E1-27; source measurement is historical VERIFIED, full acceptance is not established by it. |
+| E2 | `BLOCKED` | E2-06..11 source is OBSERVED; audit against E2-25..28/45..47 and exact-proposal E2-49 before new integration. E2-08 is unchecked despite source contract presence: reconcile evidence, do not duplicate it. |
+| E3 / BETA | `BLOCKED` | Preceding track acceptance. |
+| E4 | `BLOCKED` | Optional; E0–E3, consented dataset and evaluated narrow-role baselines required. |

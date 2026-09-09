@@ -742,6 +742,7 @@ class ModelRouter:
         # missing evidence, low confidence, novelty or high impact.
         # This upgrades fast/tools → reasoning so a stronger model is scored.
         effective_role = role
+        escalated = False
         if task_signals is not None:
             observed = _observed_ood_conditions(task_signals, privacy_required)
             from .reasoning_contracts import OODCondition
@@ -753,6 +754,7 @@ class ModelRouter:
             }
             if observed & ood_upscalars and role in ("fast", "tools"):
                 effective_role = "reasoning"
+                escalated = True
                 logger.info(
                     "model_routed_ood_escalation", task_id=task_id,
                     prev_role=role, new_role=effective_role,
@@ -820,6 +822,23 @@ class ModelRouter:
             local_scored = [(m, s) for (m, s) in scored if m.provider == "local"]
             scored = real_scored + local_scored
 
+        # E2-12: Stop visibly when the required cloud route is unavailable.
+        # When escalation fired (E2-11) and only a local stand-in is available,
+        # the task still needs a real cloud model — do NOT silently degrade.
+        if escalated and scored and scored[0][0].provider == "local":
+            logger.warning(
+                "cloud_route_unavailable", role=role, task_id=task_id
+            )
+            return ModelSelection(
+                model_name="",
+                reason=(
+                    f"E2-12: role escalated to '{role}' for a capable model "
+                    f"but no non-local provider is available; "
+                    f"stopping visibly instead of falling back to local."
+                ),
+                role=role,
+            )
+
         if not scored:
             logger.warning("no_model_for_role", role=role)
             return ModelSelection(
@@ -875,6 +894,7 @@ class ModelRouter:
         # missing evidence, low confidence, novelty or high impact.
         # This upgrades fast/tools → reasoning so a stronger model is scored.
         effective_role = role
+        escalated = False
         if task_signals is not None:
             observed = _observed_ood_conditions(task_signals, privacy_required)
             from .reasoning_contracts import OODCondition
@@ -886,6 +906,7 @@ class ModelRouter:
             }
             if observed & ood_upscalars and role in ("fast", "tools"):
                 effective_role = "reasoning"
+                escalated = True
                 logger.info(
                     "model_routed_ood_escalation", task_id=task_id,
                     prev_role=role, new_role=effective_role,
@@ -942,6 +963,18 @@ class ModelRouter:
             scored = real_scored + local_scored
 
         self._scores[task_id] = [s for _, s in scored]
+
+        # E2-12: Stop visibly when the required cloud route is unavailable.
+        if escalated and scored and scored[0][0].provider == "local":
+            return ModelSelection(
+                model_name="",
+                reason=(
+                    f"E2-12: role escalated to '{role}' for a capable model "
+                    f"but no non-local provider is available; "
+                    f"stopping visibly instead of falling back to local."
+                ),
+                role=role,
+            ), []
 
         if not scored:
             return ModelSelection(model_name="", reason="No models available", role=role), []
