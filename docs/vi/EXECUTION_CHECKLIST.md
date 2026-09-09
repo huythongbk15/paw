@@ -10,7 +10,7 @@ Kết quả: min_recall = 1,00, median_warm_reduction = 0,9847,
 E1-27 đã đóng. Contract E2-02..05 vẫn là bản ghi thực thi provisional,
 chưa cho phép kích hoạt E2 cho tới khi gate E2 được phê duyệt.
 
-Review 2026-09-08: E1 **VERIFIED**, E2 **BLOCKED**. Báo cáo sạch trước đó tại
+Review 2026-09-08: E1 **VERIFIED**, E2 **RATIFIED**. Báo cáo sạch trước đó tại
 `c28d679` đo 12 file `benchmarks/e1/fixtures_paw`, không phải `src/paw`, nên
 chưa từng确立 gate E1 đại diện cho dự án thật. Lượt đo dirty-tree ngày
 2026-09-08 trên 70 file source PAW quan sát recall=1,00 và reduction=0,981
@@ -479,7 +479,7 @@ thái tiến độ gate, không cho phép gọi implementation quan sát đượ
 | SX | `VERIFIED` | 14/14 | không | `SX-14` đã đóng | `f3ad4ef` (548 passed trong 303.72s) |
 | E0 | `IN PROGRESS` | 44/44 items marked [x] hoặc DEFERRED (deterministic baseline gate; E0-20/21 charter-deferred cho cloud baseline) | không (E0-20/21 deferred-by-charter; E0-17/18/19/22 covered bởi lượt chạy hiện tại; E0-26..42 features dispositions done) | re-open any E0-17..42 nếu cần follow-up review | `f3ad4ef` (777 passed, ruff clean); re-verified tại `08a8806` |
 | E1 | `VERIFIED` | Các item tập trung đều pass; E1-27 D3 gate đã đóng trên revision sạch `649ded9`. Measurement source thật: recall=1,0, reduction=0,9847, 71 file / 839.006 byte, `LocalEmbeddingProvider` đã enable, `measurement_gate=PASS`, `evidence_state=VERIFIED`. | Không còn việc để lại. Báo cáo `c28d679` trước đó chỉ đo corpus tổng hợp `fixtures_paw`; lượt dirty-tree `037f9b9` có provenance fixture stale. Cả hai đã được thay thế bởi báo cáo clean-revision `649ded9`. | E1 đã đóng. Tiếp theo: E2-06 (extend existing router) hoặc mở lại E1-23/24/25 cho adversarial hardening thêm. | `649ded9` (`VERIFIED`) |
-| E2 | `BLOCKED` | E2-01 audit xong; draft E2-02..05 có focused test nhưng chưa check. | E1 chưa `VERIFIED`; cấm wiring router/runtime/persistence E2. | Sau khi E1 pass, ratify E2-02..05 rồi E2-06. | — |
+| E2 | `RATIFIED` | E2-01 audit xong; E2-02..05 contracts có focused test; E2-06 `ModelRouter.route()` consume E2-02..05 giá trị contracts — 17 tests pass, ruff clean. | E1 đã `VERIFIED`; gate ratified trên `76013fb`. | E2-07 (persist role/budget/reason in ledger) next. | `76013fb` |
 | E3 | `BLOCKED` | 0/25 | Gate E2 | `E3-01` | — |
 | BETA | `BLOCKED` | 0/14 | Gate E3 | `B-01` | — |
 | E4 | `BLOCKED` | 0/22 | Gate E3 và dataset verified | `E4-01` | — |

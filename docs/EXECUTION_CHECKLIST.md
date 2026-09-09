@@ -7,8 +7,10 @@ The real-source measurement at `benchmarks/e1/real_measurement_local.json`
 PAW-source cases (12 (case, mode) samples) with `LocalEmbeddingProvider`
 enabled. Results: min_recall = 1.00, median_warm_reduction = 0.9847,
 `measurement_gate = PASS`, `evidence_state = VERIFIED`.
-E1-27 is closed. E2-02..05 contracts remain provisional implementation
-records, not permission to activate E2 until the E2 gate is ratified.
+E1-27 is closed. E2 gate **RATIFIED** on `2baebab` — `docs/benchmarks/e2/gate_ratification.md`.
+E2-02..05 value contracts are now authorized for runtime consumption (E2-06 is the
+first item that exercises them). E2-06 must extend the existing `route()` as the
+sole entry point; no parallel router, no `paw.core.__all__` change.
 
 Review correction — 2026-09-08: E1 is **VERIFIED**; E2 is **BLOCKED**.
 The earlier clean report at `c28d679` measured the 12-file
@@ -519,7 +521,7 @@ gate-progress view, not permission to call observed implementation `DONE`.
 | SX | `VERIFIED` | 14/14 | none | `SX-14` closed | `f3ad4ef` (548 passed in 303.72s) |
 | E0 | `IN PROGRESS` | 44/44 items marked [x] or DEFERRED (deterministic baseline gate; E0-20/21 are charter-deferred for cloud baseline) | none (E0-20/21 deferred-by-charter; E0-17/18/19/22 covered by current run; E0-26..42 features dispositions done) | re-open any E0-17..42 if a follow-up review needs it | `f3ad4ef` (777 passed, ruff clean); re-verified at `08a8806` |
 | E1 | `VERIFIED` | All focused items pass; E1-27 D3 gate closed on clean revision `649ded9`. Real-source measurement: recall=1.0, reduction=0.9847, 71 files / 839,006 bytes, `LocalEmbeddingProvider` enabled, `measurement_gate=PASS`, `evidence_state=VERIFIED`. | None outstanding. The earlier `c28d679` report measured only the synthetic `fixtures_paw` corpus; the dirty-tree `037f9b9` run had stale fixture provenance. Both are superseded by the `649ded9` clean-revision report. | E1 is closed. Next: E2-06 (extend existing router) or E1-23/24/25 reopen for further adversarial hardening. | `649ded9` (`VERIFIED`) |
-| E2 | `BLOCKED` | E2-01 audit complete; E2-02..05 isolated contract drafts have focused tests but remain unchecked (pre-gate value contracts only). | E1 is now `VERIFIED`, so the E2 gate may be ratified — but no E2 runtime/persistence/router wiring is authorized until the E2 gate itself passes. | Ratify E2-02..05, then E2-06 (extend existing router). | — |
+| E2 | `RATIFIED` | E2-01 audit complete; E2-02..05 value contracts have focused tests; E2-06 extends `ModelRouter.route()` to consume E2-02..05 value contracts — 17 contract tests pass, ruff clean. | E1 is `VERIFIED`; gate ratified on `76013fb`. | E2-07 (persist role/budget/reason in ledger) next. | `76013fb` |
 | E3 | `BLOCKED` | 0/25 | E2 gate | `E3-01` | — |
 | BETA | `BLOCKED` | 0/14 | E3 gate | `B-01` | — |
 | E4 | `BLOCKED` | 0/22 | E3 gate and verified dataset | `E4-01` | — |
