@@ -4,6 +4,37 @@ Tài liệu này ghi lại thực tế mã nguồn hiện tại, không trao tr�
 dựa trên ghi chú phase lịch sử. Mỗi thay đổi ownership hoặc wiring runtime phải
 cập nhật tài liệu này.
 
+## Rà soát tài liệu phase — 2026-09-09
+
+Quyết định **STANDARD / READY**, chỉ sửa tài liệu. Checklist/ratification nâng
+measurement thành toàn E1 trong khi Roadmap vẫn chặn E2. Báo cáo
+`benchmarks/e1/real_measurement_local.json` tự giới hạn phép đo tại
+`649ded9`; integration_pack/token_measurement không chứng nhận D3, chất lượng
+hay cloud savings. Tại `fd8a8c8`, source E2-06..11 OBSERVED; luồng đồng thời
+sau đó commit tới `532bb38` (E2-18). Giữ nguyên code/test đang thay đổi,
+không chứng nhận chúng qua lượt rà soát tài liệu.
+
+So sánh: đồng bộ theo tuyên bố VERIFIED của checklist; giữ metric và mở lại
+acceptance thiếu bằng chứng (chọn); hoặc hoãn tài liệu (giữ mâu thuẫn).
+Bằng chứng ngược: phép đo sạch và kết quả test được báo sau đó là tiến bộ thật,
+nhưng không tự chứng minh toàn acceptance cùng revision.
+
+Invariant: evidence trước implementation, owner duy nhất, proposal chính xác
+trước Policy/provider và tách observation khỏi verification. Ngân sách/dừng:
+tài liệu, scope report, source/history nội bộ; không network, sửa runtime,
+full suite hay phase mới. Nghiệm thu: EN/VI thống nhất gate/item evidence,
+ma trận E1 rõ proof thiếu, dependency E2 giữ ID cũ và D0 pass.
+Đổi scope/đụng cùng đoạn đang sửa thì đánh giá lại READY.
+
+Kiểm chứng tài liệu: contract-checks.sh báo CONTRACT PASSED; `git diff --check`
+pass; `python -m pytest -q tests/test_project_lock.py` đạt 5 test trong 6,54 giây
+trên working tree đã review. Đây là D0, không phải D3; source đang commit đồng
+thời nên không tuyên bố release trên revision sạch.
+
+Kết quả qualification dự án: **PARTIAL**. Code E2 hiện có cần audit tuân thủ,
+không xóa. Các mục lịch sử dưới đây chỉ có giá trị tại revision được ghi;
+câu “hiện tại/tiếp theo” trong lịch sử không thay thế review này hoặc Roadmap.
+
 ## Baseline audit
 
 ### Kiểm chứng tiếp theo — 2026-09-08 (`74b563e` + working tree)

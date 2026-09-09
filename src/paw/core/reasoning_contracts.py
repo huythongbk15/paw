@@ -436,6 +436,29 @@ def evaluate_local_eligibility(
     )
 
 
+class ImplementationReadiness(StrEnum):
+    """Readiness level for proceeding with a model inference call.
+
+    E2-27: This is intentionally separate from PolicyDecision, AutonomyDecision,
+    StopReason, and AutonomyStopReason. Readiness captures whether the
+    *preconditions* for a safe, correct, efficient inference are met — not
+    whether the autonomy loop should continue or the policy allows execution.
+
+    Levels (ordered):
+      * NEEDS_RESEARCH   — local evidence insufficient; reconnaissance required.
+      * NEEDS_CLARIFICATION — goal is ambiguous; question must be asked.
+      * SPIKE_REQUIRED   — bounded exploration needed before a real call.
+      * READY            — preconditions met; safe to proceed to inference.
+      * REJECTED         — the task should not proceed (e.g. privacy-blocked).
+    """
+
+    NEEDS_RESEARCH = "needs_research"
+    NEEDS_CLARIFICATION = "needs_clarification"
+    SPIKE_REQUIRED = "spike_required"
+    READY = "ready"
+    REJECTED = "rejected"
+
+
 __all__ = [
     "CANONICAL_ELIGIBILITY_RULES",
     "CANONICAL_ROLE_CONTRACTS",
@@ -445,6 +468,7 @@ __all__ = [
     "EligibilityResult",
     "EligibilityRule",
     "ImpactLevel",
+    "ImplementationReadiness",
     "InferenceClassification",
     "NoveltyLevel",
     "OODCondition",

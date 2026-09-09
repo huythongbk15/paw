@@ -1,38 +1,75 @@
 # Lộ trình Core Stabilization của PAW
 
-Review mới nhất (2026-09-08, `74b563e` + working tree): **PARTIAL**, thay thế
-snapshot cũ bên dưới. Fixture provenance đã sửa ở `7d0cc7e`; measurement sạch
-tại đó pass. Lượt hiện tại đo 71 file / 836.732 byte, recall 1,0, reduction
-0,981366, fixture fresh nhưng cây dirty. Bản sửa local inference và status lock
-đạt 41 test, full Ruff và CLI cài riêng. Còn thiếu D3 sạch trên revision mới.
-Contract E2-02..05 vẫn provisional dù checkbox đã đánh dấu; chỉ kích hoạt sau E1.
-
-Review 2026-09-08: **PARTIAL**. Báo cáo sạch tại `c28d679` có
-`corpus_roots=benchmarks/e1/fixtures_paw` (12 file, 6.128 byte), không phải
-`src/paw`; vì vậy nó chỉ xác minh metric của fixture tổng hợp, không đóng gate
-E1 đại diện cho dự án thật. Lượt chạy hiện tại trên `src/paw` (70 file, 835.061
-byte) quan sát recall cold/warm tối thiểu 1,00 và median giảm context warm 0,981,
-nhưng trả về `PARTIAL`/`OBSERVED` vì cây dirty và fixture review đã stale. E2
-bị chặn cho tới khi E1 được freeze sạch và qua D3 privacy/chất lượng.
+Rà soát ngày 2026-09-09, HEAD source `fd8a8c8` và thay đổi router chưa
+commit có sẵn: **E1 PARTIAL; gate nghiệm thu E2–E3/BETA BLOCKED**.
+Báo cáo tracked `benchmarks/e1/real_measurement_local.json` ghi
+**chỉ phép đo** PASS/VERIFIED trên revision sạch `649ded9`: 71 file source,
+839.006 byte, recall 1,0, giảm context warm ước tính 0,9847.
+Báo cáo tự loại trừ qualification toàn E1. Đây là bằng chứng đo lịch sử,
+không phải D3 revision hiện tại, chất lượng engineering hay token provider.
+Source E2-06..11 đã tồn tại, gồm wiring routing/reconnaissance trong runtime:
+ghi nhận OBSERVED, chưa đồng nghĩa đã đạt điều kiện nghiệm thu.
+Giữ code để rà soát, không tự mở rộng. Xem quyết định 2026-09-09 trong
+`IMPLEMENTATION_MAP.md`.
 
 Đây là work sequence duy nhất đang hoạt động. Các phase được đánh số trong lịch
 sử mô tả cách repository phình lên; chúng không quyết định việc phải xây tiếp.
 
 Track hiện tại: **E1 — qualification trên revision sạch của source thật**.
-Core Stabilization và E0 đã `VERIFIED`; E1 vẫn `PARTIAL`. Audit E2-01 và các
-contract E2-02..05 độc lập chỉ là input trước gate, không kích hoạt E2.
+Core Stabilization và E0 đã `VERIFIED`; E1 vẫn `PARTIAL`. Source E2 đã có wiring runtime; cần audit prerequisite, không tự mở gate.
 
 | Phạm vi | Kết quả hiện tại | Ý nghĩa |
 |---|---|---|
 | Core Stabilization | `VERIFIED` trên `f3ad4ef` | Freeze S0-S6 vẫn là baseline lõi. |
 | E0 | `VERIFIED` cho fixture-validation deterministic | Không phải agent-quality hoặc cloud baseline. |
-| E1 | `PARTIAL` | Clean report `c28d679` chỉ đo fixture tổng hợp; metric source thật đang `OBSERVED`, chưa có freeze/D3 cùng revision. |
-| E2-E3 và BETA | `BLOCKED` | E2 cần E0 + E1 `VERIFIED`; contract draft không có quyền runtime. |
+| E1 | `PARTIAL` | Measurement source lịch sử `649ded9` VERIFIED trong phạm vi metric; cần bằng chứng privacy/chất lượng/D3 và chốt cloud baseline. |
+| E2-E3 và BETA | `BLOCKED` | Code/wiring E2 đã có trước prerequisite nghiệm thu; giữ để audit, không coi là quyền mở rộng. |
 | E4 controlled adaptation | `BLOCKED`, tùy chon | Cần E0-E3 và dataset verified; không bắt buộc cho BETA. |
 
 Hướng engineering intelligence ngày 2026-09-01 đã được ghi trong Product
 Charter và Architecture. Đây là ràng buộc thiết kế, không phải bằng chứng rằng
 một capability E2 đang bị chặn đã hoạt động.
+
+
+## Phụ thuộc thực thi — giữ ID cũ, không thêm phase
+
+Số thứ tự checklist không phải thứ tự phụ thuộc. Bảng này cụ thể hóa điều kiện
+readiness E2 đã có, không tự mở gate E2.
+
+| Thứ tự | Item hiện có | Điều kiện đi tiếp |
+|---|---|---|
+| 1. Nghiệm thu E1 | E1-23..27, E1-33..36 khi liên quan | Measurement đã review, privacy/chất lượng và D3 cùng candidate sạch. |
+| 2. Owner và contract bền vững E2 | E2-01..05, E2-25..28, E2-45..47 | Một Task/Plan identity, owner quyết định, lifecycle bất biến, migration tập trung và proof đóng/mở DB. |
+| 3. Research/readiness có giới hạn | E2-08, E2-29..44 | Recon deterministic, phương án/bằng chứng ngược, budget, READY đúng revision và ma trận âm chặn mutation. |
+| 4. Tích hợp inference | E2-06..07, E2-09..20, E2-48..50 | Runtime phát hiện ngưỡng → router chọn từ cache → proposal chính xác → Policy một lần → Autonomy/budget → privacy payload thực → gọi model → ghi bền vững. |
+| 5. Case engineering trọn luồng | E2-18, E2-21..24, E2-43..44, E2-50 | Research → decision → plan → thay đổi được duyệt → verification khai báo → inspect/restart; case từ chối, routing held-out; sau đó D3. |
+
+Có thể thiết kế chung contract dùng ở nhiều hàng; không bật hành vi khi
+prerequisite chưa đạt. Code E2 hiện có cần audit, không viết lại hay tự rollback.
+Recon deterministic không biến thành inference vì evidence yếu; inference tiếp
+theo phải là proposal riêng được gate. E2-29 là phân loại độ sâu nghiên cứu;
+E2-31 là local-before-external, không phải embedding-aware routing.
+
+Runtime điều phối; Knowledge cung cấp evidence; ContextCompiler sở hữu context/
+manifest; ModelRouter chọn model đã admission; Policy quyết định quyền; Autonomy
+tiêu thụ verdict/budget; owner persistence hiện có commit record. Không tạo
+planner/router/research store thứ hai.
+
+### Ma trận bằng chứng nghiệm thu E1
+
+| Tuyên bố | Bằng chứng cần | Giới hạn / item sở hữu |
+|---|---|---|
+| Recall ≥95% | Case versioned đã review, hash/config và kết quả từng case trên source đại diện | `649ded9` chỉ là phép đo sáu case lịch sử; review lại input đổi ở E1-23/27. |
+| Giảm token warm ≥30% | Baseline/measurement cùng phạm vi; tách estimator khỏi usage provider | Báo cáo ước tính context chọn so với toàn chunk/skill, không đo cloud input token thực (E1-24/27). |
+| Không giảm chất lượng/an toàn | Kết quả task so sánh và negative controls privacy: payload thực, local/remote, failure/resume | Gắn kết quả đúng revision; metric xanh hoặc tổng test không đủ (E1-25/27/36). |
+| Freshness/release | Fixture/source đã review, input ổn định, candidate sạch, full test/lint/build và smoke wheel riêng | Freshness lịch sử không chứng nhận HEAD hiện tại; E1-27 ghi toàn command pack. |
+
+Target cloud-token của Roadmap và cloud baseline đang hoãn trong Charter không
+thể giải quyết bằng đổi tên token estimate. Trước khi đóng E1-27, cần bằng chứng
+paired-cloud được duyệt với adapter hiện có, hoặc quyết định Charter/Roadmap
+minh bạch thu hẹp qualification *offline* và giao cloud claim cho E2-21/24.
+Chưa có quyết định/bằng chứng thì E1 PARTIAL. Không hạ target số, tự cho phép
+chi phí provider hay thêm integration.
 
 ## Quy tắc trình tự
 
@@ -409,12 +446,6 @@ tài liệu, không được hạ để biến implementation kém thành hoàn 
 
 ## Ba task an toàn tiếp theo
 
-1. Review và freeze cây sửa contract E1/E2 hiện tại, không trộn thay đổi không
-   liên quan. Gắn mọi fixture `paw_*.yaml` vào commit thật chứa đúng byte đã
-   review; không dùng corpus `fixtures_paw` thay cho `src/paw`.
-2. Trên đúng revision sạch đó, chạy measurement PAW-source mặc định, proof
-   privacy/quality và gate D3 gồm test, lint, build, cài wheel cô lập. Giữ nguyên
-   corpus, revision, dirty flag và fixture-review rows trong evidence.
-3. Chỉ ghi E1 `VERIFIED` nếu toàn bộ acceptance đạt trên cùng revision. Khi đó
-   mới ratify E2-02..05 và tiếp tục E2-06; nếu không, giữ E2 bị chặn và sửa failure
-   có tên.
+1. Đối chiếu E1-27 với ma trận evidence; giữ measurement lịch sử, tìm đủ proof privacy/chất lượng/D3 và chốt phạm vi cloud baseline minh bạch.
+2. Audit wiring E2 hiện có với E2-25..28/45..47 và E2-49; ghi gap vào Implementation Map, giữ thay đổi người dùng; không đi tiếp chỉ theo số thứ tự.
+3. Sau sửa được thống nhất, freeze candidate và chạy measurement/privacy/chất lượng cùng D3 cần thiết một lượt. Chỉ nâng E1 khi mọi điều kiện đạt, rồi theo bảng phụ thuộc E2.

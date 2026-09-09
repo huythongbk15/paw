@@ -71,22 +71,19 @@ per change. The order, from highest to lowest:
    that records what the source actually does. A
    `[CURRENT]` claim in this document must have a
    matching row in the implementation map; a discrepancy
-   means the implementation map is stale.
+   requires checking source/tests before correcting either document.
 5. **`docs/EXECUTION_CHECKLIST.md`** — *atomic execution
    and evidence*. The checklist records one evidence
    string per closed item. An item without an evidence
    string is not done; the evidence string is the
    reviewer-readable record of what was run.
 
-The rule of conflict resolution is: **the higher
-document wins**, and the lower document must be updated
-to match in the same change. A `ROADMAP.md` change that
-violates `ARCHITECTURE.md` is wrong; an
-`IMPLEMENTATION_MAP.md` change that violates
-`ARCHITECTURE.md` is wrong; an `EXECUTION_CHECKLIST.md`
-mark that contradicts `IMPLEMENTATION_MAP.md` is wrong.
-The Charter is above all four; nothing below it can
-override it.
+This precedence governs intended scope and design, not observed behavior.
+For facts about implementation, current source and reproducible tests take
+precedence as defined in README. If source differs from an architectural target,
+the map must record the gap; never rewrite the map to pretend the target exists.
+A checklist or benchmark-specific ratification cannot waive Roadmap entry gates.
+Contract changes require explicit review; code presence does not authorize them.
 
 The cross-document checks are runnable:
 
@@ -256,7 +253,7 @@ answer.
 ### Cognitive-role and task-signal boundary
 
 **`[CURRENT]`** `ModelRole` is the historical routing vocabulary accepted by
-model manifests. The isolated `core/reasoning_contracts.py` module defines one
+model manifests. The `core/reasoning_contracts.py` module defines one
 immutable pre-gate contract registry for the minimum engineering cognitive roles
 (`FAST`, `REASONING`, `CODING`, `TOOLS`) and one immutable `TaskSignals` value
 object. `VISION`/`EMBEDDING` remain modalities and `FALLBACK` remains routing
@@ -264,15 +261,18 @@ behavior; none is promoted into a second cognitive-role registry. Task signals
 reuse `core/privacy.py:PrivacyClass` and default unevaluated novelty, impact,
 context sufficiency and budget to explicit unknown values.
 
-**`[CURRENT]`** These value contracts have no runtime authority while E1 is
-`PARTIAL`. They do not classify `FAST`/`STANDARD`/`DEEP`, decide escalation,
-select a model, persist routing evidence or invoke a provider. The reasoning
-output contract asks for an evidence-backed assessment and uncertainty, not
-hidden chain-of-thought. E2-05 onward may consume these values only after the E2
-entry gate is satisfied and the contracts are re-approved on that revision.
+**`[CURRENT]`** Source at `fd8a8c8` already consumes these values in routing,
+reconnaissance and ledger wiring (E2-06..11). Later concurrent commits require
+their own conformance review; this paragraph does not certify their behavior.
+The output contract requests evidence and uncertainty, not hidden chain-of-thought.
+
+**`[RATIFIED TARGET]`** Runtime activation requires E1 qualification and the
+E2 readiness prerequisites in the Roadmap. Existing wiring ahead of those gates
+is an implementation/acceptance gap, not an isolated draft or an authorized
+exception. Preserve and audit it against the exact-proposal escalation contract.
 
 **`[CURRENT]`** Local eligibility and out-of-distribution conditions live in the
-same isolated module. One closed `OODCondition` enum (9 values) and one
+same module. One closed `OODCondition` enum (9 values) and one
 immutable `EligibilityRule` per cognitive role define when a role is not eligible
 for local execution. `FAST` and `TOOLS` are bounded (capability, provider,
 privacy, budget); `REASONING` and `CODING` are strict (also evidence, confidence,

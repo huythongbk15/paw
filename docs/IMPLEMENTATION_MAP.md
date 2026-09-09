@@ -4,7 +4,44 @@ This document records current source reality. It does not award completion
 based on historical phase notes. Update it whenever ownership or runtime wiring
 changes.
 
-## Audit baseline
+## Phase-document review — 2026-09-09
+
+Decision: **STANDARD / READY** for documentation repair only.
+Problem: checklist/gate ratification promotes a measurement result to full E1,
+while Roadmap blocks E2 and source already contains E2 runtime integration.
+Evidence: `benchmarks/e1/real_measurement_local.json` explicitly limits scope
+to measurement at `649ded9`; `docs/benchmarks/e1/integration_pack.md`
+and `token_measurement.md` exclude full qualification and actual cloud savings.
+At inspected `fd8a8c8`, E2-06..11 source is OBSERVED. Concurrent commits
+subsequently advance E2 through `532bb38` (E2-18); those changes and new
+uncommitted tests are preserved, not certified by this documentation review.
+
+Options: (A) synchronize every document to the checklist's VERIFIED declaration;
+(B) preserve measurement evidence, reopen unsupported overall acceptance and
+make dependencies explicit (selected); (C) defer all documentation (leaves
+conflicting execution instructions). Contrary evidence: clean source measurement
+and later reported full-test results are meaningful progress, but neither alone
+proves all Roadmap acceptance conditions on one revision.
+
+Invariants: evidence before implementation, single ownership, exact proposal
+before Policy/provider effects, and observation separate from verification.
+Budget/stop: project documents, report scope, source/history only; no network,
+runtime edits, full suite or new phase. Acceptance: EN/VI roadmap/checklist
+distinguish item evidence from gate acceptance; E1 matrix names missing proof;
+E2 preserves existing IDs with explicit readiness dependencies; D0 checks pass.
+Scope changes or concurrent edits to the same paragraph require reassessment.
+
+Documentation verification: contract-checks.sh reports CONTRACT PASSED;
+`git diff --check` passes; `python -m pytest -q tests/test_project_lock.py`
+reports 5 passed in 6.54s on the reviewed working tree. This is D0 evidence,
+not D3; concurrent source commits prevent a clean-revision release claim.
+
+Result: **PARTIAL** for project qualification; no new runtime verification.
+Source presence is not entry authorization. Existing E2 changes need conformance
+review, not deletion. Historical sections below retain their stated revision;
+their “current”/“next” language must not override this review or the Roadmap.
+
+## Historical audit records
 
 ### Verification follow-up — 2026-09-08 (`74b563e` + working tree)
 

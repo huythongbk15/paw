@@ -6,7 +6,10 @@ Uses aiosqlite for async operations. Schema is defined in SQL for clarity and co
 
 from __future__ import annotations
 
+import json
+import uuid
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 
 import aiosqlite
@@ -263,6 +266,21 @@ CREATE TABLE IF NOT EXISTS plans (
     task_id TEXT,
     session_id TEXT NOT NULL,
     goal TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+-- Decisions
+CREATE TABLE IF NOT EXISTS decision_records (
+    id TEXT PRIMARY KEY,
+    task_id TEXT,
+    session_id TEXT NOT NULL,
+    decision_type TEXT NOT NULL,  -- 'readiness', 'policy', 'autonomy'
+    decision_value TEXT NOT NULL,  -- the enum value (e.g. 'ready', 'allow')
+    reason TEXT NOT NULL DEFAULT '',
+    project_revision TEXT NOT NULL DEFAULT '',
+    constraint_fingerprint TEXT NOT NULL DEFAULT '',
+    metadata TEXT NOT NULL DEFAULT '{}',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -781,6 +799,54 @@ class Database:
         await self._conn.commit()
 
         return len(rows)
+
+    # --- Decision records (E2-28) ---
+
+    async def record_decision(
+        self,
+        decision_type: str,
+        decision_value: str,
+        *,
+        task_id: str | None = None,
+        session_id: str | None = None,
+        reason: str = "",
+        project_revision: str = "",
+        constraint_fingerprint: str = "",
+        metadata: dict | None = None,
+    ) -> str:
+        """Persist a decision with project revision and constraint fingerprint.
+
+        Returns the decision record ID.
+        """
+        decision_id = f"dec_{uuid.uuid4().hex[:12]}"
+        now = datetime.now(UTC).isoformat()
+        meta_json = json.dumps(metadata or {})
+        await self.write(
+            """INSERT INTO decision_records
+               (id, task_id, session_id, decision_type, decision_value,
+                reason, project_revision, constraint_fingerprint, metadata,
+                created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                decision_id, task_id, session_id, decision_type, decision_value,
+                reason, project_revision, constraint_fingerprint, meta_json,
+                now, now,
+            ),
+        )
+        return decision_id
+
+    async def get_decision(self, decision_id: str) -> dict | None:
+        """Retrieve a decision record by ID."""
+        return await self.fetch_one(
+            "SELECT * FROM decision_records WHERE id = ?", (decision_id,)
+        )
+
+    async def get_decisions_by_task(self, task_id: str) -> list[dict]:
+        """Retrieve all decision records for a task."""
+        return await self.fetch_all(
+            "SELECT * FROM decision_records WHERE task_id = ? ORDER BY created_at ASC",
+            (task_id,),
+        )
 
     async def upsert(
         self,

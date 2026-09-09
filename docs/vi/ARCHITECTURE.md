@@ -4,6 +4,15 @@ Tài liệu này định nghĩa contract đích của PAW Core. Nó ổn định
 cách sắp xếp file hiện tại; xem [bản đồ triển khai](IMPLEMENTATION_MAP.md) để
 biết mã nguồn thực tế đang làm được gì.
 
+## Thẩm quyền tài liệu và bằng chứng
+
+Charter quyết định phạm vi, Architecture quyết định invariant đích, Roadmap
+quyết định trình tự/gate, Implementation Map ghi thực tế, Checklist chia việc.
+Đây là thứ tự cho ý định thiết kế, không thay thế source/test khi mô tả hành vi.
+Nếu source lệch kiến trúc, ghi gap; không sửa map để giả vờ target đã tồn tại.
+Checkbox hay ratification riêng của benchmark không thể bỏ qua gate Roadmap.
+Mọi đổi contract cần review rõ ràng; code tồn tại không tự cấp quyền mở rộng.
+
 ## Ranh giới hệ thống
 
 PAW Core nhận mục tiêu người dùng và sở hữu mọi chuyển trạng thái dẫn đến kết
@@ -152,22 +161,25 @@ Tiết kiệm token phải đứng sau việc giữ đủ bằng chứng để t
 
 ### Boundary cognitive role và task signal
 
-`ModelRole` là từ vựng routing lịch sử mà model manifest chấp nhận. Module độc
-lập `core/reasoning_contracts.py` định nghĩa một registry contract bất biến cho
+`ModelRole` là từ vựng routing lịch sử mà model manifest chấp nhận. Module
+`core/reasoning_contracts.py` định nghĩa một registry contract bất biến cho
 bốn cognitive role kỹ thuật tối thiểu (`FAST`, `REASONING`, `CODING`, `TOOLS`)
 và một value object `TaskSignals` bất biến. `VISION`/`EMBEDDING` vẫn là modality;
 `FALLBACK` vẫn là hành vi routing. Task signal tái dùng
 `core/privacy.py:PrivacyClass` và mặc định novelty, impact, context sufficiency,
 budget chưa đánh giá thành giá trị unknown tường minh.
 
-Các value contract này chưa có quyền runtime khi E1 còn `PARTIAL`: chúng không
-phân loại `FAST`/`STANDARD`/`DEEP`, quyết định escalation, chọn model, persist
-routing evidence hoặc gọi provider. Contract reasoning yêu cầu assessment có
-bằng chứng và uncertainty, không yêu cầu hidden chain-of-thought. Chỉ E2-05 trở
-đi mới được dùng các value này sau khi entry gate E2 đạt và contract được review
-lại trên revision đó.
+Source tại `fd8a8c8` đã dùng các value này trong routing, reconnaissance và
+ledger (E2-06..11). Commit đồng thời sau đó cần review riêng; đoạn này không
+chứng nhận hành vi của chúng. Contract yêu cầu evidence/uncertainty, không
+yêu cầu hidden chain-of-thought.
 
-Local eligibility và out-of-distribution theo role cũng nằm trong module độc lập
+Contract đích: kích hoạt runtime cần E1 qualification và prerequisite readiness
+E2 trong Roadmap. Wiring có trước gate là gap triển khai/nghiệm thu, không còn
+là draft cô lập và cũng không phải ngoại lệ được duyệt. Giữ để audit theo
+contract escalation với proposal chính xác.
+
+Local eligibility và out-of-distribution theo role cũng nằm trong module
 này. `OODCondition` là enum đóng 9 giá trị; mỗi cognitive role có một
 `EligibilityRule` bất biến ghi điều kiện khiến role không đủ điều kiện chạy local.
 `FAST` và `TOOLS` bị giới hạn (capability match, provider reachable, privacy,
