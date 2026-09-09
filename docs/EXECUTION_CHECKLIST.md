@@ -352,7 +352,7 @@ baseline. Estimated 34–45 days.
 - [x] `E2-11` Escalate on missing evidence, low confidence, novelty or high impact. `(0.5d, D2)` — `ModelRouter.route()` and `route_with_explain()` escalate role fast/tools→reasoning before scoring when task_signals contain OOD upscaling conditions (NOVEL_TASK, HIGH_IMPACT, LOW_CONFIDENCE, MISSING_EVIDENCE); 106 E2-06/07 tests + 46 E2-06/07/10 tests pass; full suite 1469 pass; ruff clean.
 - [x] `E2-12` Stop visibly when the required cloud route is unavailable. `(3h, D2)` — when E2-11 escalation fires and only `local` provider models are available, route() returns empty ModelSelection with visible reason; non-local providers proceed normally; full suite 1469+ pass; ruff clean.
 - [x] `E2-13` Reject silent downgrade to a weaker model for high-impact work. `(3h, D2)` — when HIGH_IMPACT is observed and the best model is from `local` provider, stop visibly regardless of whether E2-11 escalation fired; log as `high_impact_local_downgrade_blocked`; full suite 1469+ pass; ruff clean.
-- [ ] `E2-14` Preserve the same proposal/policy/execution path after escalation. `(0.5d, D2)`
+- [x] `E2-14` Preserve the same proposal/policy/execution path after escalation. `(0.5d, D2)` — escalation internal to route(), prefer_cheap overridden to False on escalation so most capable reasoning model selected; proposal/policy/execution path unchanged; full suite 1469+ pass; ruff clean.
 
 ### Cost, fallback and verification
 

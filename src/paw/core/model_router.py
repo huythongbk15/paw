@@ -760,6 +760,16 @@ class ModelRouter:
                     prev_role=role, new_role=effective_role,
                     conditions=sorted(c.value for c in observed),
                 )
+        # E2-14: Preserve the same proposal/policy/execution path after escalation.
+        # When escalation fired (E2-11), override prefer_cheap so the most
+        # capable reasoning model is selected — this does NOT change the
+        # proposal/policy/execution path, only the model scoring preference.
+        if escalated:
+            prefer_cheap = False
+            logger.info(
+                "model_routed_escalation_override_prefer_cheap",
+                task_id=task_id, role=role
+            )
         role = effective_role
 
         scored = self.registry.find_best_for_task(
@@ -936,6 +946,16 @@ class ModelRouter:
                     prev_role=role, new_role=effective_role,
                     conditions=sorted(c.value for c in observed),
                 )
+        # E2-14: Preserve the same proposal/policy/execution path after escalation.
+        # When escalation fired (E2-11), override prefer_cheap so the most
+        # capable reasoning model is selected — this does NOT change the
+        # proposal/policy/execution path, only the model scoring preference.
+        if escalated:
+            prefer_cheap = False
+            logger.info(
+                "model_routed_escalation_override_prefer_cheap",
+                task_id=task_id, role=role
+            )
         role = effective_role
 
         scored = self.registry.find_best_for_task(
