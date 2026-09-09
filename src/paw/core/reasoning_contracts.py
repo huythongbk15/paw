@@ -593,10 +593,26 @@ def classify_decision_level(signals: TaskSignals) -> DecisionLevel:
     return classify_research_depth(signals)
 
 
+
+RESEARCH_DEPTH_ACTIONS: MappingProxyType[DecisionLevel, str] = MappingProxyType({
+    DecisionLevel.FAST: "continue",
+    DecisionLevel.STANDARD: "ask",
+    DecisionLevel.DEEP: "continue",
+})
+
+def research_depth_action(depth: DecisionLevel) -> str:
+    """Return the explicit action for a research depth (fail-closed).
+
+    Unknown or future DecisionLevel values map to "stop" so that
+    unrecognized depths never silently continue.
+    """
+    return RESEARCH_DEPTH_ACTIONS.get(depth, "stop")
+
 __all__ = [
     "CANONICAL_ELIGIBILITY_RULES",
     "CANONICAL_ROLE_CONTRACTS",
     "OOD_CONDITIONS",
+    "RESEARCH_DEPTH_ACTIONS",
     "BudgetLevel",
     "ContextSufficiencyLevel",
     "DecisionLevel",
@@ -619,4 +635,5 @@ __all__ = [
     "classify_inference",
     "classify_research_depth",
     "evaluate_local_eligibility",
+    "research_depth_action",
 ]
