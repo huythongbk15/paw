@@ -104,6 +104,45 @@ class TaskLedger:
         return [TaskEvent.from_row(dict(r)) for r in rows]
 
     @staticmethod
+    async def get_model_call_count(task_id: ID) -> int:
+        """Return the total provider calls recorded for a task.
+
+        Derived from STEP_EXECUTED events only. Missing or non-integer
+        provider_calls values are treated as 0.
+        """
+        events = await TaskLedger.get_events_by_type(task_id, TaskEventType.STEP_EXECUTED)
+        total = 0
+        for event in events:
+            payload = event.payload or {}
+            resources = payload.get("resources_used", {})
+            try:  # noqa: SIM105
+                total += int(resources.get("provider_calls", 0) or 0)
+            except (TypeError, ValueError):
+                pass
+        return total
+
+    @staticmethod
+    async def assert_model_calls_monotonic(task_id: ID) -> None:
+        """Assert that model-call counts are monotonically non-decreasing.
+
+        Raises RuntimeError if a decrease is detected.
+        """
+        events = await TaskLedger.get_events_by_type(task_id, TaskEventType.STEP_EXECUTED)
+        cumulative = 0
+        for event in events:
+            payload = event.payload or {}
+            resources = payload.get("resources_used", {})
+            try:
+                provider_calls = int(resources.get("provider_calls", 0) or 0)
+            except (TypeError, ValueError):
+                provider_calls = 0
+            if provider_calls < 0:
+                raise RuntimeError(
+                    f"provider_calls decreased for {task_id}: event_id={event.id} provider_calls={provider_calls}"
+                )
+            cumulative += provider_calls
+
+    @staticmethod
     async def get_events_by_type(
         task_id: ID,
         event_type: TaskEventType,
