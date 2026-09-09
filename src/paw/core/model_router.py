@@ -294,6 +294,11 @@ class ModelRegistry:
         self._models: dict[str, ModelManifest] = {}
         self._scorer = ModelScorer()
 
+    def clear(self) -> None:
+        """Remove all registered models (test/utility helper)."""
+        self._models.clear()
+        logger.info("model_registry_cleared")
+
     def register(self, manifest: ModelManifest) -> None:
         """Register a model."""
         self._models[manifest.name] = manifest

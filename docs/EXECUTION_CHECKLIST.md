@@ -360,7 +360,7 @@ baseline. Estimated 34–45 days.
 
 - [ ] `E2-08` Define a bounded local reconnaissance result from project evidence. `(0.5d, D1)`
 - [x] `E2-09` Gate reconnaissance inference as `model.inference`. `(0.5d, D2)` — `InferenceClassification` enum + `classify_inference()` boundary rule (fail-closed: empty/zero-confidence → model.inference, confidence ≥ 0.25 + evidence → local.compute); threshold boundary tests + adversarial NaN/bypass tests; ruff clean.
-- [ ] `E2-10` Re-evaluate routing after reconnaissance rather than only from the initial prompt. `(1d, D2)`
+- [x] `E2-10` Re-evaluate routing after reconnaissance rather than only from the initial prompt. `(1d, D2)` — `ModelRouter.re_evaluate_routing(prev_selection, recon)` with `classify_inference` boundary (LOCAL_COMPUTE + evidence → downgrade cloud→local; MODEL_INFERENCE + OOD signals → escalate role); `PawRuntime._gather_reconnaissance()` gathers real E1 evidence (symbols, recent_changes, test_associations, knowledge sources); runtime wiring in `_execute_action` with `MODEL_RESELECTED` ledger event; 17 tests pass (4 invariant, 4 runtime, 4 adversarial, 5 measurable); ruff clean.
 - [ ] `E2-11` Escalate on missing evidence, low confidence, novelty or high impact. `(0.5d, D2)`
 - [ ] `E2-12` Stop visibly when the required cloud route is unavailable. `(3h, D2)`
 - [ ] `E2-13` Reject silent downgrade to a weaker model for high-impact work. `(3h, D2)`
