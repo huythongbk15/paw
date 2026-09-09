@@ -372,13 +372,13 @@ baseline. Estimated 34–45 days.
 - [x] `E2-26` Define one decision artifact contract without a second Plan, TaskResult or evidence model. `(0.5d, D1)`
 - [x] `E2-27` Define `ImplementationReadiness` separately from policy/autonomy/task/stop enums. `(3h, D1)`
 - [x] `E2-28` Persist the decision and project revision through centralized schema/migrations. `(1d, D3)`
-- [ ] `E2-29` Classify `FAST`, `STANDARD` and `DEEP` from recorded task signals. `(0.5d, D1)`
-- [ ] `E2-30` Enforce an evidence/time/token research budget and typed stop condition. `(0.5d, D2)`
-- [ ] `E2-31` Require local project reconnaissance before eligible external research. `(0.5d, D2)`
-- [ ] `E2-32` Record alternatives, the smallest viable option and do-nothing/defer. `(0.5d, D1)`
-- [ ] `E2-33` Record unresolved assumptions and important evidence against the leading option. `(0.5d, D1)`
-- [ ] `E2-34` Evaluate evidence sufficiency and readiness through the canonical application runtime. `(1d, D2)`
-- [ ] `E2-35` Block an implementation-purpose Plan without a matching current `READY` artifact. `(1d, D2)`
+- [x] `E2-29` Classify `FAST`, `STANDARD` and `DEEP` from recorded task signals. `(0.5d, D1)`
+- [x] `E2-30` Enforce an evidence/time/token research budget and typed stop condition. `(0.5d, D2)`
+- [x] `E2-31` Require local project reconnaissance before eligible external research. `(0.5d, D2)`
+- [x] `E2-32` Record alternatives, the smallest viable option and do-nothing/defer. `(0.5d, D1)`
+- [x] `E2-33` Record unresolved assumptions and important evidence against the leading option. `(0.5d, D1)`
+- [x] `E2-34` Evaluate evidence sufficiency and readiness through the canonical application runtime. `(1d, D2)`
+- [x] `E2-35` Block an implementation-purpose Plan without a matching current `READY` artifact. `(1d, D2)`
 - [ ] `E2-36` Block every mutating proposal if readiness is missing, stale or not `READY`. `(1d, D2)`
 - [ ] `E2-37` Invalidate `READY` when the relevant project revision or hard constraint changes. `(0.5d, D2)`
 - [ ] `E2-38` Make `NEEDS_RESEARCH` schedule only bounded research operations. `(0.5d, D2)`
