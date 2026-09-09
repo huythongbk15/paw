@@ -382,6 +382,12 @@ class ModelSelection(BaseModel):
     reason: str = ""
     fallback_chain: list[str] = Field(default_factory=list)
     score: float = 0.0
+    # E2-17: structured failure classification for retry decisions.
+    # None = success (model selected).
+    # "retryable" = provider/model temporarily unavailable, retry later.
+    # "capability_mismatch" = no model supports the required role/caps.
+    # "budget_exceeded" = token/cost ceiling exceeded.
+    failure_kind: str | None = None
 
 
 class CapabilityManifest(BaseModel):

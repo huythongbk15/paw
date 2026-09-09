@@ -861,6 +861,7 @@ class ModelRouter:
                     f"stopping visibly instead of falling back to local."
                 ),
                 role=role,
+                failure_kind="retryable",
             )
 
         if not scored:
@@ -869,6 +870,7 @@ class ModelRouter:
                 model_name="",
                 reason=f"No model available for role: {role}",
                 role=role,
+                failure_kind="capability_mismatch",
             )
 
         # E2-13: Reject silent downgrade for high-impact work.
@@ -893,6 +895,7 @@ class ModelRouter:
                             f"'{role}'; stopping visibly."
                         ),
                         role=role,
+                        failure_kind="capability_mismatch",
                     )
 
         # E2-15: Per-role token/cost ceiling hard-stop.
@@ -914,6 +917,7 @@ class ModelRouter:
                         f"token ceiling {_ceil_tokens} for role '{role}'."
                     ),
                     role=role,
+                    failure_kind="budget_exceeded",
                 )
             if _ceil_cost is not None:
                 _model_cost = _model_estimated_cost(scored[0][0])
@@ -928,6 +932,7 @@ class ModelRouter:
                             f"cost ceiling ${_ceil_cost:.4f} for role '{role}'."
                         ),
                         role=role,
+                        failure_kind="budget_exceeded",
                     )
 
         # Store all scores for this task
@@ -1083,6 +1088,7 @@ class ModelRouter:
                         f"'{role}'; stopping visibly."
                     ),
                     role=role,
+                    failure_kind="capability_mismatch",
                 ), []
 
         # E2-15: Per-role token/cost ceiling hard-stop (route_with_explain).
@@ -1099,6 +1105,7 @@ class ModelRouter:
                         f"token ceiling {_ceil_tokens} for role '{role}'."
                     ),
                     role=role,
+                    failure_kind="budget_exceeded",
                 ), []
             if _ceil_cost is not None:
                 _model_cost = _model_estimated_cost(scored[0][0])
@@ -1110,10 +1117,17 @@ class ModelRouter:
                             f"cost ceiling ${_ceil_cost:.4f} for role '{role}'."
                         ),
                         role=role,
+                        failure_kind="budget_exceeded",
                     ), []
 
         if not scored:
-            return ModelSelection(model_name="", reason="No models available", role=role), []
+            return ModelSelection(
+                    model_name="",
+                    reason="No models available",
+                    role=role,
+                    failure_kind="capability_mismatch",
+                ), []
+
 
         best_manifest, best_score = scored[0]
         fallback_chain = [m.name for (m, s) in scored]
