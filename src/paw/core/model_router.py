@@ -738,13 +738,35 @@ class ModelRouter:
                         logger.info("model_routed_preferred", task_id=task_id, model=manifest.name)
                         return selection
 
+        # E2-11: Escalate role before scoring when task_signals indicate
+        # missing evidence, low confidence, novelty or high impact.
+        # This upgrades fast/tools → reasoning so a stronger model is scored.
+        effective_role = role
+        if task_signals is not None:
+            observed = _observed_ood_conditions(task_signals, privacy_required)
+            from .reasoning_contracts import OODCondition
+            ood_upscalars = {
+                OODCondition.NOVEL_TASK,
+                OODCondition.HIGH_IMPACT,
+                OODCondition.LOW_CONFIDENCE,
+                OODCondition.MISSING_EVIDENCE,
+            }
+            if observed & ood_upscalars and role in ("fast", "tools"):
+                effective_role = "reasoning"
+                logger.info(
+                    "model_routed_ood_escalation", task_id=task_id,
+                    prev_role=role, new_role=effective_role,
+                    conditions=sorted(c.value for c in observed),
+                )
+        role = effective_role
+
         scored = self.registry.find_best_for_task(
-            role, context_size, complexity, privacy_required, prefer_cheap
+            effective_role, context_size, complexity, privacy_required, prefer_cheap
         )
 
         # Phase 15: exclude models from unavailable providers
         scored = await self._filter_for_availability(
-            scored, role, context_size, complexity, privacy_required, prefer_cheap
+            scored, effective_role, context_size, complexity, privacy_required, prefer_cheap
         )
 
         # --- E2-06: consume task_signals + local eligibility ---
@@ -849,13 +871,35 @@ class ModelRouter:
             await self._provider_registry.discover_models(self.registry)
             self._providers_discovered = True
 
+        # E2-11: Escalate role before scoring when task_signals indicate
+        # missing evidence, low confidence, novelty or high impact.
+        # This upgrades fast/tools → reasoning so a stronger model is scored.
+        effective_role = role
+        if task_signals is not None:
+            observed = _observed_ood_conditions(task_signals, privacy_required)
+            from .reasoning_contracts import OODCondition
+            ood_upscalars = {
+                OODCondition.NOVEL_TASK,
+                OODCondition.HIGH_IMPACT,
+                OODCondition.LOW_CONFIDENCE,
+                OODCondition.MISSING_EVIDENCE,
+            }
+            if observed & ood_upscalars and role in ("fast", "tools"):
+                effective_role = "reasoning"
+                logger.info(
+                    "model_routed_ood_escalation", task_id=task_id,
+                    prev_role=role, new_role=effective_role,
+                    conditions=sorted(c.value for c in observed),
+                )
+        role = effective_role
+
         scored = self.registry.find_best_for_task(
-            role, context_size, complexity, privacy_required, prefer_cheap
+            effective_role, context_size, complexity, privacy_required, prefer_cheap
         )
 
         # Phase 15: exclude models from unavailable providers
         scored = await self._filter_for_availability(
-            scored, role, context_size, complexity, privacy_required, prefer_cheap
+            scored, effective_role, context_size, complexity, privacy_required, prefer_cheap
         )
 
         # --- E2-06: consume task_signals + local eligibility ---
