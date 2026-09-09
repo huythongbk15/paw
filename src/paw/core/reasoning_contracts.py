@@ -452,11 +452,91 @@ class ImplementationReadiness(StrEnum):
       * REJECTED         — the task should not proceed (e.g. privacy-blocked).
     """
 
-    NEEDS_RESEARCH = "needs_research"
-    NEEDS_CLARIFICATION = "needs_clarification"
-    SPIKE_REQUIRED = "spike_required"
-    READY = "ready"
-    REJECTED = "rejected"
+class DecisionLevel(StrEnum):
+    """Research depth classification: FAST, STANDARD, DEEP.
+
+    E2-29: Classified from recorded TaskSignals, not from heuristic
+    defaults. This is a *classification* of how much reasoning depth the
+    canonical loop should apply — not a routing or autonomy decision.
+
+    * FAST — routine, low-impact, sufficient context, no uncertainty.
+             Can use the cheapest capability tier.
+    * STANDARD — moderate novelty or impact, or partial context.
+                Use the default capability tier.
+    * DEEP — novelty, high/critical impact, insufficient context, or high
+             uncertainty. Requires maximum reasoning depth.
+    """
+
+    FAST = "fast"
+    STANDARD = "standard"
+    DEEP = "deep"
+
+
+def classify_research_depth(signals: TaskSignals) -> DecisionLevel:
+    """Classify research depth from recorded task signals.
+
+    E2-29 boundary rule (deterministic, fail-closed):
+
+    Returns ``DEEP`` if any of:
+      * impact is HIGH or CRITICAL
+      * novelty is NOVEL or UNPRECEDENTED
+      * context_sufficiency is INSUFFICIENT
+      * uncertainty_score >= 0.7
+
+    Returns ``STANDARD`` if any of:
+      * impact is MEDIUM
+      * novelty is FAMILIAR
+      * context_sufficiency is PARTIAL
+      * uncertainty_score is 0.4-0.7
+
+    Returns ``FAST`` only when:
+      * impact is LOW
+      * novelty is ROUTINE
+      * context_sufficiency is SUFFICIENT
+      * uncertainty_score is 0.0-0.4
+      * budget is not NEAR_LIMIT or EXHAUSTED
+
+    When signals are UNKNOWN (incomplete reconnaissance), returns ``STANDARD``
+    as a safe default — never FAST.
+    """
+    # Hard-deep conditions
+    if signals.impact in (ImpactLevel.HIGH, ImpactLevel.CRITICAL):
+        return DecisionLevel.DEEP
+    if signals.novelty in (NoveltyLevel.NOVEL, NoveltyLevel.UNPRECEDENTED):
+        return DecisionLevel.DEEP
+    if signals.context_sufficiency is ContextSufficiencyLevel.INSUFFICIENT:
+        return DecisionLevel.DEEP
+    if signals.uncertainty_score is not None and signals.uncertainty_score >= 0.7:
+        return DecisionLevel.DEEP
+
+    # Standard conditions
+    if signals.impact is ImpactLevel.MEDIUM:
+        return DecisionLevel.STANDARD
+    if signals.novelty is NoveltyLevel.FAMILIAR:
+        return DecisionLevel.STANDARD
+    if signals.context_sufficiency is ContextSufficiencyLevel.PARTIAL:
+        return DecisionLevel.STANDARD
+    if signals.uncertainty_score is not None and signals.uncertainty_score >= 0.4:
+        return DecisionLevel.STANDARD
+
+    # Fast only when all conditions are routine
+    if (
+        signals.impact is ImpactLevel.LOW
+        and signals.novelty is NoveltyLevel.ROUTINE
+        and signals.context_sufficiency is ContextSufficiencyLevel.SUFFICIENT
+        and signals.uncertainty_score is not None
+        and signals.uncertainty_score < 0.4
+        and signals.budget not in (BudgetLevel.NEAR_LIMIT, BudgetLevel.EXHAUSTED)
+    ):
+        return DecisionLevel.FAST
+
+    # Unknown/incomplete signals — safe default, never FAST
+    return DecisionLevel.STANDARD
+
+
+def classify_decision_level(signals: TaskSignals) -> DecisionLevel:
+    """Alias for classify_research_depth (E2-29 spec)."""
+    return classify_research_depth(signals)
 
 
 __all__ = [
@@ -465,6 +545,7 @@ __all__ = [
     "OOD_CONDITIONS",
     "BudgetLevel",
     "ContextSufficiencyLevel",
+    "DecisionLevel",
     "EligibilityResult",
     "EligibilityRule",
     "ImpactLevel",
@@ -477,6 +558,8 @@ __all__ = [
     "RoleContract",
     "TaskSignals",
     "UncertaintyDisposition",
+    "classify_decision_level",
     "classify_inference",
+    "classify_research_depth",
     "evaluate_local_eligibility",
 ]

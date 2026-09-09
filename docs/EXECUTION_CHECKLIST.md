@@ -370,7 +370,7 @@ baseline. Estimated 34–45 days.
 
 - [x] `E2-25` Record the ownership map for readiness, evidence, context, routing, Policy, Autonomy and Planner. `(2h, D0)`
 - [x] `E2-26` Define one decision artifact contract without a second Plan, TaskResult or evidence model. `(0.5d, D1)`
-- [ ] `E2-27` Define `ImplementationReadiness` separately from policy/autonomy/task/stop enums. `(3h, D1)`
+- [x] `E2-27` Define `ImplementationReadiness` separately from policy/autonomy/task/stop enums. `(3h, D1)`
 - [x] `E2-28` Persist the decision and project revision through centralized schema/migrations. `(1d, D3)`
 - [ ] `E2-29` Classify `FAST`, `STANDARD` and `DEEP` from recorded task signals. `(0.5d, D1)`
 - [ ] `E2-30` Enforce an evidence/time/token research budget and typed stop condition. `(0.5d, D2)`
