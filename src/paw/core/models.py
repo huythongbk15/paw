@@ -437,6 +437,26 @@ class ResourceUsage(BaseModel):
     network_bytes: int = 0
     destructive_ops: int = 0
 
+    def provider_calls(self) -> int:
+        """Number of provider/model calls for this step."""
+        return self.model_calls
+
+    def total_tokens(self) -> int:
+        """Cumulative token count for this step."""
+        return self.tokens
+
+    def to_receipt(self) -> dict[str, Any]:
+        """Exact cost/usage receipt for ledger logging."""
+        return {
+            "provider_calls": self.provider_calls(),
+            "total_tokens": self.total_tokens(),
+            "total_cost_usd": self.total_cost(),
+            "wall_time_ms": self.wall_time_ms,
+            "tool_calls": self.tool_calls,
+            "network_bytes": self.network_bytes,
+            "destructive_ops": self.destructive_ops,
+        }
+
     def total_cost(self) -> float:
         """Weighted total for budget accounting."""
         return (
