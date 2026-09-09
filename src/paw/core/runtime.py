@@ -86,6 +86,7 @@ from .models import (
 )
 from .policy import RequestVerdict
 from .privacy import RemoteDisclosureRefusedError
+from .reasoning_contracts import check_research_budget
 from .runtime_persistence import RuntimePersistence
 from .task import TaskManager
 from .task_scheduler import TaskScheduleStatus
@@ -1782,6 +1783,24 @@ class PawRuntime:
         # This is the execution-side model routing (distinct from the proposer's
         # planning-side model call) and is logged for both brain and proposer
         # paths so the ledger always records which model executed a step.
+        # E2-30: enforce research budget before any local research operation.
+        if self.task_signals is not None and getattr(self.task_signals, "research_budget", None) is not None:
+            stop_reason = check_research_budget(self.task_signals.research_budget)
+            if stop_reason is not None:
+                await log_autonomy_gate_evaluated(
+                    task_id,
+                    proposed.operation_id,
+                    f"RESEARCH_{stop_reason.value.upper()}",
+                    stop_reason.value,
+                )
+                return ExecutionObservation(
+                    step_id=proposed.operation_id,
+                    action_id=proposed.operation_id,
+                    success=False,
+                    error=f"research_budget_exhausted:{stop_reason.value}",
+                    resources_used=ResourceUsage(),
+                )
+
         needs_model = Capability.MODEL_INFERENCE in proposed.capabilities
         if needs_model and self.model_router is not None:
             token_count = _token_count_from_context(proposed.context)

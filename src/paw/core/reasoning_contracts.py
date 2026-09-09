@@ -147,6 +147,59 @@ class BudgetLevel(StrEnum):
     EXHAUSTED = "exhausted"
 
 
+class ResearchStopReason(StrEnum):
+    """Why research stopped."""
+
+    EVIDENCE_LIMIT = "evidence_limit"
+    TIME_LIMIT = "time_limit"
+    TOKEN_LIMIT = "token_limit"
+    COMPLETED = "completed"
+
+
+@dataclass(frozen=True)
+class ResearchBudget:
+    """Bounded budget for local research operations before inference."""
+
+    max_evidence_items: int = 20
+    max_time_seconds: float = 300.0
+    max_tokens: int = 4000
+    stop_reason: ResearchStopReason = field(default=ResearchStopReason.COMPLETED)
+
+    def __post_init__(self) -> None:
+        if self.max_evidence_items < 0:
+            raise ValueError("max_evidence_items must be non-negative")
+        if self.max_time_seconds < 0:
+            raise ValueError("max_time_seconds must be non-negative")
+        if self.max_tokens < 0:
+            raise ValueError("max_tokens must be non-negative")
+
+
+def check_research_budget(
+    budget: ResearchBudget,
+    evidence_count: int = 0,
+    elapsed_time: float = 0.0,
+    tokens_used: int = 0,
+) -> ResearchStopReason | None:
+    """Return the stop reason if a research budget is exhausted, else None.
+
+    Checks are ordered by priority:
+      1. Evidence count
+      2. Time
+      3. Tokens
+
+    If multiple limits are exceeded simultaneously, the highest-priority
+    exhausted limit wins. A budget with stop_reason=COMPLETED and no
+    exhausted limit returns None.
+    """
+    if evidence_count >= budget.max_evidence_items:
+        return ResearchStopReason.EVIDENCE_LIMIT
+    if elapsed_time >= budget.max_time_seconds:
+        return ResearchStopReason.TIME_LIMIT
+    if tokens_used >= budget.max_tokens:
+        return ResearchStopReason.TOKEN_LIMIT
+    return None
+
+
 @dataclass(frozen=True)
 class TaskSignals:
     """Recorded inputs for later depth, eligibility and routing decisions.
@@ -163,6 +216,7 @@ class TaskSignals:
     budget: BudgetLevel = BudgetLevel.UNKNOWN
     uncertainty_score: float | None = None
     estimated_tokens: int | None = None
+    research_budget: ResearchBudget | None = None
 
     def __post_init__(self) -> None:
         enum_fields = (
@@ -555,9 +609,12 @@ __all__ = [
     "OODCondition",
     "ProviderKind",
     "ReconnaissanceResult",
+    "ResearchBudget",
+    "ResearchStopReason",
     "RoleContract",
     "TaskSignals",
     "UncertaintyDisposition",
+    "check_research_budget",
     "classify_decision_level",
     "classify_inference",
     "classify_research_depth",
