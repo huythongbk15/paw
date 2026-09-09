@@ -847,6 +847,30 @@ class ModelRouter:
                 role=role,
             )
 
+        # E2-13: Reject silent downgrade for high-impact work.
+        # When HIGH_IMPACT is observed in task_signals (even without E2-11
+        # escalation, e.g. role='reasoning' + high impact), the local stand-in
+        # is not acceptable — stop visibly instead of silently degrading.
+        if task_signals is not None:
+            from .reasoning_contracts import OODCondition
+            observed = _observed_ood_conditions(task_signals, privacy_required)
+            if OODCondition.HIGH_IMPACT in observed:
+                _best = scored[0]
+                if _best[0].provider == "local":
+                    logger.warning(
+                        "high_impact_local_downgrade_blocked",
+                        role=role, task_id=task_id,
+                    )
+                    return ModelSelection(
+                        model_name="",
+                        reason=(
+                            f"E2-13: high-impact task requires a capable model "
+                            f"but only local stand-in available for role "
+                            f"'{role}'; stopping visibly."
+                        ),
+                        role=role,
+                    )
+
         # Store all scores for this task
         self._scores[task_id] = [s for _, s in scored]
 
@@ -975,6 +999,21 @@ class ModelRouter:
                 ),
                 role=role,
             ), []
+
+        # E2-13: Reject silent downgrade for high-impact work.
+        if task_signals is not None:
+            from .reasoning_contracts import OODCondition
+            observed = _observed_ood_conditions(task_signals, privacy_required)
+            if OODCondition.HIGH_IMPACT in observed and scored and scored[0][0].provider == "local":
+                return ModelSelection(
+                    model_name="",
+                    reason=(
+                        f"E2-13: high-impact task requires a capable model "
+                        f"but only local stand-in available for role "
+                        f"'{role}'; stopping visibly."
+                    ),
+                    role=role,
+                ), []
 
         if not scored:
             return ModelSelection(model_name="", reason="No models available", role=role), []
