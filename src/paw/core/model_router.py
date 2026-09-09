@@ -25,9 +25,37 @@ from .models import (
     ModelRole,
     ModelSelection,
 )
+from .reasoning_contracts import TaskSignals, evaluate_local_eligibility
 from .storage import db
 
 logger = get_logger(__name__)
+
+
+def _observed_ood_conditions(
+    signals: TaskSignals, privacy_required: bool,
+) -> frozenset:
+    """Translate E2-04 task_signals into the OODCondition set E2-05 expects.
+
+    The mapping is deterministic and fail-closed: any signal field that is
+    still ``UNKNOWN`` (the deliberate default) contributes nothing, so the
+    caller cannot accidentally route a task that was never reconnoitred.
+    """
+    from .reasoning_contracts import OODCondition
+
+    conditions: set = set()
+    if signals.novelty.value == "novel":
+        conditions.add(OODCondition.NOVEL_TASK)
+    if signals.impact.value == "high":
+        conditions.add(OODCondition.HIGH_IMPACT)
+    if privacy_required or signals.privacy.value == "secret":
+        conditions.add(OODCondition.PRIVACY_BLOCKED)
+    if signals.budget.value == "exhausted":
+        conditions.add(OODCondition.BUDGET_EXHAUSTED)
+    if signals.uncertainty_score is not None and signals.uncertainty_score < 0.5:
+        conditions.add(OODCondition.LOW_CONFIDENCE)
+    if signals.context_sufficiency.value == "insufficient":
+        conditions.add(OODCondition.MISSING_EVIDENCE)
+    return frozenset(conditions)
 
 
 # --- Model Scoring ---
@@ -628,6 +656,7 @@ class ModelRouter:
         prefer_cheap: bool = True,
         execution_profile: ExecutionProfile | None = None,
         preferred_provider: str | None = None,
+        task_signals: TaskSignals | None = None,
     ) -> ModelSelection:
         """Route a task to the best model using multi-dimensional scoring."""
         # Phase 15: initialize providers (so availability is known) BEFORE
@@ -698,6 +727,37 @@ class ModelRouter:
             scored, role, context_size, complexity, privacy_required, prefer_cheap
         )
 
+        # --- E2-06: consume task_signals + local eligibility ---
+        # When the caller supplies task_signals (E2-04 reconnaissance output),
+        # evaluate whether the role is eligible for local execution (E2-05).
+        # If the role is out-of-distribution locally, demote local candidates
+        # so a non-local (cloud_approved) provider is preferred when available.
+        # This is the first runtime consumption of the E2 value contracts;
+        # it does not change the single ``route()`` entry point.
+        if task_signals is not None:
+            observed = _observed_ood_conditions(task_signals, privacy_required)
+            eligibility = evaluate_local_eligibility(role, observed)
+            if not eligibility.eligible:
+                local_scored = [(m, s) for (m, s) in scored if m.provider == "local"]
+                nonlocal_scored = [
+                    (m, s) for (m, s) in scored if m.provider != "local"
+                ]
+                scored = nonlocal_scored + local_scored
+                logger.info(
+                    "model_routed_ood_demote_local",
+                    task_id=task_id,
+                    role=role,
+                    conditions=sorted(c.value for c in eligibility.conditions),
+                    matched_rule=eligibility.matched_rule,
+                )
+            else:
+                logger.debug(
+                    "model_routed_local_eligible",
+                    task_id=task_id,
+                    role=role,
+                    matched_rule=eligibility.matched_rule,
+                )
+
         if preferred_provider:
             preferred = [
                 (manifest, score)
@@ -756,6 +816,7 @@ class ModelRouter:
         complexity: str = "medium",
         privacy_required: bool = False,
         prefer_cheap: bool = True,
+        task_signals: TaskSignals | None = None,
     ) -> tuple[ModelSelection, list[ModelScore]]:
         """Route with full explainability (all scores returned)."""
         if self._provider_registry is not None:
@@ -773,6 +834,37 @@ class ModelRouter:
         scored = await self._filter_for_availability(
             scored, role, context_size, complexity, privacy_required, prefer_cheap
         )
+
+        # --- E2-06: consume task_signals + local eligibility ---
+        # When the caller supplies task_signals (E2-04 reconnaissance output),
+        # evaluate whether the role is eligible for local execution (E2-05).
+        # If the role is out-of-distribution locally, demote local candidates
+        # so a non-local (cloud_approved) provider is preferred when available.
+        # This is the first runtime consumption of the E2 value contracts;
+        # it does not change the single ``route()`` entry point.
+        if task_signals is not None:
+            observed = _observed_ood_conditions(task_signals, privacy_required)
+            eligibility = evaluate_local_eligibility(role, observed)
+            if not eligibility.eligible:
+                local_scored = [(m, s) for (m, s) in scored if m.provider == "local"]
+                nonlocal_scored = [
+                    (m, s) for (m, s) in scored if m.provider != "local"
+                ]
+                scored = nonlocal_scored + local_scored
+                logger.info(
+                    "model_routed_ood_demote_local",
+                    task_id=task_id,
+                    role=role,
+                    conditions=sorted(c.value for c in eligibility.conditions),
+                    matched_rule=eligibility.matched_rule,
+                )
+            else:
+                logger.debug(
+                    "model_routed_local_eligible",
+                    task_id=task_id,
+                    role=role,
+                    matched_rule=eligibility.matched_rule,
+                )
 
         # The `local` provider is an offline stand-in (echo / placeholder),
         # not a real model. Prefer real (non-local) candidates while keeping
