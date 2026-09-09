@@ -93,8 +93,8 @@ class TestInvariantReEvaluateRouting:
         assert "E2-10 re-evaluated" in result.reason
         assert "downgraded" in result.reason
 
-    async def test_inv2_model_inference_keeps_prev_when_no_ood(self):
-        """When MODEL_INFERENCE and no OOD signals, keeps previous selection."""
+    async def test_inv2_model_inference_escalates_when_ood(self):
+        """When MODEL_INFERENCE + OOD signals (non-empty), escalates role."""
         router = _make_router_with_models()
         prev = ModelSelection(
             model_name="cloud-1",
@@ -103,22 +103,16 @@ class TestInvariantReEvaluateRouting:
             reason="initial",
             score=0.9,
         )
-        # Empty recon → MODEL_INFERENCE, but no OOD conditions (symbols > 0)
+        # Non-empty recon, low confidence → model.inference + OOD
         recon = ReconnaissanceResult(
             task_goal="test",
-            symbol_count=0,
-            recent_change_count=0,
-            evidence_confidence=0.0,  # empty → model.inference
+            symbol_count=1,
+            evidence_confidence=0.01,  # < 0.25 → model.inference
         )
         result = await router.re_evaluate_routing("t2", prev, recon)
-        # Empty recon AND no novel/high-impact → no escalation signal
-        # because recent_change_count == 0 and symbol_count == 0 and
-        # evidence_confidence < 0.25.
-        # The OOD set would include MISSING_EVIDENCE + LOW_CONFIDENCE,
-        # so escalation to reasoning should fire.
-        # Actually: model_inference + ood conditions → escalate role
+        # model.inference + OOD → escalate from fast to reasoning
         assert result.role == "reasoning"
-        assert result.model_name == "" or result != prev
+        assert classify_inference(recon) == InferenceClassification.MODEL_INFERENCE
 
     async def test_inv3_empty_recon_yields_model_inference(self):
         """Empty recon → classify_inference returns MODEL_INFERENCE."""
@@ -227,14 +221,13 @@ class TestAdversarialReEvaluation:
             score=0.9,
         )
         recon = ReconnaissanceResult(
-            task_goal="test",
+            task_goal="unknown task",
             symbol_count=0,
             evidence_confidence=0.0,
         )
-        # Empty recon → escalate to reasoning (OOD), not downgrade
+        # Completely empty recon → is_empty() → keep previous selection
         result = await router.re_evaluate_routing("t_adv3", prev, recon)
-        # Should not silently downgrade when there's no evidence
-        assert result.model_name != "local-echo" or result != prev
+        assert result.model_name == "cloud-1"
 
     async def test_adv4_preferred_provider_not_downgraded(self):
         """When a recon downgrades, the fallback chain preserves the prev model."""
@@ -309,8 +302,8 @@ class TestMeasurableReEvaluation:
         assert initial.model_manifest.provider == "mock_cloud"
         assert reevaluated.model_manifest.provider == "local"
 
-    async def test_meas3_no_evidence_no_change(self):
-        """Measurable: recon with zero evidence → no downgrade (escalation path)."""
+    async def test_meas3_nonempty_low_confidence_escalates(self):
+        """Measurable: non-empty recon with low confidence → escalate role."""
         router = _make_router_with_models()
         prev = ModelSelection(
             model_name="cloud-1",
@@ -319,13 +312,14 @@ class TestMeasurableReEvaluation:
             reason="initial",
             score=0.9,
         )
+        # Non-empty (symbols=1) but very low confidence → model.inference + OOD
         recon = ReconnaissanceResult(
             task_goal="unknown task",
-            symbol_count=0,
-            evidence_confidence=0.0,
+            symbol_count=1,
+            evidence_confidence=0.01,  # < 0.25 threshold
         )
         result = await router.re_evaluate_routing("t_meas3", prev, recon)
-        # Empty recon → model.inference → escalate role (fast→reasoning)
+        # Non-empty recon → model.inference → escalate role (fast->reasoning)
         assert result.role == "reasoning"
         assert classify_inference(recon) == InferenceClassification.MODEL_INFERENCE
 

@@ -947,6 +947,10 @@ class ModelRouter:
         selection is returned as-is when the recon result does not change
         the decision (idempotent re-evaluation).
         """
+        # No evidence to act on — defer to the initial routing decision.
+        if reconnaissance.is_empty():
+            return prev_selection
+
         # Classify whether local evidence justifies skipping a model call.
         inference_class = classify_inference(reconnaissance)
 
