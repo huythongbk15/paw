@@ -722,6 +722,13 @@ class ContextCompiler:
         current_sources = set()
 
         for cand in candidates:
+            # Reject stale derived records (E2-35)
+            if cand.is_stale:
+                excluded.append(cand)
+                cand.metadata["excluded_reason"] = "source_stale"
+                cand.metadata["included"] = False
+                continue
+
             # Check budget constraints
             if current_fragments >= self.budget.max_fragments:
                 excluded.append(cand)
