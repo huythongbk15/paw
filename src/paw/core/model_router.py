@@ -1303,6 +1303,51 @@ class ModelRouter:
         local_scored.sort(key=lambda x: x[1].score, reverse=True)
         return local_scored
 
+    async def select_verifier(
+        self,
+        executor_selection: ModelSelection,
+        execution_profile: ExecutionProfile | None = None,
+    ) -> ModelSelection:
+        """Select a verifier model independently from the executor.
+
+        E2-18: The verifier policy is chosen separately from the executor
+        capability selection. The verifier is used to check the executor's
+        output and may use a different (typically cheaper) model.
+
+        - "none" (default): no verification needed; return the executor's
+          selection unchanged.
+        - "same": reuse the executor's selected model.
+        - "cheapest": select the cheapest available local model that supports
+          the executor's role. Falls back to the executor's selection if no
+          local model is available.
+        """
+        policy = execution_profile.verifier_policy if execution_profile else "none"
+        if policy == "none":
+            return executor_selection
+        if policy == "same":
+            return executor_selection
+        if policy == "cheapest":
+            scored = self._score_local_models(
+                role=executor_selection.role,
+                context_size=0,
+                complexity="low",
+                privacy_required=False,
+                prefer_cheap=True,
+            )
+            if not scored:
+                return executor_selection  # fallback to executor's model
+            vm, vs = scored[0]
+            return ModelSelection(
+                model_name=vm.name,
+                model_manifest=vm,
+                role=executor_selection.role,
+                reason="E2-18: cheapest local verifier selected",
+                score=vs.score,
+                failure_kind=None,
+            )
+        # Unknown policy → default to no verification
+        return executor_selection
+
     def get_scores(self, task_id: str) -> list[ModelScore] | None:
         """Retrieve scores for a task."""
         return self._scores.get(task_id)

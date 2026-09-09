@@ -53,6 +53,11 @@ class ExecutionProfile:
     privacy_preference: PrivacyPreference = PrivacyPreference.LOCAL_FIRST
     cost_priority: float = 0.5          # 0 = ignore cost, 1 = minimize cost
     latency_priority: float = 0.5       # 0 = ignore latency, 1 = minimize latency
+    # E2-18: Verifier selection policy, independent from executor selection.
+    # "none" = no verification step.
+    # "same" = use the same model as the executor.
+    # "cheapest" = select the cheapest eligible model for verification.
+    verifier_policy: str = "none"
     # E2-15: per-role token and cost ceilings (hard-stop when exceeded).
     # Empty dict = no ceiling (use profile default behavior).
     role_token_ceil: dict[str, int] = field(default_factory=dict)
@@ -97,6 +102,7 @@ class ExecutionProfile:
             "privacy_preference": self.privacy_preference.value,
             "cost_priority": self.cost_priority,
             "latency_priority": self.latency_priority,
+            "verifier_policy": self.verifier_policy,
             "role_token_ceil": self.role_token_ceil,
             "role_cost_ceil": self.role_cost_ceil,
             "skill_categories": self.skill_categories,
@@ -138,6 +144,7 @@ class ExecutionProfile:
             privacy_preference=privacy,
             cost_priority=data.get("cost_priority", 0.5),
             latency_priority=data.get("latency_priority", 0.5),
+            verifier_policy=data.get("verifier_policy", "none"),
             role_token_ceil=data.get("role_token_ceil", {}),
             role_cost_ceil=data.get("role_cost_ceil", {}),
             skill_categories=data.get("skill_categories", []),
@@ -159,6 +166,7 @@ PRECISE = ExecutionProfile(
     privacy_preference=PrivacyPreference.LOCAL_ONLY,
     cost_priority=0.8,
     latency_priority=0.3,
+    verifier_policy="same",
     skill_risk_tolerance=SkillRisk.LOW,
     skill_confidence_threshold=0.6,
     progressive_loading=True,
@@ -172,6 +180,7 @@ FAST = ExecutionProfile(
     privacy_preference=PrivacyPreference.CLOUD_ALLOWED,
     cost_priority=0.2,
     latency_priority=0.9,
+    verifier_policy="cheapest",
     skill_risk_tolerance=SkillRisk.MEDIUM,
     skill_confidence_threshold=0.0,
     progressive_loading=True,
@@ -185,6 +194,7 @@ SAFE = ExecutionProfile(
     privacy_preference=PrivacyPreference.LOCAL_FIRST,
     cost_priority=0.5,
     latency_priority=0.5,
+    verifier_policy="same",
     skill_risk_tolerance=SkillRisk.LOW,
     skill_confidence_threshold=0.5,
     progressive_loading=True,
@@ -198,6 +208,7 @@ DEVELOP = ExecutionProfile(
     privacy_preference=PrivacyPreference.LOCAL_FIRST,
     cost_priority=0.5,
     latency_priority=0.5,
+    verifier_policy="cheapest",
     skill_risk_tolerance=SkillRisk.MEDIUM,
     skill_confidence_threshold=0.3,
     progressive_loading=True,
