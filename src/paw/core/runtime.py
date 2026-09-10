@@ -1796,19 +1796,23 @@ class PawRuntime:
         # E2-36/E2-37: block mutating proposals unless readiness is READY and fresh.
         if proposed.is_mutating:
             if self.readiness != "READY":
-                await log_autonomy_gate_evaluated(
-                    task_id,
-                    proposed.operation_id,
-                    "READY_NOT_MET",
-                    self.readiness,
-                )
-                return ExecutionObservation(
-                    step_id=proposed.operation_id,
-                    action_id=proposed.operation_id,
-                    success=False,
-                    error=f"readiness_not_ready:{self.readiness}",
-                    resources_used=ResourceUsage(),
-                )
+                # E2-38: NEEDS_RESEARCH allows only bounded research operations.
+                if self.readiness == "NEEDS_RESEARCH" and proposed.is_research:
+                    pass  # research operations are allowed; budget check is separate
+                else:
+                    await log_autonomy_gate_evaluated(
+                        task_id,
+                        proposed.operation_id,
+                        "READY_NOT_MET",
+                        self.readiness,
+                    )
+                    return ExecutionObservation(
+                        step_id=proposed.operation_id,
+                        action_id=proposed.operation_id,
+                        success=False,
+                        error=f"readiness_not_ready:{self.readiness}",
+                        resources_used=ResourceUsage(),
+                    )
             # E2-37: staleness check
             if self.readiness_revision and self.current_revision and self.readiness_revision != self.current_revision:
                 await log_autonomy_gate_evaluated(

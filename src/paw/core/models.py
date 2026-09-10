@@ -515,6 +515,9 @@ class ProposedAction(BaseModel):
     estimated_cost: ResourceUsage = Field(default_factory=ResourceUsage)
     # E2-36: mutating proposals require READY readiness artifact
     is_mutating: bool = True
+    # E2-38: research proposals are the only mutating operations allowed
+    # when readiness is NEEDS_RESEARCH.
+    is_research: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return self.model_dump(mode="json")
