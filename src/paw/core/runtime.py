@@ -196,10 +196,6 @@ class ActionProposer:
             if cap in costs:
                 total += costs[cap]
 
-        # Add base model call cost
-        total.model_calls = 1
-        total.tokens += 1000
-
         return total
 
 
@@ -232,6 +228,7 @@ class AgentActionProposer:
         session_id: str | None = None,
         complexity: str = "medium",
         privacy_required: bool = False,
+        plan: Any | None = None,
     ):
         self.context_compiler = context_compiler
         self.model_router = model_router
@@ -242,6 +239,7 @@ class AgentActionProposer:
         self.session_id = session_id
         self.complexity = complexity
         self.privacy_required = privacy_required
+        self.plan = plan
         self._proposal_count = 0
 
     async def propose(
@@ -425,13 +423,15 @@ class AgentActionProposer:
             "done": done,
         }
 
+        effect_constraints = list(getattr(getattr(self, "plan", None), "effect_constraints", None) or [])
         return ProposedAction(
             goal=task_goal,
             capabilities=capabilities,
             context={"compiled_context": _context_summary(compiled_ctx)},
             metadata=metadata,
             operation_id=f"op_{task_id}_{self._proposal_count}",
-            estimated_cost=ResourceUsage(model_calls=1, tool_calls=len(selected_skills)),
+            estimated_cost=ResourceUsage(),
+            effect_constraints=effect_constraints,
         )
 
 
@@ -582,6 +582,7 @@ class PawRuntime:
         privacy_required: bool = False,
         preferred_provider: str | None = None,
         execution_profile: Any | None = None,
+        plan: Any | None = None,
         task_signals: Any | None = None,
         project_root: str | None = None,
         readiness: str = "READY",
@@ -609,6 +610,7 @@ class PawRuntime:
         self.privacy_required = privacy_required
         self.preferred_provider = preferred_provider
         self.execution_profile = execution_profile or None
+        self.plan = plan
         # E2-07: task reconnaissance signals (novelty/impact/privacy etc.)
         # carried into the model-routing decision and persisted in the ledger.
         self.task_signals = task_signals
@@ -762,6 +764,7 @@ class PawRuntime:
             session_id=session_id,
             complexity=self.complexity,
             privacy_required=self.privacy_required,
+            plan=self.plan,
         )
 
         # E1-16: pre-compile the manifest for this run. The manifest
@@ -982,6 +985,7 @@ class PawRuntime:
                     self.skill_fabric, default_role=self.default_role,
                     execution_profile=execution_profile, session_id=session_id,
                     complexity=self.complexity, privacy_required=self.privacy_required,
+                    plan=self.plan,
                 )
                 proposed = await agent_proposer.propose(
                     task_id, node_goal, context=compiled_ctx, candidates=candidates,
@@ -1355,7 +1359,7 @@ class PawRuntime:
             )
         # E2-46: enforce plan effect constraints on proposed actions.
         if proposed.effect_constraints:
-            plan_effect_constraints = proposed.context.get("plan_effect_constraints", [])
+            plan_effect_constraints = list(getattr(getattr(self, "plan", None), "effect_constraints", None) or [])
             disallowed = [c for c in proposed.effect_constraints if c not in plan_effect_constraints]
             if disallowed:
                 await log_autonomy_gate_evaluated(

@@ -80,7 +80,7 @@ class _MockProvider:
 
     async def complete(self, request: dict[str, Any]) -> dict[str, Any]:
         # Deterministic echo so the loop runs end-to-end offline.
-        return {"response": "next: use skill", "model": request.get("model"), "done": False}
+        return {"response": "next: use skill", "model": request.get("model"), "done": True}
 
     async def stream(self, request: dict[str, Any]) -> AsyncGenerator[dict[str, Any], None]:
         yield {"response": "next: use skill", "model": request.get("model")}

@@ -189,7 +189,7 @@ class TestPhase19RuntimeHardening:
         assert isinstance(proposed, ProposedAction)
         assert proposed.operation_id.startswith("op_test_task_1_")
         assert isinstance(proposed.estimated_cost, ResourceUsage)
-        assert proposed.estimated_cost.model_calls >= 1  # Base model call
+        assert proposed.estimated_cost.model_calls == 0  # Proposals no longer assume a base model call
         assert proposed.estimated_cost.tool_calls >= 1  # Tool call for filesystem.read
         assert proposed.idempotency_key is None  # Optional, can be set
 

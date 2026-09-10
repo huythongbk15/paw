@@ -297,7 +297,7 @@ def _proposed_action(
         operation_id=operation_id,
         goal="do something",
         capabilities=capabilities or [Capability.MODEL_INFERENCE, Capability.FILESYSTEM_READ],
-        estimated_cost=ResourceUsage(model_calls=1, tool_calls=1, tokens=10),
+        estimated_cost=ResourceUsage(),
         idempotency_key="idem-priv-001",
         metadata={},
     )

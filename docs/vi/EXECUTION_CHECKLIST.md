@@ -351,7 +351,7 @@ success tác động cao không thấp hơn cloud-only baseline. Ước lượng
 - [ ] `E2-43` Hiển thị depth, evidence, option, readiness, budget, staleness khi inspect. `(0.5d, D2)`
 - [ ] `E2-44` Chạy full readiness negative matrix, chứng minh chỉ `READY` hiện hành tới mutation. `(1d, D2)`
 - [ ] `E2-45` Mở rộng Plan canonical bằng purpose `RESEARCH`, `SPIKE`, `IMPLEMENTATION` và constraint effect. `(0.5d, D1)`
-- [ ] `E2-46` Bắt Planner nhận `Task.id` hiện hữu và persist Plan ID riêng, project revision, constraint fingerprint. `(1d, D3)`
+- [x] `E2-46` Thực thi effect constraints tại runtime trước khi invocation step_fn. `(0.5d, D2)` — PASS: `_gate_action` kiểm tra `proposed.effect_constraints` với `PawRuntime.plan.effect_constraints`; tham số `plan` được wired vào runtime `__init__`; 5 runtime tests pass.
 - [ ] `E2-47` Làm decision final version bất biến và transition `DRAFT`/`FINAL`/`STALE`/`SUPERSEDED`. `(1d, D3)`
 - [ ] `E2-48` Định nghĩa field reasoning assessment có kiểu và threshold role/OOD xác định. `(0.5d, D1)`
 - [ ] `E2-49` Làm escalation non-terminal assessment → Model Router chọn cached → proposal chính xác → Policy → Autonomy → provider trong loop canonical. `(1d, D3)`

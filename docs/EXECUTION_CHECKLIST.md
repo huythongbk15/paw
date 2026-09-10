@@ -389,7 +389,7 @@ baseline. Estimated 34–45 days.
 - [x] `E2-43` Expose depth, evidence, options, readiness, budget and staleness in inspect output. `(0.5d, D2)`
 - [x] `E2-44` Run the full readiness negative matrix and prove only current `READY` reaches mutation. `(1d, D2)`
 - [x] `E2-45` Extend canonical Plan with `RESEARCH`, `SPIKE`, `IMPLEMENTATION` purpose and effect constraints. `(0.5d, D1)` — PASS: Plan dataclass gains `purpose` + `effect_constraints`; schema additive; 4 contract tests pass.
-- [x] `E2-46` Enforce effect constraints at runtime before step_fn invocation. `(0.5d, D2)` — PASS: _gate_action checks proposed.effect_constraints against plan context; 5 runtime tests pass.
+- [x] `E2-46` Enforce effect constraints at runtime before step_fn invocation. `(0.5d, D2)` — PASS: `_gate_action` checks `proposed.effect_constraints` against `PawRuntime.plan.effect_constraints`; `plan` parameter wired into runtime `__init__`; 5 runtime tests pass.
 - [x] `E2-47` Implement immutable final decision versions and `DRAFT`/`FINAL`/`STALE`/`SUPERSEDED` transitions. `(1d, D3)` — PASS: DecisionVersionState + DecisionVersion frozen dataclass with validation; 3 contract tests pass.
 - [x] `E2-48` Define typed reasoning assessment fields and deterministic role/OOD thresholds. `(0.5d, D1)` — PASS: ReasoningTier + OODSignal + ReasoningAssessment frozen dataclass with range/NaN/role_ceiling validation; 8 contract tests pass.
 - [x] `E2-49` Implement non-terminal assessment → cached Model Router selection → exact proposal → Policy → Autonomy → provider escalation in the canonical loop. `(1d, D3)` — PASS: CanonicalProposal frozen dataclass with validation; 1 contract test pass; types exported in __all__.
