@@ -1815,6 +1815,23 @@ class PawRuntime:
                         error=f"rejected:{';'.join(reasons)}",
                         resources_used=ResourceUsage(),
                     )
+                # E2-41: SPIKE_REQUIRED allows only explicitly research-only plans.
+                elif self.readiness == "SPIKE_REQUIRED" and proposed.plan_purpose in ("research", "spike"):
+                    pass  # research/spike plans are allowed
+                elif self.readiness == "SPIKE_REQUIRED":
+                    await log_autonomy_gate_evaluated(
+                        task_id,
+                        proposed.operation_id,
+                        "READY_NOT_MET",
+                        self.readiness,
+                    )
+                    return ExecutionObservation(
+                        step_id=proposed.operation_id,
+                        action_id=proposed.operation_id,
+                        success=False,
+                        error=f"readiness_not_ready:{self.readiness}",
+                        resources_used=ResourceUsage(),
+                    )
                 # E2-39: NEEDS_CLARIFICATION persists the question and waits.
                 elif self.readiness == "NEEDS_CLARIFICATION":
                     question = proposed.clarification_question or "no_question_provided"

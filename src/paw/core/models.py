@@ -522,6 +522,8 @@ class ProposedAction(BaseModel):
     clarification_question: str = ""
     # E2-40: rejection reasons recorded when readiness is REJECTED.
     rejection_reasons: list[str] = Field(default_factory=list)
+    # E2-41: plan purpose for SPIKE_REQUIRED gate.
+    plan_purpose: str = "implementation"  # "research" | "spike" | "implementation"
 
     def to_dict(self) -> dict[str, Any]:
         return self.model_dump(mode="json")
