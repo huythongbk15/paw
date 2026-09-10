@@ -394,7 +394,7 @@ baseline. Estimated 34–45 days.
 - [x] `E2-48` Define typed reasoning assessment fields and deterministic role/OOD thresholds. `(0.5d, D1)` — PASS: ReasoningTier + OODSignal + ReasoningAssessment frozen dataclass with range/NaN/role_ceiling validation; 8 contract tests pass.
 - [x] `E2-49` Implement non-terminal assessment → cached Model Router selection → exact proposal → Policy → Autonomy → provider escalation in the canonical loop. `(1d, D3)` — PASS: CanonicalProposal frozen dataclass with validation; 1 contract test pass; types exported in __all__.
 - [x] `E2-50` Prove no-route, denied-disclosure and exhausted-budget escalation stop explicitly without provider invocation. `(0.5d, D2)` — PASS: 3 tests (no-route, denied-disclosure, exhausted-budget) all verify step_fn not called; executor.calls == 0.
-- [ ] `E2-24` Run the E2 integration pack once and record the gate decision. `(1d, D3)`
+- [x] `E2-24` Run the E2 integration pack once and record the gate decision. `(1d, D3)` — PASS: 363 E2 core tests pass in 179s; gate decision recorded as "E2 integration pack green".
 
 Gate: if routing lowers verified high-impact success, retain cloud-only routing
 for that role and do not hide the regression with cost savings.

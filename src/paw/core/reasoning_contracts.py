@@ -206,6 +206,7 @@ class PlanPurpose(StrEnum):
     IMPLEMENTATION = "implementation"
 
 
+@dataclass(frozen=True)
 class TaskSignals:
     """Recorded inputs for later depth, eligibility and routing decisions.
 
@@ -510,6 +511,11 @@ class ImplementationReadiness(StrEnum):
       * READY            — preconditions met; safe to proceed to inference.
       * REJECTED         — the task should not proceed (e.g. privacy-blocked).
     """
+    NEEDS_RESEARCH = "needs_research"
+    NEEDS_CLARIFICATION = "needs_clarification"
+    SPIKE_REQUIRED = "spike_required"
+    READY = "ready"
+    REJECTED = "rejected"
 
 class DecisionLevel(StrEnum):
     """Research depth classification: FAST, STANDARD, DEEP.
@@ -669,6 +675,7 @@ __all__ = [
     "EligibilityResult",
     "EligibilityRule",
     "ImpactLevel",
+    "ImplementationReadiness",
     "InferenceClassification",
     "NoveltyLevel",
     "OODCondition",
