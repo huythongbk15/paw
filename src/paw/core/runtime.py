@@ -585,6 +585,10 @@ class PawRuntime:
         task_signals: Any | None = None,
         project_root: str | None = None,
         readiness: str = "READY",
+        readiness_revision: str = "",
+        readiness_constraints: str = "",
+        current_revision: str = "",
+        current_constraints: str = "",
     ):
         self.autonomy = autonomy
         self.proposer = proposer or ActionProposer()
@@ -609,6 +613,10 @@ class PawRuntime:
         # carried into the model-routing decision and persisted in the ledger.
         self.task_signals = task_signals
         self.readiness = readiness
+        self.readiness_revision = readiness_revision
+        self.readiness_constraints = readiness_constraints
+        self.current_revision = current_revision
+        self.current_constraints = current_constraints
         # E2-10: project root for reconnaissance evidence gathering.
         self._project_root = project_root
 
@@ -1785,21 +1793,52 @@ class PawRuntime:
         # This is the execution-side model routing (distinct from the proposer's
         # planning-side model call) and is logged for both brain and proposer
         # paths so the ledger always records which model executed a step.
-        # E2-36: block mutating proposals unless readiness is READY.
-        if proposed.is_mutating and self.readiness != "READY":
-            await log_autonomy_gate_evaluated(
-                task_id,
-                proposed.operation_id,
-                "READY_NOT_MET",
-                self.readiness,
-            )
-            return ExecutionObservation(
-                step_id=proposed.operation_id,
-                action_id=proposed.operation_id,
-                success=False,
-                error=f"readiness_not_ready:{self.readiness}",
-                resources_used=ResourceUsage(),
-            )
+        # E2-36/E2-37: block mutating proposals unless readiness is READY and fresh.
+        if proposed.is_mutating:
+            if self.readiness != "READY":
+                await log_autonomy_gate_evaluated(
+                    task_id,
+                    proposed.operation_id,
+                    "READY_NOT_MET",
+                    self.readiness,
+                )
+                return ExecutionObservation(
+                    step_id=proposed.operation_id,
+                    action_id=proposed.operation_id,
+                    success=False,
+                    error=f"readiness_not_ready:{self.readiness}",
+                    resources_used=ResourceUsage(),
+                )
+            # E2-37: staleness check
+            if self.readiness_revision and self.current_revision and self.readiness_revision != self.current_revision:
+                await log_autonomy_gate_evaluated(
+                    task_id,
+                    proposed.operation_id,
+                    "READY_STALE",
+                    f"revision:{self.readiness_revision}->{self.current_revision}",
+                )
+                return ExecutionObservation(
+                    step_id=proposed.operation_id,
+                    action_id=proposed.operation_id,
+                    success=False,
+                    error=f"readiness_stale:revision:{self.readiness_revision}->{self.current_revision}",
+                    resources_used=ResourceUsage(),
+                )
+            if (self.readiness_constraints and self.current_constraints
+                    and self.readiness_constraints != self.current_constraints):
+                await log_autonomy_gate_evaluated(
+                    task_id,
+                    proposed.operation_id,
+                    "READY_STALE",
+                    f"constraints:{self.readiness_constraints}->{self.current_constraints}",
+                )
+                return ExecutionObservation(
+                    step_id=proposed.operation_id,
+                    action_id=proposed.operation_id,
+                    success=False,
+                    error=f"readiness_stale:constraints:{self.readiness_constraints}->{self.current_constraints}",
+                    resources_used=ResourceUsage(),
+                )
 
         # E2-30: enforce research budget before any local research operation.
         if self.task_signals is not None and getattr(self.task_signals, "research_budget", None) is not None:
