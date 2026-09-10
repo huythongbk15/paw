@@ -2204,6 +2204,61 @@ class PawRuntime:
             error=executor_result.error,
         )
 
+    def inspect_state(self) -> dict[str, Any]:
+        """Return a read-only diagnostic snapshot of runtime decision state.
+
+        E2-43: expose depth, evidence, options, readiness, budget and staleness.
+        """
+        depth = None
+        evidence = {}
+        if self.task_signals is not None:
+            from .reasoning_contracts import classify_research_depth
+            depth = classify_research_depth(self.task_signals).value
+            evidence = {
+                "novelty": getattr(self.task_signals, "novelty", None),
+                "impact": getattr(self.task_signals, "impact", None),
+                "privacy": getattr(self.task_signals, "privacy", None),
+                "context_sufficiency": getattr(self.task_signals, "context_sufficiency", None),
+                "budget": getattr(self.task_signals, "budget", None),
+            }
+        readiness_level = self.readiness
+        revision_mismatch = bool(
+            self.readiness_revision
+            and self.current_revision
+            and self.readiness_revision != self.current_revision
+        )
+        constraint_mismatch = bool(
+            self.readiness_constraints
+            and self.current_constraints
+            and self.readiness_constraints != self.current_constraints
+        )
+        is_stale = revision_mismatch or constraint_mismatch
+        return {
+            "depth": depth,
+            "evidence": evidence,
+            "options": {
+                "preferred_model": getattr(self, "_current_model_name", None),
+                "fallback_chain": getattr(self, "_current_fallback_chain", []),
+                "selected_role": self.default_role,
+            },
+            "readiness": {
+                "level": readiness_level,
+                "revision": self.readiness_revision,
+                "constraints": self.readiness_constraints,
+                "is_stale": is_stale,
+            },
+            "budget": {
+                "model_calls": self.autonomy.usage.model_calls,
+                "tool_calls": self.autonomy.usage.tool_calls,
+                "total_tokens": self.autonomy.usage.total_tokens,
+                "wall_time_seconds": getattr(self.autonomy.usage, "wall_time_seconds", 0.0),
+            },
+            "staleness": {
+                "revision_mismatch": revision_mismatch,
+                "constraint_mismatch": constraint_mismatch,
+            },
+        }
+
     async def _create_checkpoint(
         self,
         task_id: str,
