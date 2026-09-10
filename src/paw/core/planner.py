@@ -96,6 +96,9 @@ class Plan:
     nodes: list[TaskNode] = field(default_factory=list)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    # E2-45: plan purpose + effect constraints
+    purpose: str = "implementation"  # PlanPurpose value
+    effect_constraints: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -106,6 +109,8 @@ class Plan:
             "nodes": [n.to_dict() for n in self.nodes],
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
+            "purpose": self.purpose,
+            "effect_constraints": self.effect_constraints,
         }
 
     @classmethod

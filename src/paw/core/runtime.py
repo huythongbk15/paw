@@ -1353,6 +1353,21 @@ class PawRuntime:
                 step_called=False,
                 iterations=i,
             )
+        # E2-46: enforce plan effect constraints on proposed actions.
+        if proposed.effect_constraints:
+            plan_effect_constraints = proposed.context.get("plan_effect_constraints", [])
+            disallowed = [c for c in proposed.effect_constraints if c not in plan_effect_constraints]
+            if disallowed:
+                await log_autonomy_gate_evaluated(
+                    task_id, proposed.operation_id, "STOP",
+                    f"effect_constraint_denied:{';'.join(disallowed)}",
+                )
+                return RuntimeOutcome(
+                    stopped=True,
+                    reason=StopReason.POLICY_DENIED,
+                    step_called=False,
+                    iterations=i,
+                )
         return None  # CONTINUE
 
     # ------------------------------------------------------------------

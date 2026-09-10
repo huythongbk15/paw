@@ -267,7 +267,9 @@ CREATE TABLE IF NOT EXISTS plans (
     session_id TEXT NOT NULL,
     goal TEXT NOT NULL,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    purpose TEXT NOT NULL DEFAULT 'implementation',
+    effect_constraints TEXT NOT NULL DEFAULT '[]'
 );
 
 -- Decisions

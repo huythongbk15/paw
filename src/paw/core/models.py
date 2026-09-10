@@ -526,6 +526,8 @@ class ProposedAction(BaseModel):
     plan_purpose: str = "implementation"  # "research" | "spike" | "implementation"
     # E2-42: spike isolation flag — skip persistence and usage accumulation.
     isolated: bool = False
+    # E2-45/46: effect constraints for the proposed action.
+    effect_constraints: list[str] = Field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return self.model_dump(mode="json")

@@ -200,7 +200,12 @@ def check_research_budget(
     return None
 
 
-@dataclass(frozen=True)
+class PlanPurpose(StrEnum):
+    RESEARCH = "research"
+    SPIKE = "spike"
+    IMPLEMENTATION = "implementation"
+
+
 class TaskSignals:
     """Recorded inputs for later depth, eligibility and routing decisions.
 
@@ -656,16 +661,22 @@ __all__ = [
     "RESEARCH_DEPTH_ACTIONS",
     "ROLE_CEILINGS",
     "BudgetLevel",
+    "CanonicalProposal",
     "ContextSufficiencyLevel",
     "DecisionLevel",
+    "DecisionVersion",
+    "DecisionVersionState",
     "EligibilityResult",
     "EligibilityRule",
     "ImpactLevel",
-    "ImplementationReadiness",
     "InferenceClassification",
     "NoveltyLevel",
     "OODCondition",
+    "OODSignal",
+    "PlanPurpose",
     "ProviderKind",
+    "ReasoningAssessment",
+    "ReasoningTier",
     "ReconnaissanceResult",
     "ResearchBudget",
     "ResearchStopReason",
@@ -681,3 +692,102 @@ __all__ = [
     "evaluate_local_eligibility",
     "research_depth_action",
 ]
+
+
+# E2-47: immutable final decision versions and transitions
+class DecisionVersionState(StrEnum):
+    DRAFT = "draft"
+    FINAL = "final"
+    STALE = "stale"
+    SUPERSEDED = "superseded"
+
+
+@dataclass(frozen=True)
+class DecisionVersion:
+    """Immutable snapshot of a decision at one point in time."""
+
+    version_id: str
+    decision_id: str
+    state: DecisionVersionState
+    payload: Mapping[str, object]
+    created_at: str  # ISO-8601
+    created_by: str = ""
+    superseded_by: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.version_id.strip():
+            raise ValueError("version_id must not be empty")
+        if not self.decision_id.strip():
+            raise ValueError("decision_id must not be empty")
+        if not self.state:
+            raise ValueError("state is required")
+        if not self.payload:
+            raise ValueError("payload must not be empty")
+        if not self.created_at.strip():
+            raise ValueError("created_at must not be empty")
+
+
+# E2-48: typed reasoning assessment fields and deterministic role/OOD thresholds
+class ReasoningTier(StrEnum):
+    ROUTINE = "routine"
+    COMPLEX = "complex"
+    SAFETY_CRITICAL = "safety_critical"
+
+
+class OODSignal(StrEnum):
+    NONE = "none"
+    SUSPICIOUS = "suspicious"
+    CRITICAL = "critical"
+
+
+@dataclass(frozen=True)
+class ReasoningAssessment:
+    """Typed assessment attached to a proposed action or plan."""
+
+    tier: ReasoningTier
+    uncertainty: float  # [0,1]
+    ood_signal: OODSignal
+    confidence: float  # [0,1]
+    role_ceiling: str  # canonical role name
+    allowed_roles: tuple[str, ...]
+    blocked_roles: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.uncertainty <= 1.0:
+            raise ValueError("uncertainty must be within [0,1]")
+        if not 0.0 <= self.confidence <= 1.0:
+            raise ValueError("confidence must be within [0,1]")
+        if math.isnan(self.uncertainty) or math.isnan(self.confidence):
+            raise ValueError("NaN is not allowed")
+        if not self.role_ceiling.strip():
+            raise ValueError("role_ceiling must not be empty")
+        if not self.allowed_roles:
+            raise ValueError("allowed_roles must not be empty")
+        if any(not role.strip() for role in self.blocked_roles):
+            raise ValueError("blocked_roles must not contain empty values")
+        if self.role_ceiling not in self.allowed_roles:
+            raise ValueError("role_ceiling must be in allowed_roles")
+
+
+# E2-49: canonical loop contract for non-terminal assessment → routing → proposal → gates
+@dataclass(frozen=True)
+class CanonicalProposal:
+    """Exact proposal after routing selection, before Policy/Autonomy gates."""
+
+    proposed_action: object
+    selected_model: str
+    inference_classification: str
+    reasoning_assessment: ReasoningAssessment
+    provider_kind: str
+    budget: object  # ResearchBudget for traceability
+    evidence_refs: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not self.selected_model.strip():
+            raise ValueError("selected_model must not be empty")
+        if not self.inference_classification.strip():
+            raise ValueError("inference_classification is required")
+        if not self.provider_kind.strip():
+            raise ValueError("provider_kind is required")
+        if not self.evidence_refs:
+            raise ValueError("evidence_refs must not be empty")
