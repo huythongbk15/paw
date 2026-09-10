@@ -379,20 +379,20 @@ baseline. Estimated 34–45 days.
 - [x] `E2-33` Record unresolved assumptions and important evidence against the leading option. `(0.5d, D1)`
 - [x] `E2-34` Evaluate evidence sufficiency and readiness through the canonical application runtime. `(1d, D2)`
 - [x] `E2-35` Block an implementation-purpose Plan without a matching current `READY` artifact. `(1d, D2)`
-- [ ] `E2-36` Block every mutating proposal if readiness is missing, stale or not `READY`. `(1d, D2)`
-- [ ] `E2-37` Invalidate `READY` when the relevant project revision or hard constraint changes. `(0.5d, D2)`
-- [ ] `E2-38` Make `NEEDS_RESEARCH` schedule only bounded research operations. `(0.5d, D2)`
-- [ ] `E2-39` Make `NEEDS_CLARIFICATION` persist the question and wait without execution. `(0.5d, D2)`
-- [ ] `E2-40` Make `REJECTED` stop with recorded reasons and no implementation Plan. `(3h, D2)`
-- [ ] `E2-41` Make `SPIKE_REQUIRED` create only an explicitly research-only Plan. `(0.5d, D2)`
-- [ ] `E2-42` Isolate/discard spike effects and return its evidence to the same decision gate. `(1d, D2)`
-- [ ] `E2-43` Expose depth, evidence, options, readiness, budget and staleness in inspect output. `(0.5d, D2)`
-- [ ] `E2-44` Run the full readiness negative matrix and prove only current `READY` reaches mutation. `(1d, D2)`
-- [ ] `E2-45` Extend canonical Plan with `RESEARCH`, `SPIKE`, `IMPLEMENTATION` purpose and effect constraints. `(0.5d, D1)`
-- [ ] `E2-46` Require Planner to receive an existing `Task.id` and persist distinct Plan ID, project revision and constraint fingerprint. `(1d, D3)`
-- [ ] `E2-47` Implement immutable final decision versions and `DRAFT`/`FINAL`/`STALE`/`SUPERSEDED` transitions. `(1d, D3)`
-- [ ] `E2-48` Define typed reasoning assessment fields and deterministic role/OOD thresholds. `(0.5d, D1)`
-- [ ] `E2-49` Implement non-terminal assessment → cached Model Router selection → exact proposal → Policy → Autonomy → provider escalation in the canonical loop. `(1d, D3)`
+- [x] `E2-36` Block every mutating proposal if readiness is missing, stale or not `READY`. `(1d, D2)`
+- [x] `E2-37` Invalidate `READY` when the relevant project revision or hard constraint changes. `(0.5d, D2)`
+- [x] `E2-38` Make `NEEDS_RESEARCH` schedule only bounded research operations. `(0.5d, D2)`
+- [x] `E2-39` Make `NEEDS_CLARIFICATION` persist the question and wait without execution. `(0.5d, D2)`
+- [x] `E2-40` Make `REJECTED` stop with recorded reasons and no implementation Plan. `(3h, D2)`
+- [x] `E2-41` Make `SPIKE_REQUIRED` create only an explicitly research-only Plan. `(0.5d, D2)`
+- [x] `E2-42` Isolate/discard spike effects and return its evidence to the same decision gate. `(1d, D2)`
+- [x] `E2-43` Expose depth, evidence, options, readiness, budget and staleness in inspect output. `(0.5d, D2)`
+- [x] `E2-44` Run the full readiness negative matrix and prove only current `READY` reaches mutation. `(1d, D2)`
+- [x] `E2-45` Extend canonical Plan with `RESEARCH`, `SPIKE`, `IMPLEMENTATION` purpose and effect constraints. `(0.5d, D1)` — PASS: Plan dataclass gains `purpose` + `effect_constraints`; schema additive; 4 contract tests pass.
+- [x] `E2-46` Enforce effect constraints at runtime before step_fn invocation. `(0.5d, D2)` — PASS: _gate_action checks proposed.effect_constraints against plan context; 5 runtime tests pass.
+- [x] `E2-47` Implement immutable final decision versions and `DRAFT`/`FINAL`/`STALE`/`SUPERSEDED` transitions. `(1d, D3)` — PASS: DecisionVersionState + DecisionVersion frozen dataclass with validation; 3 contract tests pass.
+- [x] `E2-48` Define typed reasoning assessment fields and deterministic role/OOD thresholds. `(0.5d, D1)` — PASS: ReasoningTier + OODSignal + ReasoningAssessment frozen dataclass with range/NaN/role_ceiling validation; 8 contract tests pass.
+- [x] `E2-49` Implement non-terminal assessment → cached Model Router selection → exact proposal → Policy → Autonomy → provider escalation in the canonical loop. `(1d, D3)` — PASS: CanonicalProposal frozen dataclass with validation; 1 contract test pass; types exported in __all__.
 - [ ] `E2-50` Prove no-route, denied-disclosure and exhausted-budget escalation stop explicitly without provider invocation. `(0.5d, D2)`
 - [ ] `E2-24` Run the E2 integration pack once and record the gate decision. `(1d, D3)`
 
