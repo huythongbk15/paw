@@ -398,7 +398,7 @@ def run_case_file(
     seed: str | None = None,
 ) -> CaseRunResult:
     """Convenience: load a case from disk and run it."""
-    root = project_root or case_path.resolve().parents[-1]
+    root = project_root or Path.cwd()
     manifest = load_case(case_path)
     return run_case(manifest, project_root=root, runs=runs, seed=seed)
 

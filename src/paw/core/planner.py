@@ -123,6 +123,8 @@ class Plan:
             nodes=nodes,
             created_at=datetime.fromisoformat(row["created_at"]),
             updated_at=datetime.fromisoformat(row["updated_at"]),
+            purpose=row.get("purpose", "implementation"),
+            effect_constraints=json.loads(row["effect_constraints"]) if row.get("effect_constraints") else [],
         )
 
     def topological_sort(self) -> list[TaskNode]:
@@ -213,14 +215,16 @@ class Planner:
                 raise ValueError(f"Unknown task: {plan.task_id}")
             await conn.execute(
                 """
-                INSERT INTO plans (id, task_id, session_id, goal, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO plans (id, task_id, session_id, goal, purpose, effect_constraints, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     plan.id,
                     plan.task_id,
                     plan.session_id,
                     plan.goal,
+                    plan.purpose,
+                    json.dumps(plan.effect_constraints),
                     plan.created_at.isoformat(),
                     plan.updated_at.isoformat(),
                 ),

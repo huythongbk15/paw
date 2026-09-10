@@ -10,8 +10,11 @@ Decision level: D2.
 """
 import json
 
-from paw.core.planner import Plan
+import pytest
+
+from paw.core.planner import Plan, Planner
 from paw.core.reasoning_contracts import PlanPurpose
+from paw.core.storage import db
 
 
 def test_plan_purpose_default():
@@ -40,3 +43,24 @@ def test_plan_effect_constraints_json_roundtrip():
     json_str = json.dumps(d)
     d2 = json.loads(json_str)
     assert d2["effect_constraints"] == constraints
+
+
+@pytest.mark.asyncio
+async def test_plan_purpose_and_effect_constraints_persisted():
+    """E2-45 runtime proof: purpose + effect_constraints survive DB round-trip."""
+    planner = Planner()
+    await db.write(
+        "INSERT INTO tasks (id, session_id, goal, status, created_at, updated_at) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        ("task-ec-1", "sess-ec-1", "persist plan fields", "pending", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"),
+    )
+    plan = Plan(task_id="task-ec-1", session_id="sess-ec-1", goal="persist plan fields")
+    plan.id = "plan-ec-1"
+    plan.purpose = "research"
+    plan.effect_constraints = ["read", "model_inference"]
+    await planner._save(plan)
+
+    loaded = await planner.get_plan(plan.id)
+    assert loaded is not None
+    assert loaded.purpose == "research"
+    assert loaded.effect_constraints == ["read", "model_inference"]
