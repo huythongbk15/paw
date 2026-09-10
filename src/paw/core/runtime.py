@@ -79,6 +79,7 @@ from .logging import get_logger
 from .models import (
     Capability,
     ExecutionObservation,
+    ModelSelection,
     PolicyDecision,
     ProposedAction,
     ResourceUsage,
@@ -86,7 +87,17 @@ from .models import (
 )
 from .policy import RequestVerdict
 from .privacy import RemoteDisclosureRefusedError
-from .reasoning_contracts import check_research_budget, check_role_ceiling
+from .reasoning_contracts import (
+    CanonicalProposal,
+    InferenceClassification,
+    OODSignal,
+    ReasoningAssessment,
+    ReasoningTier,
+    ReconnaissanceResult,
+    check_research_budget,
+    check_role_ceiling,
+    classify_inference,
+)
 from .runtime_persistence import RuntimePersistence
 from .task import TaskManager
 from .task_scheduler import TaskScheduleStatus
@@ -518,7 +529,7 @@ class _UnitExecutionResult:
 # A step function receives the task id and the proposed action and returns an
 # ExecutionObservation. Returning an observation with ``done=True`` signals
 # task completion.
-StepFn = Callable[[str, ProposedAction], Awaitable[ExecutionObservation]]
+StepFn = Callable[[str, ProposedAction | CanonicalProposal], Awaitable[ExecutionObservation]]
 
 # A propose function produces the next ProposedAction from runtime state.
 # It mirrors ``ActionProposer.propose`` but is async so the agent brain can
@@ -1100,10 +1111,15 @@ class PawRuntime:
             skills_used=skills_used, context_compiled=context_compiled,
         )
 
+    @staticmethod
+    def _unwrap_proposed(proposed: ProposedAction | CanonicalProposal) -> ProposedAction:
+        """Extract the underlying ProposedAction from a canonical wrapper."""
+        return proposed.proposed_action if isinstance(proposed, CanonicalProposal) else proposed
+
     async def _execute_unit(
         self,
         task_id: str,
-        proposed: ProposedAction,
+        proposed: ProposedAction | CanonicalProposal,
         *,
         iteration_index: int,
         step_fn: StepFn,
@@ -1119,8 +1135,9 @@ class PawRuntime:
         """
         ledger_context = dict(ledger_context or {})
         result = _UnitExecutionResult()
+        action = self._unwrap_proposed(proposed)
 
-        selected_skill = proposed.metadata.get("selected_skill")
+        selected_skill = action.metadata.get("selected_skill")
         if selected_skill:
             result.skills_used.append(str(selected_skill))
             await TaskLedger.record(
@@ -1129,24 +1146,36 @@ class PawRuntime:
                 {"skills": [selected_skill], **ledger_context},
             )
 
-        selected_model = proposed.metadata.get("model_selection")
+        selected_model = action.metadata.get("model_selection")
         if selected_model:
             result.model_selections.append(str(selected_model))
 
         await log_step_proposed(
             task_id,
-            proposed.operation_id,
-            proposed.goal,
-            [capability.value for capability in proposed.capabilities],
-            proposed.estimated_cost.model_dump() if proposed.estimated_cost else None,
+            action.operation_id,
+            action.goal,
+            [capability.value for capability in action.capabilities],
+            action.estimated_cost.model_dump() if action.estimated_cost else None,
         )
 
         result.gate = await self._gate_action(task_id, proposed, iteration_index)
         if result.gate is not None:
             return result
 
+        step_action = self._unwrap_proposed(proposed)
+        if isinstance(proposed, CanonicalProposal):
+            step_action = step_action.model_copy(
+                update={
+                    "metadata": {
+                        **step_action.metadata,
+                        "selected_model": proposed.selected_model,
+                        "inference_classification": proposed.inference_classification,
+                        "provider_kind": proposed.provider_kind,
+                    }
+                }
+            )
         try:
-            observation = await step_fn(task_id, proposed)
+            observation = await step_fn(task_id, step_action)
         except RemoteDisclosureRefusedError as exc:
             # Hard gate: disclosure refused, operation not completed.
             # The OperationRecord is persisted as 'failed' so reopen/resume
@@ -1155,7 +1184,7 @@ class PawRuntime:
             logger.error("remote_disclosure_refused_hard", provider_kind=exc.provider_kind, reasons=exc.refused)
             fail_obs = ExecutionObservation(
                 step_id=step_id,
-                action_id=proposed.operation_id,
+                action_id=action.operation_id,
                 result={"done": False, "progress": 0.0, "error": str(exc)},
                 success=False,
                 error=str(exc),
@@ -1163,7 +1192,7 @@ class PawRuntime:
             try:
                 await RuntimePersistence.commit_operation(
                     task_id=task_id,
-                    operation_id=proposed.operation_id,
+                    operation_id=action.operation_id,
                     op_type=operation_type,
                     status="failed",
                     result_ref=f"observation:{step_id}",
@@ -1178,13 +1207,13 @@ class PawRuntime:
             await TaskLedger.record(
                 task_id,
                 TaskEventType.EXECUTION_COMPLETED,
-                {"step_id": step_id, "action_id": proposed.operation_id, "executed": False, "error": str(exc)},
+                {"step_id": step_id, "action_id": action.operation_id, "executed": False, "error": str(exc)},
             )
             return _UnitExecutionResult(
                 observation=fail_obs,
                 operation_completed=False,
             )
-        observation.action_id = proposed.operation_id
+        observation.action_id = action.operation_id
         observation.step_id = step_id
         result.observation = observation
 
@@ -1203,7 +1232,7 @@ class PawRuntime:
                 operation_metadata["effect_intent"] = effect_intent
         await RuntimePersistence.commit_operation(
             task_id=task_id,
-            operation_id=proposed.operation_id,
+            operation_id=action.operation_id,
             op_type=operation_type,
             status=operation_status,
             result_ref=f"observation:{observation.step_id}",
@@ -1216,9 +1245,9 @@ class PawRuntime:
         result.operation_completed = observation.success
 
         # E2-42: isolated spike proposals skip persistence and usage accumulation.
-        if not getattr(proposed, "isolated", False):
+        if not getattr(action, "isolated", False):
             if observation.success and self.approval_store is not None:
-                await self.approval_store.consume(task_id, proposed)
+                await self.approval_store.consume(task_id, action)
 
             if observation.resources_used:
                 self.autonomy.usage.model_calls += observation.resources_used.model_calls
@@ -1235,7 +1264,7 @@ class PawRuntime:
                 # this StepExecuted entry.
                 await log_step_executed(
                     task_id,
-                    proposed.operation_id,
+                    action.operation_id,
                     success=observation.success,
                     resources_used=observation.resources_used.model_dump(),
                     error=observation.error,
@@ -1249,7 +1278,7 @@ class PawRuntime:
     # ------------------------------------------------------------------
 
     async def _gate_action(
-        self, task_id: str, proposed: ProposedAction, i: int
+        self, task_id: str, proposed: ProposedAction | CanonicalProposal, i: int
     ) -> RuntimeOutcome | None:
         """
         Run the policy + autonomy gates on a proposed action.
@@ -1260,19 +1289,20 @@ class PawRuntime:
         the step. The gate is the single authority: a blocked/denied action
         never reaches ``step_fn``.
         """
+        action = self._unwrap_proposed(proposed)
         # --- Policy Gate (single authority, before any side effect) ---
         verdict = None
         approval_request = None
-        if self.autonomy.policy_guard is not None and proposed.capabilities:
+        if self.autonomy.policy_guard is not None and action.capabilities:
             verdict = await self.autonomy.policy_guard.evaluate_request(
-                proposed.capabilities, proposed.context, task_id=task_id
+                action.capabilities, action.context, task_id=task_id
             )
             needs_approval = verdict.verdict == "ask" or (
                 verdict.verdict == "block"
                 and verdict.stop_reason == StopReason.POLICY_ASK_REQUIRED
             )
             if needs_approval and self.approval_store is not None:
-                if await self.approval_store.is_approved(task_id, proposed):
+                if await self.approval_store.is_approved(task_id, action):
                     # A durable approval only overrides ASK for this exact
                     # fingerprint. A hard DENY can never reach this branch.
                     verdict = RequestVerdict(
@@ -1287,22 +1317,22 @@ class PawRuntime:
                 else:
                     approval_request = await self.approval_store.request(
                         task_id,
-                        proposed,
+                        action,
                         metadata={"policy_reason": verdict.reason},
                     )
             await log_policy_gate_evaluated(
-                task_id, proposed.operation_id, verdict.verdict,
-                [c.value for c in proposed.capabilities],
+                task_id, action.operation_id, verdict.verdict,
+                [c.value for c in action.capabilities],
             )
             if verdict.verdict == "block":
                 await log_autonomy_gate_evaluated(
-                    task_id, proposed.operation_id, "STOP",
+                    task_id, action.operation_id, "STOP",
                     verdict.stop_reason.value if verdict.stop_reason else "policy_denied",
                 )
                 await self.autonomy.record_decision(
                     AutonomyDecision.STOP,
                     verdict.stop_reason or StopReason.POLICY_DENIED,
-                    context={"task_id": task_id, "action_id": proposed.operation_id},
+                    context={"task_id": task_id, "action_id": action.operation_id},
                 )
                 waiting = verdict.stop_reason == StopReason.POLICY_ASK_REQUIRED
                 return RuntimeOutcome(
@@ -1317,17 +1347,17 @@ class PawRuntime:
         # --- Autonomy Gate (budget, progress, repetition, stall) ---
         decision, stop_reason = await self.autonomy.decide(
             task_id,
-            context=proposed.context,
-            required_capabilities=proposed.capabilities,
+            context=action.context,
+            required_capabilities=action.capabilities,
             policy_verdict=verdict,
         )
         await log_autonomy_gate_evaluated(
-            task_id, proposed.operation_id, decision.value,
+            task_id, action.operation_id, decision.value,
             stop_reason.value if stop_reason else None,
         )
         await self.autonomy.record_decision(
             decision, stop_reason,
-            context={"task_id": task_id, "action_id": proposed.operation_id},
+            context={"task_id": task_id, "action_id": action.operation_id},
         )
 
         if decision == AutonomyDecision.STOP:
@@ -1358,12 +1388,12 @@ class PawRuntime:
                 iterations=i,
             )
         # E2-46: enforce plan effect constraints on proposed actions.
-        if proposed.effect_constraints:
+        if action.effect_constraints:
             plan_effect_constraints = list(getattr(getattr(self, "plan", None), "effect_constraints", None) or [])
-            disallowed = [c for c in proposed.effect_constraints if c not in plan_effect_constraints]
+            disallowed = [c for c in action.effect_constraints if c not in plan_effect_constraints]
             if disallowed:
                 await log_autonomy_gate_evaluated(
-                    task_id, proposed.operation_id, "STOP",
+                    task_id, action.operation_id, "STOP",
                     f"effect_constraint_denied:{';'.join(disallowed)}",
                 )
                 return RuntimeOutcome(
@@ -1495,10 +1525,50 @@ class PawRuntime:
                 )
                 continue
 
+            # E2-49: build the canonical proposal after cached model routing
+            # but BEFORE policy/autonomy gates. This is the "exact proposal"
+            # that flows through the single authority.
+            if isinstance(proposed, CanonicalProposal):
+                canonical = proposed
+            else:
+                selection, recon, inference_class = (
+                    await self._select_model_for_proposal(task_id, proposed)
+                )
+                reasoning_assessment = ReasoningAssessment(
+                    tier=ReasoningTier.ROUTINE,
+                    uncertainty=0.5,
+                    ood_signal=OODSignal.NONE,
+                    confidence=0.5,
+                    role_ceiling=self.default_role,
+                    allowed_roles=(self.default_role,),
+                    blocked_roles=(),
+                )
+                provider_kind = (
+                    getattr(selection.model_manifest, "provider", "local")
+                    if selection.model_manifest
+                    else "local"
+                )
+                if not selection.model_name:
+                    selection = ModelSelection(model_name="local")
+                evidence_refs: tuple[str, ...] = ()
+                if recon is not None and getattr(recon, "recent_changed_files", None):
+                    evidence_refs = tuple(str(p) for p in recon.recent_changed_files[:3])
+                if not evidence_refs:
+                    evidence_refs = (f"task:{task_id}",)
+                canonical = CanonicalProposal(
+                    proposed_action=proposed,
+                    selected_model=selection.model_name or "",
+                    inference_classification=inference_class.value,
+                    reasoning_assessment=reasoning_assessment,
+                    provider_kind=provider_kind,
+                    budget=self.execution_profile,
+                    evidence_refs=evidence_refs,
+                )
+
             iterations += 1
             unit = await self._execute_unit(
                 task_id,
-                proposed,
+                canonical,
                 iteration_index=iterations - 1,
                 step_fn=step_fn,
                 operation_type="step",
@@ -1792,10 +1862,59 @@ class PawRuntime:
             evidence_confidence=evidence_confidence,
         )
 
-    async def _execute_action(
+    async def _select_model_for_proposal(
         self,
         task_id: str,
         proposed: ProposedAction,
+    ) -> tuple[ModelSelection, ReconnaissanceResult, InferenceClassification]:
+        """Gather reconnaissance, route a model, and classify inference.
+
+        This is the cached Model Router selection that feeds
+        ``CanonicalProposal`` before Policy/Autonomy gates (E2-49).
+        """
+        token_count = _token_count_from_context(proposed.context)
+        recon = await self._gather_reconnaissance(task_id, proposed.goal)
+        try:
+            selection = await self.model_router.route(
+                task_id,
+                proposed.goal,
+                role=self.default_role,
+                context_size=token_count,
+                complexity=self.complexity,
+                privacy_required=self.privacy_required,
+                execution_profile=self.execution_profile,
+                preferred_provider=self.preferred_provider,
+                task_signals=self.task_signals,
+                reconnaissance=recon,
+            )
+            if selection.model_name:
+                re_evaluated = await self.model_router.re_evaluate_routing(
+                    task_id, selection, recon,
+                )
+                if re_evaluated.model_name != selection.model_name:
+                    selection = re_evaluated
+                    await TaskLedger.record(
+                        task_id,
+                        TaskEventType.MODEL_RESELECTED,
+                        {
+                            "prev_model": re_evaluated.reason,
+                            "model": selection.model_name,
+                            "role": selection.role,
+                            "reason": selection.reason,
+                            "score": selection.score,
+                            "stage": "canonical_proposal",
+                        },
+                    )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("canonical_proposal_route_failed", error=str(exc))
+            selection = ModelSelection()
+        inference_class = classify_inference(recon)
+        return selection, recon, inference_class
+
+    async def _execute_action(
+        self,
+        task_id: str,
+        proposed: ProposedAction | CanonicalProposal,
     ) -> ExecutionObservation:
         """
         Execute a proposed action through the canonical CapabilityRouter.
@@ -1806,7 +1925,8 @@ class PawRuntime:
         ``_gate_action`` has completed, so no provider side effect occurs before
         policy authorization.
         """
-        skill_name = proposed.metadata.get("selected_skill")
+        action = self._unwrap_proposed(proposed)
+        skill_name = action.metadata.get("selected_skill")
         skill_body = ""
         model_result: dict[str, Any] = {}
         selected_model_name: str | None = None
@@ -1816,56 +1936,56 @@ class PawRuntime:
         # planning-side model call) and is logged for both brain and proposer
         # paths so the ledger always records which model executed a step.
         # E2-36/E2-37: block mutating proposals unless readiness is READY and fresh.
-        if proposed.is_mutating:
+        if action.is_mutating:
             if self.readiness != "READY":
                 # E2-38: NEEDS_RESEARCH allows only bounded research operations.
-                if self.readiness == "NEEDS_RESEARCH" and proposed.is_research:
+                if self.readiness == "NEEDS_RESEARCH" and action.is_research:
                     pass  # research operations are allowed; budget check is separate
                 # E2-40: REJECTED stops with recorded reasons, no implementation plan.
                 elif self.readiness == "REJECTED":
-                    reasons = proposed.rejection_reasons or ["no_reasons_provided"]
+                    reasons = action.rejection_reasons or ["no_reasons_provided"]
                     await log_autonomy_gate_evaluated(
                         task_id,
-                        proposed.operation_id,
+                        action.operation_id,
                         "REJECTED",
                         ";".join(reasons),
                     )
                     return ExecutionObservation(
-                        step_id=proposed.operation_id,
-                        action_id=proposed.operation_id,
+                        step_id=action.operation_id,
+                        action_id=action.operation_id,
                         success=False,
                         error=f"rejected:{';'.join(reasons)}",
                         resources_used=ResourceUsage(),
                     )
                 # E2-41: SPIKE_REQUIRED allows only explicitly research-only plans.
-                elif self.readiness == "SPIKE_REQUIRED" and proposed.plan_purpose in ("research", "spike"):
+                elif self.readiness == "SPIKE_REQUIRED" and action.plan_purpose in ("research", "spike"):
                     pass  # research/spike plans are allowed
                 elif self.readiness == "SPIKE_REQUIRED":
                     await log_autonomy_gate_evaluated(
                         task_id,
-                        proposed.operation_id,
+                        action.operation_id,
                         "READY_NOT_MET",
                         self.readiness,
                     )
                     return ExecutionObservation(
-                        step_id=proposed.operation_id,
-                        action_id=proposed.operation_id,
+                        step_id=action.operation_id,
+                        action_id=action.operation_id,
                         success=False,
                         error=f"readiness_not_ready:{self.readiness}",
                         resources_used=ResourceUsage(),
                     )
                 # E2-39: NEEDS_CLARIFICATION persists the question and waits.
                 elif self.readiness == "NEEDS_CLARIFICATION":
-                    question = proposed.clarification_question or "no_question_provided"
+                    question = action.clarification_question or "no_question_provided"
                     await log_autonomy_gate_evaluated(
                         task_id,
-                        proposed.operation_id,
+                        action.operation_id,
                         "NEEDS_CLARIFICATION",
                         question,
                     )
                     return ExecutionObservation(
-                        step_id=proposed.operation_id,
-                        action_id=proposed.operation_id,
+                        step_id=action.operation_id,
+                        action_id=action.operation_id,
                         success=False,
                         error=f"needs_clarification:{question}",
                         resources_used=ResourceUsage(),
@@ -1873,13 +1993,13 @@ class PawRuntime:
                 else:
                     await log_autonomy_gate_evaluated(
                         task_id,
-                        proposed.operation_id,
+                        action.operation_id,
                         "READY_NOT_MET",
                         self.readiness,
                     )
                     return ExecutionObservation(
-                        step_id=proposed.operation_id,
-                        action_id=proposed.operation_id,
+                        step_id=action.operation_id,
+                        action_id=action.operation_id,
                         success=False,
                         error=f"readiness_not_ready:{self.readiness}",
                         resources_used=ResourceUsage(),
@@ -1888,13 +2008,13 @@ class PawRuntime:
             if self.readiness_revision and self.current_revision and self.readiness_revision != self.current_revision:
                 await log_autonomy_gate_evaluated(
                     task_id,
-                    proposed.operation_id,
+                    action.operation_id,
                     "READY_STALE",
                     f"revision:{self.readiness_revision}->{self.current_revision}",
                 )
                 return ExecutionObservation(
-                    step_id=proposed.operation_id,
-                    action_id=proposed.operation_id,
+                    step_id=action.operation_id,
+                    action_id=action.operation_id,
                     success=False,
                     error=f"readiness_stale:revision:{self.readiness_revision}->{self.current_revision}",
                     resources_used=ResourceUsage(),
@@ -1903,13 +2023,13 @@ class PawRuntime:
                     and self.readiness_constraints != self.current_constraints):
                 await log_autonomy_gate_evaluated(
                     task_id,
-                    proposed.operation_id,
+                    action.operation_id,
                     "READY_STALE",
                     f"constraints:{self.readiness_constraints}->{self.current_constraints}",
                 )
                 return ExecutionObservation(
-                    step_id=proposed.operation_id,
-                    action_id=proposed.operation_id,
+                    step_id=action.operation_id,
+                    action_id=action.operation_id,
                     success=False,
                     error=f"readiness_stale:constraints:{self.readiness_constraints}->{self.current_constraints}",
                     resources_used=ResourceUsage(),
@@ -1921,117 +2041,148 @@ class PawRuntime:
             if stop_reason is not None:
                 await log_autonomy_gate_evaluated(
                     task_id,
-                    proposed.operation_id,
+                    action.operation_id,
                     f"RESEARCH_{stop_reason.value.upper()}",
                     stop_reason.value,
                 )
                 return ExecutionObservation(
-                    step_id=proposed.operation_id,
-                    action_id=proposed.operation_id,
+                    step_id=action.operation_id,
+                    action_id=action.operation_id,
                     success=False,
                     error=f"research_budget_exhausted:{stop_reason.value}",
                     resources_used=ResourceUsage(),
                 )
 
-        needs_model = Capability.MODEL_INFERENCE in proposed.capabilities
+        # E2-49: when the canonical proposal injected a cached model selection
+        # into metadata, use it instead of re-routing. This preserves the
+        # "non-terminal assessment → routing → exact proposal → gates"
+        # contract while keeping step_fn backward-compatible.
+        canonical_model_selection: ModelSelection | None = None
+        cached_model = action.metadata.get("selected_model")
+        if cached_model:
+            canonical_model_selection = ModelSelection(
+                model_name=cached_model,
+                inference_classification=InferenceClassification(
+                    action.metadata.get("inference_classification", "model.inference")
+                ),
+            )
+            selected_model_name = cached_model
+            await TaskLedger.record(
+                task_id,
+                TaskEventType.MODEL_SELECTED,
+                {
+                    "model": cached_model,
+                    "role": "canonical",
+                    "reason": "canonical_proposal",
+                    "score": 1.0,
+                    "fallback_chain": [],
+                    "budget": {},
+                    "signals_summary": {},
+                    "inference_classification": action.metadata.get("inference_classification", "model.inference"),
+                    "stage": "canonical_proposal",
+                },
+            )
+
+        needs_model = Capability.MODEL_INFERENCE in action.capabilities
         if needs_model and self.model_router is not None:
-            token_count = _token_count_from_context(proposed.context)
+            token_count = _token_count_from_context(action.context)
             # E2-32: enforce per-role token/cost ceiling before inference.
-            estimated_cost = proposed.estimated_cost.total_cost() if proposed.estimated_cost else 0.0
+            estimated_cost = action.estimated_cost.total_cost() if action.estimated_cost else 0.0
             ceiling_reason = check_role_ceiling(self.default_role, token_count, estimated_cost)
             if ceiling_reason is not None:
                 await log_autonomy_gate_evaluated(
                     task_id,
-                    proposed.operation_id,
+                    action.operation_id,
                     f"ROLE_{ceiling_reason.upper()}",
                     ceiling_reason,
                 )
                 return ExecutionObservation(
-                    step_id=proposed.operation_id,
-                    action_id=proposed.operation_id,
+                    step_id=action.operation_id,
+                    action_id=action.operation_id,
                     success=False,
                     error=f"role_ceiling_exceeded:{ceiling_reason}",
                     resources_used=ResourceUsage(),
                 )
-            # E2-10: gather real reconnaissance from the project (symbols,
-            # recent changes, test associations, knowledge sources) and pass
-            # it to route() so the routing decision is re-evaluated after
-            # reconnaissance rather than only from the initial prompt.
-            recon = await self._gather_reconnaissance(task_id, proposed.goal)
-            try:
-                selection = await self.model_router.route(
-                    task_id,
-                    proposed.goal,
-                    role=self.default_role,
-                    context_size=token_count,
-                    complexity=self.complexity,
-                    privacy_required=self.privacy_required,
-                    execution_profile=self.execution_profile,
-                    preferred_provider=self.preferred_provider,
-                    task_signals=self.task_signals,
-                    reconnaissance=recon,
-                )
-                if selection.model_name:
-                    selected_model_name = selection.model_name
-                    # E2-10: re-evaluate routing after reconnaissance.
-                    # If the recon result changes the inference classification
-                    # (e.g. local evidence is now sufficient), the router
-                    # re-routes from the initial selection.
-                    re_evaluated = await self.model_router.re_evaluate_routing(
-                        task_id, selection, recon,
+            if canonical_model_selection is None:
+                # E2-10: gather real reconnaissance from the project (symbols,
+                # recent changes, test associations, knowledge sources) and pass
+                # it to route() so the routing decision is re-evaluated after
+                # reconnaissance rather than only from the initial prompt.
+                recon = await self._gather_reconnaissance(task_id, action.goal)
+                try:
+                    selection = await self.model_router.route(
+                        task_id,
+                        action.goal,
+                        role=self.default_role,
+                        context_size=token_count,
+                        complexity=self.complexity,
+                        privacy_required=self.privacy_required,
+                        execution_profile=self.execution_profile,
+                        preferred_provider=self.preferred_provider,
+                        task_signals=self.task_signals,
+                        reconnaissance=recon,
                     )
-                    if re_evaluated.model_name != selection.model_name:
-                        selection = re_evaluated
+                    if selection.model_name:
                         selected_model_name = selection.model_name
+                        # E2-10: re-evaluate routing after reconnaissance.
+                        # If the recon result changes the inference classification
+                        # (e.g. local evidence is now sufficient), the router
+                        # re-routes from the initial selection.
+                        re_evaluated = await self.model_router.re_evaluate_routing(
+                            task_id, selection, recon,
+                        )
+                        if re_evaluated.model_name != selection.model_name:
+                            selection = re_evaluated
+                            selected_model_name = selection.model_name
+                            await TaskLedger.record(
+                                task_id,
+                                TaskEventType.MODEL_RESELECTED,
+                                {
+                                    "prev_model": re_evaluated.reason,
+                                    "model": selection.model_name,
+                                    "role": selection.role,
+                                    "reason": selection.reason,
+                                    "score": selection.score,
+                                    "stage": "reconnaissance_re_evaluation",
+                                },
+                            )
+                        # E2-09: classify whether this step required model
+                        # inference or could have been satisfied by local compute.
+                        from .reasoning_contracts import classify_inference
+                        inference_class = classify_inference(recon)
+                        # E2-07: persist the routing decision metadata
+                        # (reason/budget/signals) in the ledger for traceability.
+                        signals_summary = {}
+                        if self.task_signals is not None:
+                            for field in ("novelty", "impact", "privacy",
+                                          "context_sufficiency", "budget"):
+                                val = getattr(self.task_signals, field, None)
+                                if val is not None:
+                                    signals_summary[field] = (
+                                        val.value if hasattr(val, "value") else str(val)
+                                    )
+                        budget_summary = {}
+                        if self.execution_profile is not None:
+                            for key in ("max_model_calls", "max_tool_calls",
+                                        "max_total_tokens", "max_wall_time_seconds"):
+                                budget_summary[key] = getattr(
+                                    self.execution_profile, key, None
+                                )
                         await TaskLedger.record(
                             task_id,
-                            TaskEventType.MODEL_RESELECTED,
+                            TaskEventType.MODEL_SELECTED,
                             {
-                                "prev_model": re_evaluated.reason,
                                 "model": selection.model_name,
                                 "role": selection.role,
                                 "reason": selection.reason,
                                 "score": selection.score,
-                                "stage": "reconnaissance_re_evaluation",
+                                "fallback_chain": selection.fallback_chain,
+                                "budget": budget_summary,
+                                "signals_summary": signals_summary,
+                                "inference_classification": inference_class.value,
+                                "stage": "execution",
                             },
                         )
-                    # E2-09: classify whether this step required model
-                    # inference or could have been satisfied by local compute.
-                    from .reasoning_contracts import classify_inference
-                    inference_class = classify_inference(recon)
-                    # E2-07: persist the routing decision metadata
-                    # (reason/budget/signals) in the ledger for traceability.
-                    signals_summary = {}
-                    if self.task_signals is not None:
-                        for field in ("novelty", "impact", "privacy",
-                                      "context_sufficiency", "budget"):
-                            val = getattr(self.task_signals, field, None)
-                            if val is not None:
-                                signals_summary[field] = (
-                                    val.value if hasattr(val, "value") else str(val)
-                                )
-                    budget_summary = {}
-                    if self.execution_profile is not None:
-                        for key in ("max_model_calls", "max_tool_calls",
-                                    "max_total_tokens", "max_wall_time_seconds"):
-                            budget_summary[key] = getattr(
-                                self.execution_profile, key, None
-                            )
-                    await TaskLedger.record(
-                        task_id,
-                        TaskEventType.MODEL_SELECTED,
-                        {
-                            "model": selection.model_name,
-                            "role": selection.role,
-                            "reason": selection.reason,
-                            "score": selection.score,
-                            "fallback_chain": selection.fallback_chain,
-                            "budget": budget_summary,
-                            "signals_summary": signals_summary,
-                            "inference_classification": inference_class.value,
-                            "stage": "execution",
-                        },
-                    )
                     if self.model_executor is not None:
                         # E1-21: gate remote disclosure before model invocation.
                         # SECRET and WORKSPACE-class context must never reach
@@ -2056,16 +2207,56 @@ class PawRuntime:
                                         provider_kind=provider_kind,
                                         refused=disclosure.refused,
                                     )
-                        messages = proposed.metadata.get("messages") or [
-                            {"role": "user", "content": proposed.goal},
+                        messages = action.metadata.get("messages") or [
+                            {"role": "user", "content": action.goal},
                         ]
                         model_result = await self.model_executor.complete(selection, messages) or {}
-            except RemoteDisclosureRefusedError:
-                # Propagate to _execute_unit which handles it as a
-                # hard stop — the operation is NOT completed.
-                raise
-            except Exception as exc:  # pragma: no cover - defensive
-                logger.warning("execute_model_route_failed", error=str(exc))
+                except RemoteDisclosureRefusedError:
+                    # Propagate to _execute_unit which handles it as a
+                    # hard stop — the operation is NOT completed.
+                    raise
+                except Exception as exc:  # pragma: no cover - defensive
+                    logger.warning("execute_model_route_failed", error=str(exc))
+            else:
+                selection = canonical_model_selection
+                recon = None
+                try:
+                    if self.model_executor is not None:
+                        # E1-21: gate remote disclosure before model invocation.
+                        # SECRET and WORKSPACE-class context must never reach
+                        # a non-local provider kind. Hard gate: refused
+                        # disclosure raises RemoteDisclosureRefused to stop
+                        # the loop, not just skip the current call.
+                        manifest = getattr(self, "_current_manifest", None)
+                        if manifest is not None:
+                            from .privacy import PROVIDER_LOCAL, gate_remote_disclosure
+                            provider_kind = (
+                            getattr(selection.model_manifest, "provider", "local")
+                            if selection.model_manifest
+                            else "local"
+                        )
+                            if provider_kind != PROVIDER_LOCAL:
+                                disclosure = gate_remote_disclosure(
+                                    manifest, provider_kind=provider_kind,
+                                )
+                                if not disclosure.allowed:
+                                    logger.info(
+                                        "remote_disclosure_refused",
+                                        provider_kind=provider_kind,
+                                        reasons=[r for _, r in disclosure.refused],
+                                    )
+                                    raise RemoteDisclosureRefusedError(
+                                        provider_kind=provider_kind,
+                                        refused=disclosure.refused,
+                                    )
+                        messages = action.metadata.get("messages") or [
+                            {"role": "user", "content": action.goal},
+                        ]
+                        model_result = await self.model_executor.complete(selection, messages) or {}
+                except RemoteDisclosureRefusedError:
+                    raise
+                except Exception as exc:  # pragma: no cover - defensive
+                    logger.warning("execute_model_route_failed", error=str(exc))
 
         if skill_name and self.skill_fabric is not None:
             try:
@@ -2079,16 +2270,16 @@ class PawRuntime:
         # authorized the exact capability set at this point.
         detailed_scores = await self.capability_router.route_detailed(
             task_id,
-            proposed.goal,
-            proposed.capabilities,
-            context_size=_token_count_from_context(proposed.context),
+            action.goal,
+            action.capabilities,
+            context_size=_token_count_from_context(action.context),
             complexity=self.complexity,
             privacy_required=self.privacy_required,
         )
         eligible_details = [
             detail for detail in detailed_scores if not detail.missing_capabilities
         ]
-        preferred_executor = proposed.metadata.get("preferred_executor")
+        preferred_executor = action.metadata.get("preferred_executor")
         best_detail = next(
             (
                 detail
@@ -2112,7 +2303,7 @@ class PawRuntime:
                     "executor": None,
                     "executed": False,
                     "error": error,
-                    "capabilities": [c.value for c in proposed.capabilities],
+                    "capabilities": [c.value for c in action.capabilities],
                 },
             )
             await TaskLedger.record(
@@ -2122,9 +2313,9 @@ class PawRuntime:
             )
             return ExecutionObservation(
                 step_id="",
-                action_id=proposed.operation_id,
+                action_id=action.operation_id,
                 result={"done": False, "progress": 0.0, "skill": skill_name},
-                resources_used=proposed.estimated_cost or ResourceUsage(tool_calls=1),
+                resources_used=action.estimated_cost or ResourceUsage(tool_calls=1),
                 success=False,
                 error=error,
             )
@@ -2136,29 +2327,29 @@ class PawRuntime:
                 "skill": skill_name,
                 "executor": executor.name,
                 "score": executor_score.executor_score if executor_score else None,
-                "capabilities": [c.value for c in proposed.capabilities],
+                "capabilities": [c.value for c in action.capabilities],
             },
         )
 
-        context_value = proposed.context
+        context_value = action.context
         if hasattr(context_value, "to_dict"):
             context_value = context_value.to_dict()
         if not isinstance(context_value, str):
             context_value = json.dumps(context_value or {}, default=str)
         executor_task = ExecutableTask(
             task_id=task_id,
-            goal=proposed.goal,
-            capabilities=proposed.capabilities,
+            goal=action.goal,
+            capabilities=action.capabilities,
             context=context_value,
-            operation_id=proposed.operation_id,
-            idempotency_key=proposed.idempotency_key,
-            metadata=copy.deepcopy(proposed.metadata),
+            operation_id=action.operation_id,
+            idempotency_key=action.idempotency_key,
+            metadata=copy.deepcopy(action.metadata),
             model=selected_model_name,
         )
         effect_intent: EffectIntent | None = None
         prepared_record = await OperationRecordStore.get(
             task_id,
-            proposed.operation_id,
+            action.operation_id,
         )
         if prepared_record is not None and prepared_record.status == "prepared":
             raw_intent = prepared_record.metadata.get("effect_intent")
@@ -2183,21 +2374,21 @@ class PawRuntime:
             if effect_intent is not None:
                 await RuntimePersistence.prepare_operation(
                     task_id=task_id,
-                    operation_id=proposed.operation_id,
+                    operation_id=action.operation_id,
                     op_type="external_effect",
                     effect_intent=effect_intent.to_dict(),
                 )
             executor_result = await executor.execute(executor_task, context_value)
         executed = bool(executor_result.success)
 
-        done = bool(proposed.metadata.get("done", False)) or bool(model_result.get("done", False))
+        done = bool(action.metadata.get("done", False)) or bool(model_result.get("done", False))
         result: dict[str, Any] = {
             "done": done,
             "progress": 1.0 if done else 0.0,
             "skill": skill_name,
             "skill_body": skill_body[:500] if skill_body else None,
             "model_response": model_result.get(
-                "response", proposed.metadata.get("model_response", "")
+                "response", action.metadata.get("model_response", "")
             ),
             "model": selected_model_name,
             "model_error": (
@@ -2210,13 +2401,13 @@ class PawRuntime:
             "effect_intent": effect_intent.to_dict() if effect_intent else None,
         }
 
-        resources = proposed.estimated_cost.model_copy(deep=True)
+        resources = action.estimated_cost.model_copy(deep=True)
         resources.tool_calls = max(resources.tool_calls, 1)
         if needs_model and selected_model_name:
             resources.model_calls = max(resources.model_calls, 1)
         return ExecutionObservation(
             step_id="",
-            action_id=proposed.operation_id,
+            action_id=action.operation_id,
             result=result,
             resources_used=resources,
             success=executed,
