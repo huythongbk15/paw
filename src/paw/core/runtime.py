@@ -1799,6 +1799,22 @@ class PawRuntime:
                 # E2-38: NEEDS_RESEARCH allows only bounded research operations.
                 if self.readiness == "NEEDS_RESEARCH" and proposed.is_research:
                     pass  # research operations are allowed; budget check is separate
+                # E2-39: NEEDS_CLARIFICATION persists the question and waits.
+                elif self.readiness == "NEEDS_CLARIFICATION":
+                    question = proposed.clarification_question or "no_question_provided"
+                    await log_autonomy_gate_evaluated(
+                        task_id,
+                        proposed.operation_id,
+                        "NEEDS_CLARIFICATION",
+                        question,
+                    )
+                    return ExecutionObservation(
+                        step_id=proposed.operation_id,
+                        action_id=proposed.operation_id,
+                        success=False,
+                        error=f"needs_clarification:{question}",
+                        resources_used=ResourceUsage(),
+                    )
                 else:
                     await log_autonomy_gate_evaluated(
                         task_id,

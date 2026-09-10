@@ -518,6 +518,8 @@ class ProposedAction(BaseModel):
     # E2-38: research proposals are the only mutating operations allowed
     # when readiness is NEEDS_RESEARCH.
     is_research: bool = False
+    # E2-39: clarification question persisted when readiness is NEEDS_CLARIFICATION.
+    clarification_question: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return self.model_dump(mode="json")
