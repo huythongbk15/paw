@@ -524,6 +524,8 @@ class ProposedAction(BaseModel):
     rejection_reasons: list[str] = Field(default_factory=list)
     # E2-41: plan purpose for SPIKE_REQUIRED gate.
     plan_purpose: str = "implementation"  # "research" | "spike" | "implementation"
+    # E2-42: spike isolation flag — skip persistence and usage accumulation.
+    isolated: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return self.model_dump(mode="json")

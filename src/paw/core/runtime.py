@@ -1210,31 +1210,34 @@ class PawRuntime:
             operation_metadata=operation_metadata,
         )
         result.operation_completed = observation.success
-        if observation.success and self.approval_store is not None:
-            await self.approval_store.consume(task_id, proposed)
 
-        if observation.resources_used:
-            self.autonomy.usage.model_calls += observation.resources_used.model_calls
-            self.autonomy.usage.tool_calls += observation.resources_used.tool_calls
-            self.autonomy.usage.total_tokens += observation.resources_used.tokens
-            self.autonomy.usage.wall_time_seconds += (
-                observation.resources_used.wall_time_ms / 1000.0
-            )
-            # E2-16: record the *observed* usage once in the ledger.
-            # The StepProposed event logged the *estimate*; this records the
-            # actual observed usage. They are separate audit records — summing
-            # StepProposed.estimated_cost + StepExecuted.resources_used would
-            # be double accounting; the authoritative source for actuals is
-            # this StepExecuted entry.
-            await log_step_executed(
-                task_id,
-                proposed.operation_id,
-                success=observation.success,
-                resources_used=observation.resources_used.model_dump(),
-                error=observation.error,
-            )
+        # E2-42: isolated spike proposals skip persistence and usage accumulation.
+        if not getattr(proposed, "isolated", False):
+            if observation.success and self.approval_store is not None:
+                await self.approval_store.consume(task_id, proposed)
 
-        await self.autonomy.record_iteration(result.progress)
+            if observation.resources_used:
+                self.autonomy.usage.model_calls += observation.resources_used.model_calls
+                self.autonomy.usage.tool_calls += observation.resources_used.tool_calls
+                self.autonomy.usage.total_tokens += observation.resources_used.tokens
+                self.autonomy.usage.wall_time_seconds += (
+                    observation.resources_used.wall_time_ms / 1000.0
+                )
+                # E2-16: record the *observed* usage once in the ledger.
+                # The StepProposed event logged the *estimate*; this records the
+                # actual observed usage. They are separate audit records — summing
+                # StepProposed.estimated_cost + StepExecuted.resources_used would
+                # be double accounting; the authoritative source for actuals is
+                # this StepExecuted entry.
+                await log_step_executed(
+                    task_id,
+                    proposed.operation_id,
+                    success=observation.success,
+                    resources_used=observation.resources_used.model_dump(),
+                    error=observation.error,
+                )
+
+            await self.autonomy.record_iteration(result.progress)
         return result
 
     # ------------------------------------------------------------------
