@@ -20,7 +20,7 @@ from paw.core.reasoning_contracts import (
 
 class TestInvariantCeilings:
     def test_inv1_all_roles_have_ceiling(self):
-        expected = {r for r in ModelRole}
+        expected = set(ModelRole)
         assert set(ROLE_CEILINGS.keys()) == expected
 
     def test_inv2_fast_ceiling(self):

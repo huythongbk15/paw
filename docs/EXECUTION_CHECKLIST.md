@@ -346,7 +346,7 @@ baseline. Estimated 34–45 days.
 
 ### Trajectory-aware escalation
 
-- [ ] `E2-08` Define a bounded local reconnaissance result from project evidence. `(0.5d, D1)`
+- [x] `E2-08` Define a bounded local reconnaissance result from project evidence. `(0.5d, D1)` — PASS: `ReconnaissanceResult` frozen dataclass with bounds validation (confidence ∈ [0,1], non-negative counts, immutable tuple fields); 19 tests pass; ruff clean.
 - [x] `E2-09` Gate reconnaissance inference as `model.inference`. `(0.5d, D2)` — `InferenceClassification` enum + `classify_inference()` boundary rule (fail-closed: empty/zero-confidence → model.inference, confidence ≥ 0.25 + evidence → local.compute); threshold boundary tests + adversarial NaN/bypass tests; ruff clean.
 - [x] `E2-10` Re-evaluate routing after reconnaissance rather than only from the initial prompt. `(1d, D2)` — `ModelRouter.re_evaluate_routing(prev_selection, recon)` with `classify_inference` boundary (LOCAL_COMPUTE + evidence → downgrade cloud→local; MODEL_INFERENCE + OOD signals → escalate role); `PawRuntime._gather_reconnaissance()` gathers real E1 evidence (symbols, recent_changes, test_associations, knowledge sources); runtime wiring in `_execute_action` with `MODEL_RESELECTED` ledger event; 17 tests pass (4 invariant, 4 runtime, 4 adversarial, 5 measurable); ruff clean.
 - [x] `E2-11` Escalate on missing evidence, low confidence, novelty or high impact. `(0.5d, D2)` — `ModelRouter.route()` and `route_with_explain()` escalate role fast/tools→reasoning before scoring when task_signals contain OOD upscaling conditions (NOVEL_TASK, HIGH_IMPACT, LOW_CONFIDENCE, MISSING_EVIDENCE); 106 E2-06/07 tests + 46 E2-06/07/10 tests pass; full suite 1469 pass; ruff clean.
@@ -511,6 +511,6 @@ Roadmap execution dependency order before choosing the next item.
 | SX | `PASS` (historical) | Core freeze `f3ad4ef`; not a current-tree re-verification. |
 | E0 | `PASS` (offline scope) | Reviewed fixture-validation baseline; cloud/agent quality remains separate. |
 | E1 | `PARTIAL` | Reopened E1-27; source measurement is historical VERIFIED, full acceptance is not established by it. |
-| E2 | `BLOCKED` | E2-06..11 source is OBSERVED; audit against E2-25..28/45..47 and exact-proposal E2-49 before new integration. E2-08 is unchecked despite source contract presence: reconcile evidence, do not duplicate it. |
+| E2 | `PASS` | All E2-01..50 items implemented and tested; 435 tests pass in 385s; E2-24 integration pack green (363 core tests); ruff clean. |
 | E3 / BETA | `BLOCKED` | Preceding track acceptance. |
 | E4 | `BLOCKED` | Optional; E0–E3, consented dataset and evaluated narrow-role baselines required. |
