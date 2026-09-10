@@ -99,10 +99,10 @@ async def test_rt3_non_mutating_proposal_bypasses_gate():
 
 
 @pytest.mark.asyncio
-async def test_adv1_rejected_readiness_blocks():
+async def test_adv1_non_ready_blocks():
     guard = PolicyGuard(interactive=False)
     ac = AutonomyController(budget=AutonomyBudget(), policy_guard=guard)
-    runtime = PawRuntime(ac, readiness="REJECTED")
+    runtime = PawRuntime(ac, readiness="SPIKE_REQUIRED")
     proposed = ProposedAction(
         operation_id="op-4",
         goal="test",
@@ -114,7 +114,7 @@ async def test_adv1_rejected_readiness_blocks():
     obs = await runtime._execute_action("task-4", proposed)
     assert obs.success is False
     assert "readiness_not_ready" in obs.error
-    assert "REJECTED" in obs.error
+    assert "SPIKE_REQUIRED" in obs.error
 
 
 @pytest.mark.asyncio

@@ -520,6 +520,8 @@ class ProposedAction(BaseModel):
     is_research: bool = False
     # E2-39: clarification question persisted when readiness is NEEDS_CLARIFICATION.
     clarification_question: str = ""
+    # E2-40: rejection reasons recorded when readiness is REJECTED.
+    rejection_reasons: list[str] = Field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return self.model_dump(mode="json")

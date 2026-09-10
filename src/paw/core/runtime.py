@@ -1799,6 +1799,22 @@ class PawRuntime:
                 # E2-38: NEEDS_RESEARCH allows only bounded research operations.
                 if self.readiness == "NEEDS_RESEARCH" and proposed.is_research:
                     pass  # research operations are allowed; budget check is separate
+                # E2-40: REJECTED stops with recorded reasons, no implementation plan.
+                elif self.readiness == "REJECTED":
+                    reasons = proposed.rejection_reasons or ["no_reasons_provided"]
+                    await log_autonomy_gate_evaluated(
+                        task_id,
+                        proposed.operation_id,
+                        "REJECTED",
+                        ";".join(reasons),
+                    )
+                    return ExecutionObservation(
+                        step_id=proposed.operation_id,
+                        action_id=proposed.operation_id,
+                        success=False,
+                        error=f"rejected:{';'.join(reasons)}",
+                        resources_used=ResourceUsage(),
+                    )
                 # E2-39: NEEDS_CLARIFICATION persists the question and waits.
                 elif self.readiness == "NEEDS_CLARIFICATION":
                     question = proposed.clarification_question or "no_question_provided"
