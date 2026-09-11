@@ -40,6 +40,9 @@ class NoRouteRouter:
             model_manifest=ModelManifest(name="", provider=PROVIDER_LOCAL, roles=("worker",), capabilities=[]),
         )
 
+    async def re_evaluate_routing(self, task_id, selection, recon):
+        return selection
+
 
 class DenyRouter:
     async def route(self, *args, **kwargs):
@@ -52,6 +55,9 @@ class DenyRouter:
             model_manifest=ModelManifest(name="remote-model", provider="cloud_approved", roles=("worker",), capabilities=[]),
         )
 
+    async def re_evaluate_routing(self, task_id, selection, recon):
+        return selection
+
 
 class AlwaysRouteRouter:
     async def route(self, *args, **kwargs):
@@ -63,6 +69,9 @@ class AlwaysRouteRouter:
             fallback_chain=[],
             model_manifest=ModelManifest(name="local-model", provider=PROVIDER_LOCAL, roles=("worker",), capabilities=[]),
         )
+
+    async def re_evaluate_routing(self, task_id, selection, recon):
+        return selection
 
 
 @pytest.fixture()

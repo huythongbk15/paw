@@ -2072,7 +2072,8 @@ class PawRuntime:
         cached_model = action.metadata.get("selected_model")
         if cached_model:
             # Look up the full manifest from the registry to preserve provider info
-            manifest = self.model_router.registry.get(cached_model) if self.model_router else None
+            registry = getattr(self.model_router, "registry", None)
+            manifest = registry.get(cached_model) if registry else None
             canonical_model_selection = ModelSelection(
                 model_name=cached_model,
                 model_manifest=manifest,
