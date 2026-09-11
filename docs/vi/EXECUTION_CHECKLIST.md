@@ -466,5 +466,5 @@ hoặc bằng chứng chỉ kiểm contract riêng. Chọn việc theo dependenc
 | E0 | `PASS` (offline) | Fixture-validation; cloud/agent quality tách riêng. |
 | E1 | `VERIFIED` | `8d01d90`: min_recall=1.0, 12/12 samples, real Ollama embeddings, measurement_gate=PASS. |
 | E2 | `RATIFIED` | Prereq E2-25..28 + E2-45..47 PASS (119 tests). Cloud-baseline boundary resolved. |
-| E3 / BETA | `BLOCKED` | Chờ E2 integration (rows 3-4). |
+| E3 / BETA | `BLOCKED` | E2 integration hoàn tất; E3 chờ verification. |
 | E4 | `BLOCKED`, tùy chon | Cần E0-E3, dataset verified; không bắt buộc cho BETA. |
