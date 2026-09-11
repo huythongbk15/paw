@@ -7,5 +7,3 @@
 # can find in the file; a real-world fixture would
 # contain actual repository content, but the
 # deterministic runner scores the markers.
-
-# deterministic result

@@ -588,8 +588,8 @@ class SkillFabric:
         """
         skills = list(self._manifest_index.values())
         if enabled_only and state is None:
-            # Default: only ACTIVE skills pass the gate
-            skills = [s for s in skills if s.state == SkillState.ACTIVE]
+            # E3 gate: only ACTIVE skills that are also enabled
+            skills = [s for s in skills if s.state == SkillState.ACTIVE and s.enabled]
         elif state is not None:
             skills = [s for s in skills if s.state == state]
         if category:
