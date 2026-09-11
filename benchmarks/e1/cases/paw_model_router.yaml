@@ -1,7 +1,7 @@
 schema_version: "1.0.0"
 case_id: paw_model_router
 decision_artifact_version: "1.0.0"
-project_revision: "74b563e"
+project_revision: "f1ab705"
 category: repo_understanding
 privacy_class: internal
 goal: |
@@ -10,7 +10,7 @@ goal: |
   is found and the router/registry classes are present.
 fixtures:
   - path: src/paw/core/model_router.py
-    revision: 74b563e
+    revision: f1ab705
     purpose: |
       Reviewed PAW model router module. ModelRouter routes a task to
       the best-scoring model; ModelRegistry owns the model manifests.
