@@ -355,7 +355,7 @@ The runner is a future consumer of the PAW runtime loop; it is NOT yet integrate
 5. ~~**Phase 19 Runtime Hardening**~~ ✅ DONE (2026-08-30, 501 tests)
 6. ~~**Phase 20 Agent Loop**~~ ✅ DONE (506 tests)
 7. ~~**E0 track**~~ ✅ VERIFIED on f3ad4ef (13/13 fixture-validation baseline; E0-23a paw.core surface; E0-27 gate verdict PASS)
-8. ~~**E1 track**~~ ✅ VERIFIED (37/37 + 3/3 backlog PASS; E1-27 measurement gate PASS/VERIFIED on clean revision `c28d679`; 19 E1-27 tests pass)
+8. ~~**E1 track**~~ ✅ VERIFIED (37/37 + 3/3 backlog PASS; E1-27 measurement gate PASS/VERIFIED on clean revision `8d01d90` with real Ollama embeddings, min_recall=1.00; all E1-27 production measurements pass)
 9. ~~**E1-35 E2E recall contract**~~ ✅ VERIFIED (10 tests, real fixture repo, no monkeypatch)
 10. **E2** — IN PROGRESS (E2-01 audit complete at `ba1a583`; E2-02 readiness record scaffolded in docs; E0+E1 VERIFIED gate satisfied)
 
@@ -888,4 +888,5 @@ Handoff spec: `_filter_for_availability` restore supported-role filtering + desc
 - **Gate status**: `measurement_gate = PASS` on clean revision `ae5344a` (10+9 E1-27 tests pass; `test_dirty_tree_cannot_self_certify_a_pass` proves `dirty=False` -> PASS).
   Evidence: `VERIFIED` (clean revision).
 - **Report**: `benchmarks/e1/e1_production_report.md` on clean revision `ae5344a`: `dirty=false`, `metric_gate=PASS`, `measurement_gate=PASS`, `evidence_state=VERIFIED`, min_recall=1.00, median_warm_reduction=0.871 (fixtures_paw corpus, 12 files, max_tokens=8000, max_fragments=5, max_sources=3). The E1-27 fix's `0.981` reduction was measured on the PAW source corpus (69 files, max_tokens=5000) — see E1-27 section above.
+- **Production re-run (2026-09-11)**: E1-27 re-VERIFIED on clean revision `8d01d90` with real Ollama embeddings (`nomic-embed-text:latest`), full PAW source corpus (71 files, 300+ chunks), `max_tokens=5000, max_fragments=30, max_sources=10`. **min_recall=1.00, all 12 samples (6 cases × cold/warm) at 100% recall**; median_warm_reduction=0.992. `metric_gate=PASS`, `measurement_gate=PASS`, `evidence_state=VERIFIED`, `fixtures_fresh=true`, `dirty=false`. E1 gate status: **VERIFIED** on clean revision `8d01d90`.
 
