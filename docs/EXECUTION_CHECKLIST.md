@@ -415,9 +415,9 @@ and reversible personal skill with a negative trigger case. Estimated 15–25 da
 - [x] `E3-02` Define candidate, reviewed, active, rejected, deprecated and superseded states. `(0.5d, D1)` — DONE: `SkillState` StrEnum with 6 values (CANDIDATE, REVIEWED, ACTIVE, REJECTED, DEPRECATED, SUPERSEDED)
 - [x] `E3-03` Define legal transitions and the actor/evidence required for each. `(0.5d, D1)` — DONE: `LEGAL_SKILL_TRANSITIONS` closed table + `validate_skill_transition()`
 - [x] `E3-04` Define skill provenance, scope, version and rollback metadata. `(0.5d, D1)` — DONE (in skill_governance.py)
-- [ ] `E3-05` Define trigger, non-applicability, input/output and allowed-tool fields. `(0.5d, D1)`
-- [ ] `E3-06` Define required evidence and success/failure checks. `(0.5d, D1)`
-- [ ] `E3-07` Prove facts/preferences cannot be normalized directly into active skills. `(3h, D1)`
+- [x] `E3-05` Define trigger, non-applicability, input/output and allowed-tool fields. `(0.5d, D1)` — DONE (CandidateDraft has these fields; _derive_non_applicable, _derive_criteria in skill_governance.py)
+- [x] `E3-06` Define required evidence and success/failure checks. `(0.5d, D1)` — DONE (SuccessCriteria/FailureCriterria fields in CandidateDraft + _derive_criteria)
+- [x] `E3-07` Prove facts/preferences cannot be normalized directly into active skills. `(3h, D1)` — DONE (normalize_fact_to_skill in skills.py, 3 tests pass)
 
 ### Candidate creation and review
 
@@ -425,8 +425,8 @@ and reversible personal skill with a negative trigger case. Estimated 15–25 da
 - [x] `E3-09` Create a deterministic trace-to-candidate draft with source links. `(1d, D2)` — DONE (15 tests)
 - [x] `E3-10` Redact secrets and private payloads before candidate persistence. `(0.5d, D2)` — DONE (redact_payload, redact_dict in skill_governance.py)
 - [x] `E3-11` Detect exact duplicate and overlapping trigger candidates. `(1d, D1)` — DONE (detect_duplicate_candidates)
-- [ ] `E3-12` Present candidate diff, provenance and expected effect for approval. `(0.5d, D2)`
-- [ ] `E3-13` Persist rejection without repeatedly proposing the same version. `(0.5d, D2)`
+- [x] `E3-12` Present candidate diff, provenance and expected effect for approval. `(0.5d, D2)` — DONE (generate_skill_diff, 2 tests pass)
+- [x] `E3-13` Persist rejection without repeatedly proposing the same version. `(0.5d, D2)` — DONE (skill_rejections table + is_version_rejected() + submit_candidate guard)
 
 ### Replay, promotion and rollback
 

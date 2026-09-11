@@ -632,3 +632,9 @@ class SkillGovernance:
     async def rollback(self, name: str, to_version: str | None = None) -> bool:
         """Rollback to a prior version (E3-19)."""
         return await self.fabric.rollback_skill(name, to_version)
+
+
+# E3-07: The canonical implementation lives in src/paw/core/skills.py
+# normalize_fact_to_skill. It is a negative function that always raises
+# ValueError, preventing facts/preferences from being normalized into
+# executable skill bodies. See tests/test_e3_facts_guard.py for coverage.

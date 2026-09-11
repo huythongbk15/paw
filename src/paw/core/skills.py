@@ -658,18 +658,40 @@ class SkillFabric:
             info["metadata"] = manifest.metadata.data
         return info
 
+    async def is_version_rejected(self, name: str, version: str) -> bool:
+        """E3-13: Check if a specific skill version was previously rejected."""
+        row = await db.fetchone(
+            "SELECT 1 FROM skill_rejections WHERE skill_name = ? AND version = ?",
+            (name, version),
+        )
+        return row is not None
+
     def list_all(self) -> list[SkillManifest]:
         """List all manifests regardless of state (for governance)."""
         return list(self._manifest_index.values())
 
-    async def submit_candidate(self, manifest: SkillManifest) -> None:
-        """Register a new CANDIDATE skill (E3-09)."""
-        manifest.state = SkillState.CANDIDATE
+    async def submit_candidate(self, manifest: SkillManifest) -> bool:
+        """Register a new CANDIDATE skill (E3-09).
+
+        E3-13: Returns False if the exact (name, version) was previously
+        rejected — prevents re-proposing the same rejected version.
+        """
         if not manifest.skill_version:
             manifest.skill_version = manifest.version
+        # E3-13: Check rejection history
+        row = await db.fetchone(
+            "SELECT 1 FROM skill_rejections WHERE skill_name = ? AND version = ?",
+            (manifest.name, manifest.skill_version),
+        )
+        if row is not None:
+            logger.warning("rejected_version_not_reproposed", name=manifest.name,
+                          version=manifest.skill_version)
+            return False
+        manifest.state = SkillState.CANDIDATE
         self._manifest_index[manifest.name] = manifest
         await self._save_to_db(manifest)
         logger.info("skill_candidate_submitted", name=manifest.name, version=manifest.skill_version)
+        return True
 
     def get_candidates(self) -> list[SkillManifest]:
         """E3-02: Return all CANDIDATE state skills."""
@@ -691,6 +713,18 @@ class SkillFabric:
         """E3-08/09: Create and persist a skill candidate from a verified trace."""
         candidate = SkillCandidate.from_trace(trace)
         manifest = candidate.to_manifest()
+        # E3-13: Check rejection history
+        row = await db.fetchone(
+            "SELECT 1 FROM skill_rejections WHERE skill_name = ? AND version = ?",
+            (manifest.name, manifest.skill_version),
+        )
+        if row is not None:
+            logger.warning("rejected_version_not_reproposed", name=manifest.name,
+                          version=manifest.skill_version, trace_id=trace.task_id)
+            raise ValueError(
+                f"Cannot re-propose rejected skill '{manifest.name}' "
+                f"version '{manifest.skill_version}'"
+            )
         await self._save_to_db(manifest)
         self._manifest_index[manifest.name] = manifest
         logger.info("skill_candidate_from_trace", name=manifest.name, trace_id=trace.task_id)
@@ -769,6 +803,20 @@ class SkillFabric:
         manifest.metadata.data["rejected_by"] = rejector
         manifest.metadata.data["rejected_at"] = datetime.now(UTC).isoformat()
         await self._save_to_db(manifest)
+        # E3-13: Record rejection to prevent same-version re-proposal
+        await db.write(
+            """INSERT OR REPLACE INTO skill_rejections
+               (id, skill_name, version, reason, rejected_by, rejected_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (
+                f"{manifest.name}:{manifest.skill_version}",
+                manifest.name,
+                manifest.skill_version,
+                reason,
+                rejector,
+                datetime.now(UTC).isoformat(),
+            ),
+        )
         logger.info("skill_rejected", name=name, reason=reason)
         return True
 

@@ -167,6 +167,16 @@ CREATE TABLE IF NOT EXISTS skill_registry (
     FOREIGN KEY (skill_id) REFERENCES skills(id)
 );
 
+-- E3-13: Track rejected skill versions to prevent re-proposal
+CREATE TABLE IF NOT EXISTS skill_rejections (
+    id TEXT PRIMARY KEY,          -- "<skill_name>:<version>"
+    skill_name TEXT NOT NULL,
+    version TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    rejected_by TEXT NOT NULL,
+    rejected_at TEXT NOT NULL
+);
+
 -- FTS5 Virtual Table for Skill Search
 CREATE VIRTUAL TABLE IF NOT EXISTS skill_fts USING fts5(
     name, description, body, tokenize='porter unicode61'
