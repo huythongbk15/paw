@@ -1,16 +1,9 @@
 # Checklist thực thi PAW
 
-Rà soát ngày 2026-09-09, HEAD source `fd8a8c8` và thay đổi router chưa
-commit có sẵn: **E1 VERIFIED; E2 RATIFIED; E3/BETA đang chờ integration**.
-Báo cáo tracked `benchmarks/e1/real_measurement_local.json` ghi
-**chỉ phép đo** PASS/VERIFIED trên revision sạch `649ded9`: 71 file source,
-839.006 byte, recall 1,0, giảm context warm ước tính 0,9847.
-Báo cáo tự loại trừ qualification toàn E1. Đây là bằng chứng đo lịch sử,
-không phải D3 revision hiện tại, chất lượng engineering hay token provider.
-Source E2-06..11 đã tồn tại, gồm wiring routing/reconnaissance trong runtime:
-ghi nhận OBSERVED, chưa đồng nghĩa đã đạt điều kiện nghiệm thu.
-Giữ code để rà soát, không tự mở rộng. Xem quyết định 2026-09-09 trong
-`IMPLEMENTATION_MAP.md`.
+Rà soát ngày 2026-09-11, HEAD source `8d01d90` (clean): **E1 VERIFIED; E2 RATIFIED; E3/BETA đang chờ integration**.
+E1 measurement gate PASS/VERIFIED trên revision sạch `8d01d90`: 12/12 samples đạt 100% recall, real Ollama embeddings (`nomic-embed-text:latest`), fixtures_fresh=true, dirty=false. E2 gate RATIFIED: prerequisites E2-25..28 + E2-45..47 all implemented và test (119 E2 contract tests PASS); cloud-baseline boundary được giải quyết qua `InferenceClassification` (E2-09) + `evaluate_local_eligibility` (E2-05).
+E2-06..11 wiring có mặt trong runtime và đã test (440 E2 tests pass).
+Xem `docs/benchmarks/e2/gate_ratification.md`.
 
 Đây là tracker thực thi nguyên tử được dẫn xuất từ `ROADMAP.md`. Roadmap vẫn là
 authority duy nhất về scope, thứ tự và acceptance gate. File này chỉ được chia

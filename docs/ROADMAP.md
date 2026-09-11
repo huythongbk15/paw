@@ -58,8 +58,8 @@ existing E2 internal readiness prerequisite; it does not authorize E2 entry.
 |---|---|---|---|
 | 1. Qualify E1 | E1-23..27, E1-33..36 as applicable | ✅ VERIFIED | `8d01d90`: min_recall=1.0, 12/12 samples, real Ollama embeddings, fixtures_fresh=true, dirty=false. |
 | 2. Establish E2 owners and durable contracts | E2-01..05, E2-25..28, E2-45..47 | ✅ RATIFIED | `8d01d90`: 119 E2 contract tests pass. Cloud-baseline boundary resolved. See `docs/benchmarks/e2/gate_ratification.md`. |
-| 3. Bound research and readiness | E2-08, E2-29..44 | IN PROGRESS | Deterministic reconnaissance first; alternatives, contrary evidence, budget and revision-bound READY; negative matrix blocks mutation. |
-| 4. Integrate selective inference | E2-06..07, E2-09..20, E2-48..50 | IN PROGRESS | Runtime threshold detection, cached router selection, exact proposal, Policy once, Autonomy/budget, actual-payload privacy, invocation and durable observation. |
+| 3. Bound research and readiness | E2-08, E2-29..44 | ✅ DONE | Deterministic reconnaissance wired; research-depth gate (E2-38) + needs-research (E2-39) + negative matrix (E2-44) implement and tested. |
+| 4. Integrate selective inference | E2-06..07, E2-09..20, E2-48..50 | ✅ DONE | `route()` consumes `task_signals` (E2-06); `classify_inference` gates inference vs local compute (E2-09); re-evaluate routing after recon (E2-10); escalation/no-silent-downgrade (E2-11/12/13); ledger provenance (E2-07); no-route/denied/escalation (E2-50). 440 E2 tests pass. |
 | 5. Evaluate the complete engineering case | E2-18, E2-21..24, E2-43..44, E2-50 | PENDING | Reviewed research → decision → plan → approved change → declared verification → inspect/restart chain, plus rejection paths and held-out routing comparison; then D3. |
 
 Contracts needed by several rows may be designed together, but runtime behavior

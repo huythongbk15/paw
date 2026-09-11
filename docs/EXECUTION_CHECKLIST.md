@@ -517,5 +517,5 @@ Roadmap execution dependency order before choosing the next item.
 | E0 | `PASS` (offline scope) | Reviewed fixture-validation baseline; cloud/agent quality remains separate. |
 | E1 | `VERIFIED` | `8d01d90` clean: min_recall=1.0, 12/12 samples, real Ollama embeddings. |
 | E2 | `RATIFIED` | Prereqs E2-25..28 + E2-45..47 PASS (119 tests). Gate ratified 2026-09-11. |
-| E3 / BETA | `BLOCKED` | Waiting for E2 integration work (rows 3-4). |
+| E3 / BETA | `BLOCKED` | Pending E2 integration verification. |
 | E4 | `BLOCKED` | Optional; E0–E3, consented dataset and evaluated narrow-role baselines required. |
