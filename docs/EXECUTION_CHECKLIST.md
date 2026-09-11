@@ -411,20 +411,20 @@ and reversible personal skill with a negative trigger case. Estimated 15–25 da
 
 ### Lifecycle contract
 
-- [ ] `E3-01` Inventory Skill Fabric lifecycle, selector and persistence callers. `(2h, D0)`
-- [ ] `E3-02` Define candidate, reviewed, active, rejected, deprecated and superseded states. `(0.5d, D1)`
-- [ ] `E3-03` Define legal transitions and the actor/evidence required for each. `(0.5d, D1)`
-- [ ] `E3-04` Define skill provenance, scope, version and rollback metadata. `(0.5d, D1)`
+- [x] `E3-01` Inventory Skill Fabric lifecycle, selector and persistence callers. `(2h, D0)` — DONE
+- [x] `E3-02` Define candidate, reviewed, active, rejected, deprecated and superseded states. `(0.5d, D1)` — DONE: `SkillState` StrEnum with 6 values (CANDIDATE, REVIEWED, ACTIVE, REJECTED, DEPRECATED, SUPERSEDED)
+- [x] `E3-03` Define legal transitions and the actor/evidence required for each. `(0.5d, D1)` — DONE: `LEGAL_SKILL_TRANSITIONS` closed table + `validate_skill_transition()`
+- [x] `E3-04` Define skill provenance, scope, version and rollback metadata. `(0.5d, D1)` — DONE (in skill_governance.py)
 - [ ] `E3-05` Define trigger, non-applicability, input/output and allowed-tool fields. `(0.5d, D1)`
 - [ ] `E3-06` Define required evidence and success/failure checks. `(0.5d, D1)`
 - [ ] `E3-07` Prove facts/preferences cannot be normalized directly into active skills. `(3h, D1)`
 
 ### Candidate creation and review
 
-- [ ] `E3-08` Select one repeated workflow from verified E0–E2 traces. `(2h, D0)`
-- [ ] `E3-09` Create a deterministic trace-to-candidate draft with source links. `(1d, D2)`
-- [ ] `E3-10` Redact secrets and private payloads before candidate persistence. `(0.5d, D2)`
-- [ ] `E3-11` Detect exact duplicate and overlapping trigger candidates. `(1d, D1)`
+- [x] `E3-08` Select one repeated workflow from verified E0–E2 traces. `(2h, D0)` — DONE
+- [x] `E3-09` Create a deterministic trace-to-candidate draft with source links. `(1d, D2)` — DONE (15 tests)
+- [x] `E3-10` Redact secrets and private payloads before candidate persistence. `(0.5d, D2)` — DONE (redact_payload, redact_dict in skill_governance.py)
+- [x] `E3-11` Detect exact duplicate and overlapping trigger candidates. `(1d, D1)` — DONE (detect_duplicate_candidates)
 - [ ] `E3-12` Present candidate diff, provenance and expected effect for approval. `(0.5d, D2)`
 - [ ] `E3-13` Persist rejection without repeatedly proposing the same version. `(0.5d, D2)`
 
@@ -517,5 +517,5 @@ Roadmap execution dependency order before choosing the next item.
 | E0 | `PASS` (offline scope) | Reviewed fixture-validation baseline; cloud/agent quality remains separate. |
 | E1 | `VERIFIED` | `8d01d90` clean: min_recall=1.0, 12/12 samples, real Ollama embeddings. |
 | E2 | `RATIFIED` | Prereqs E2-25..28 + E2-45..47 PASS (119 tests). Gate ratified 2026-09-11. |
-| E3 / BETA | `BLOCKED` | Pending E2 integration verification. |
+| E3 / BETA | `IN PROGRESS` | E3-01 (inventory) done; E3-02 (states) done; E3-03 (transitions) done; E3-04 (provenance) done; E3-09 (trace-to-candidate) done; E3-10 (redaction) done; E3-11 (duplicate detection) done; skill_governance module committed (commit `4a139ca`). 56 E3 tests pass. |
 | E4 | `BLOCKED` | Optional; E0–E3, consented dataset and evaluated narrow-role baselines required. |
