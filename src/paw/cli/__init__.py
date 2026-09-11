@@ -13,6 +13,7 @@ from typing import Any
 import structlog
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from .. import __version__
@@ -51,7 +52,7 @@ def _print_chat_reply(reply: Any, json_output: bool) -> None:
     if json_output:
         typer.echo(json.dumps(reply.to_dict(), ensure_ascii=False))
         return
-    console.print(f"[bold cyan]paw>[/bold cyan] {_sanitize_text(reply.content)}")
+    console.print(f"[bold cyan]paw>[/bold cyan] {escape(_sanitize_text(reply.content))}")
     details = [f"status={reply.status}", f"session={reply.session_id}"]
     if reply.task_id:
         details.append(f"task={reply.task_id}")
@@ -97,7 +98,7 @@ def _print_chat_history(messages: list[Any], json_output: bool = False) -> None:
         return
     for item in messages:
         color = "green" if item.role.value == "user" else "cyan"
-        console.print(f"[{color}]{item.role.value}>[/{color}] {_sanitize_text(item.content)}")
+        console.print(f"[{color}]{item.role.value}>[/{color}] {escape(_sanitize_text(item.content))}")
 
 
 def _print_inspection(title: str, value: Any, json_output: bool = False) -> None:

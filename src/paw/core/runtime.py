@@ -1891,7 +1891,18 @@ class PawRuntime:
                 re_evaluated = await self.model_router.re_evaluate_routing(
                     task_id, selection, recon,
                 )
-                if re_evaluated.model_name != selection.model_name:
+                # Respect explicit provider preference: if the user requested
+                # a specific provider and the original selection matched it,
+                # do not downgrade to local.
+                prefer_provider = getattr(self, "preferred_provider", None)
+                manifest = selection.model_manifest
+                original_provider = (
+                    getattr(manifest, "provider", None) if manifest else None
+                )
+                should_downgrade = True
+                if prefer_provider and original_provider == prefer_provider:
+                    should_downgrade = False
+                if should_downgrade and re_evaluated.model_name != selection.model_name:
                     selection = re_evaluated
                     await TaskLedger.record(
                         task_id,
@@ -2060,8 +2071,11 @@ class PawRuntime:
         canonical_model_selection: ModelSelection | None = None
         cached_model = action.metadata.get("selected_model")
         if cached_model:
+            # Look up the full manifest from the registry to preserve provider info
+            manifest = self.model_router.registry.get(cached_model) if self.model_router else None
             canonical_model_selection = ModelSelection(
                 model_name=cached_model,
+                model_manifest=manifest,
                 inference_classification=InferenceClassification(
                     action.metadata.get("inference_classification", "model.inference")
                 ),
@@ -2131,7 +2145,18 @@ class PawRuntime:
                         re_evaluated = await self.model_router.re_evaluate_routing(
                             task_id, selection, recon,
                         )
-                        if re_evaluated.model_name != selection.model_name:
+                        # Respect explicit provider preference: if the user requested
+                        # a specific provider and the original selection matched it,
+                        # do not downgrade to local.
+                        prefer_provider = getattr(self, "preferred_provider", None)
+                        manifest = selection.model_manifest
+                        original_provider = (
+                            getattr(manifest, "provider", None) if manifest else None
+                        )
+                        should_downgrade = True
+                        if prefer_provider and original_provider == prefer_provider:
+                            should_downgrade = False
+                        if should_downgrade and re_evaluated.model_name != selection.model_name:
                             selection = re_evaluated
                             selected_model_name = selection.model_name
                             await TaskLedger.record(
@@ -2192,7 +2217,10 @@ class PawRuntime:
                         manifest = getattr(self, "_current_manifest", None)
                         if manifest is not None:
                             from .privacy import PROVIDER_LOCAL, gate_remote_disclosure
-                            provider_kind = getattr(selection.model_manifest, "provider", "local")
+                            # Map provider name to provider kind for privacy gate.
+                            # Ollama is a local provider (runs on-box).
+                            provider_name = getattr(selection.model_manifest, "provider", "local")
+                            provider_kind = PROVIDER_LOCAL if provider_name == "ollama" else provider_name
                             if provider_kind != PROVIDER_LOCAL:
                                 disclosure = gate_remote_disclosure(
                                     manifest, provider_kind=provider_kind,
@@ -2230,11 +2258,14 @@ class PawRuntime:
                         manifest = getattr(self, "_current_manifest", None)
                         if manifest is not None:
                             from .privacy import PROVIDER_LOCAL, gate_remote_disclosure
-                            provider_kind = (
-                            getattr(selection.model_manifest, "provider", "local")
-                            if selection.model_manifest
-                            else "local"
-                        )
+                            # Map provider name to provider kind for privacy gate.
+                            # Ollama is a local provider (runs on-box).
+                            provider_name = (
+                                getattr(selection.model_manifest, "provider", "local")
+                                if selection.model_manifest
+                                else "local"
+                            )
+                            provider_kind = PROVIDER_LOCAL if provider_name == "ollama" else provider_name
                             if provider_kind != PROVIDER_LOCAL:
                                 disclosure = gate_remote_disclosure(
                                     manifest, provider_kind=provider_kind,

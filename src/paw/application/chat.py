@@ -417,7 +417,7 @@ class ChatService:
         )
         return PawRuntime(
             autonomy,
-            context_compiler=ContextCompiler(auto_attach_embeddings=False),
+            context_compiler=ContextCompiler(auto_attach_embeddings=True),
             model_router=self._model_router,
             model_executor=self._model_executor,
             skill_fabric=await get_skill_fabric(),
