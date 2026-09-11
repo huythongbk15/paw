@@ -7,6 +7,7 @@ All domain objects are owned by PAW. No external framework types leak into these
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Annotated, Any, TypeVar
@@ -154,12 +155,84 @@ class ModelRole(StrEnum):
     FALLBACK = "fallback"
 
 
-# --- Phase 10: Autonomy Decisions ---
+# --- Phase 10: Skill Risk Levels ---
 
 class SkillRisk(StrEnum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
+
+
+# --- E3: Skill lifecycle states ---
+
+class SkillState(StrEnum):
+    """Governed lifecycle states for personal skills (E3)."""
+    CANDIDATE = "candidate"
+    REVIEWED = "reviewed"
+    ACTIVE = "active"
+    REJECTED = "rejected"
+    DEPRECATED = "deprecated"
+    SUPERSEDED = "superseded"
+
+
+@dataclass
+class ReviewRecord:
+    """Record of a skill review (E3-04)."""
+    reviewer: str
+    reviewed_at: str  # ISO datetime
+    diff_summary: str
+    safety_assessment: str
+    expected_effect: str
+
+
+@dataclass
+class ApprovalRecord:
+    """Record of skill approval for ACTIVE promotion (E3-18)."""
+    approver: str
+    approved_at: str  # ISO datetime
+    skill_version: str
+    notes: str = ""
+
+
+# --- E3-03: Legal skill state transitions ---
+
+"""Every skill state transition must be in this set. Keys are (from_state,
+to_state). A transition is only valid if its pair is present AND the actor
+supplies the required evidence type."""
+LEGAL_SKILL_TRANSITIONS: dict[tuple[SkillState, SkillState], str] = {
+    # Candidate creation from trace
+    (SkillState.CANDIDATE, SkillState.REVIEWED): "review_record",
+    # Approval to activate
+    (SkillState.REVIEWED, SkillState.ACTIVE): "approval_record",
+    # Rejection
+    (SkillState.CANDIDATE, SkillState.REJECTED): "rejection_record",
+    (SkillState.REVIEWED, SkillState.REJECTED): "rejection_record",
+    # Deprecation / supersession
+    (SkillState.ACTIVE, SkillState.DEPRECATED): "deprecation_record",
+    (SkillState.ACTIVE, SkillState.SUPERSEDED): "supersession_record",
+    # Rollback
+    (SkillState.DEPRECATED, SkillState.ACTIVE): "rollback_record",
+    (SkillState.SUPERSEDED, SkillState.ACTIVE): "rollback_record",
+}
+
+
+@dataclass
+class TraceLink:
+    """Source link from a derived skill candidate back to its origin trace (E3-09)."""
+    task_id: str          # The Task.id the trace was recorded under
+    task_version: str     # Task revision snapshot hash
+    source_files: list[str]  # Source files the trace exercised
+    evidence_sha: str     # SHA-256 of the trace evidence (research → decision → impl → verification)
+    derived_at: str       # ISO datetime the candidate was created
+
+
+@dataclass
+class CandidateMetadata:
+    """E3-09 provenance for a skill candidate."""
+    trace_links: list[TraceLink]
+    expected_effect: str
+    safety_assessment: str
+    cost_estimate: dict[str, Any]
 
 
 # --- Phase 10: Autonomy Decisions ---

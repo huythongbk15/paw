@@ -135,7 +135,24 @@ CREATE TABLE IF NOT EXISTS skills (
     updated_at TEXT NOT NULL,
     executors TEXT,  -- JSON array
     dependencies TEXT,  -- JSON array of skill names
-    metadata TEXT  -- JSON object for nested metadata.paw/
+    metadata TEXT,  -- JSON object for nested metadata.paw/
+    -- E3: Skill lifecycle
+    -- Default 'active' aligns with SkillManifest.state default and _load_from_db
+    -- fallback. Trace-derived candidates set CANDIDATE explicitly via
+    -- SkillCandidate.from_trace() / create_candidate_from_workflow().
+    state TEXT NOT NULL DEFAULT 'active',
+    skill_version TEXT NOT NULL DEFAULT '1.0.0',
+    allowed_tools TEXT,  -- JSON array
+    non_applicable_when TEXT,  -- JSON array
+    input_schema TEXT,  -- JSON object
+    output_schema TEXT,  -- JSON object
+    success_criteria TEXT,  -- JSON array
+    failure_criteria TEXT,  -- JSON array
+    expected_effect TEXT NOT NULL DEFAULT '',
+    review_record TEXT,  -- JSON serialized ReviewRecord
+    approval_record TEXT,  -- JSON serialized ApprovalRecord
+    parent_version TEXT,
+    rollback_to TEXT
 );
 
 -- Migrate existing 'manifest' column to 'body' if needed
@@ -579,6 +596,30 @@ class Database:
                 await self._conn.execute(
                     f"ALTER TABLE {table} "
                     f"ADD COLUMN stale_reason TEXT NOT NULL DEFAULT ''"
+                )
+        # E3: Add skill lifecycle columns. Additive only; no row rewrite.
+        # Existing rows get state='active', skill_version=version, empty records.
+        sk_cursor = await self._conn.execute("PRAGMA table_info(skills)")
+        sk_cols = {row[1] for row in await sk_cursor.fetchall()}
+        sk_additions = {
+            "state": "TEXT NOT NULL DEFAULT 'active'",
+            "skill_version": "TEXT NOT NULL DEFAULT '1.0.0'",
+            "allowed_tools": "TEXT",
+            "non_applicable_when": "TEXT",
+            "input_schema": "TEXT",
+            "output_schema": "TEXT",
+            "success_criteria": "TEXT",
+            "failure_criteria": "TEXT",
+            "expected_effect": "TEXT NOT NULL DEFAULT ''",
+            "review_record": "TEXT",
+            "approval_record": "TEXT",
+            "parent_version": "TEXT",
+            "rollback_to": "TEXT",
+        }
+        for col, col_def in sk_additions.items():
+            if col not in sk_cols:
+                await self._conn.execute(
+                    f"ALTER TABLE skills ADD COLUMN {col} {col_def}"
                 )
         info_cursor = await self._conn.execute("PRAGMA table_info(model_selections)")
         columns = await info_cursor.fetchall()
