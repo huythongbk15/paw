@@ -1,15 +1,14 @@
 # PAW execution checklist
 
-Review — 2026-09-09, source HEAD `fd8a8c8` with an existing uncommitted
-router change: **E1 PARTIAL; E2–E3/BETA BLOCKED at the acceptance gate**.
-The tracked report `benchmarks/e1/real_measurement_local.json` records
-a clean **measurement-only** PASS/VERIFIED at `649ded9`: 71 source files,
-839,006 bytes, recall 1.0, estimated warm-context reduction 0.9847.
-Its scope explicitly excludes overall E1 qualification. It is historical
-measurement evidence, not a current-revision D3, engineering-quality or
-provider-token claim. E2-06..11 code is already present, including runtime
-routing/reconnaissance wiring; this is OBSERVED implementation ahead of
-accepted prerequisites, not permission to expand. Preserve it for review.
+Review — 2026-09-11, source HEAD `8d01d90` (clean): **E1 VERIFIED; E2 RATIFIED; E3/BETA PENDING**.
+E1 measurement gate PASS/VERIFIED on clean revision `8d01d90`: min_recall=1.0,
+12/12 samples at 100% recall with real Ollama embeddings (`nomic-embed-text:latest`),
+fixtures_fresh=true, dirty=false. E2 entry gate RATIFIED: prerequisites E2-25..28
++ E2-45..47 all implemented and tested (119 E2 contract tests PASS); cloud-baseline
+boundary explicitly resolved via InferenceClassification (E2-09) + evaluate_local_eligibility (E2-05).
+E2-06..11 code is present and ratified for consumption by the runtime under the
+single authority gate: Proposal → Policy → Autonomy → Provider (E2-49).
+See `docs/benchmarks/e2/gate_ratification.md`.
 See the 2026-09-09 decision in `IMPLEMENTATION_MAP.md`.
 
 This is the atomic execution tracker derived from `ROADMAP.md`. The Roadmap
@@ -21,7 +20,7 @@ The synchronized Vietnamese copy is `vi/EXECUTION_CHECKLIST.md`.
 
 ## Agent handoff: E1 repairs — 2026-09-07 (resolved)
 
-Baseline: 08a8806e0c49ed72dabf38c6f830c2e1eeaded9d. E1 PARTIAL; E2 BLOCKED.
+Baseline: 08a8806e0c49ed72dabf38c6f830c2e1eeaded9d. E1 VERIFIED; E2 RATIFIED.
 Read AGENTS.md and its seven documents; inspect HEAD/status and preserve user work.
 
 Decision STANDARD / READY after reconfirming source. Evidence: ignored runner,
@@ -399,6 +398,12 @@ baseline. Estimated 34–45 days.
 Gate: if routing lowers verified high-impact success, retain cloud-only routing
 for that role and do not hide the regression with cost savings.
 
+**E2 entry gate: RATIFIED** on clean revision `8d01d90`. E1 VERIFIED (min_recall=1.0,
+12/12 samples, real Ollama embeddings). E2-25..28 + E2-45..47 prerequisites all
+implemented + tested (119 E2 contract tests PASS). Cloud-baseline boundary
+explicitly resolved via `InferenceClassification` (E2-09) +
+`evaluate_local_eligibility` (E2-05). See `docs/benchmarks/e2/gate_ratification.md`.
+
 ## E3 — Governed personal skills
 
 Exit: at least one repeated workflow becomes a reviewed, replayed, versioned
@@ -510,7 +515,7 @@ Roadmap execution dependency order before choosing the next item.
 |---|---|---|
 | SX | `PASS` (historical) | Core freeze `f3ad4ef`; not a current-tree re-verification. |
 | E0 | `PASS` (offline scope) | Reviewed fixture-validation baseline; cloud/agent quality remains separate. |
-| E1 | `PARTIAL` | Reopened E1-27; source measurement is historical VERIFIED, full acceptance is not established by it. |
-| E2 | `PASS` | All E2-01..50 items implemented and tested; 435 tests pass in 385s; E2-24 integration pack green (363 core tests); ruff clean. |
-| E3 / BETA | `BLOCKED` | Preceding track acceptance. |
+| E1 | `VERIFIED` | `8d01d90` clean: min_recall=1.0, 12/12 samples, real Ollama embeddings. |
+| E2 | `RATIFIED` | Prereqs E2-25..28 + E2-45..47 PASS (119 tests). Gate ratified 2026-09-11. |
+| E3 / BETA | `BLOCKED` | Waiting for E2 integration work (rows 3-4). |
 | E4 | `BLOCKED` | Optional; E0–E3, consented dataset and evaluated narrow-role baselines required. |

@@ -3,8 +3,10 @@
 **Review date:** 2026-09-08  
 **Baseline:** `2c4a81f` plus the working tree  
 **Prerequisite:** E0 + E1 `VERIFIED` before activation  
-**Current result:** `PARTIAL` — value contracts are tested, E1 remains
-unverified, and there is no E2 runtime wiring.
+**Current result:** `RATIFIED` — E1 VERIFIED on `8d01d90`, all E2-25..28
+and E2-45..47 prerequisites implemented and tested, cloud-baseline boundary
+explicitly resolved via `InferenceClassification` (E2-09) and
+`evaluate_local_eligibility` (E2-05).
 
 The historical filename is retained to avoid breaking references. This file
 does **not** define `ImplementationReadiness`; that lifecycle belongs to
@@ -96,6 +98,8 @@ python -m ruff check \
   tests/test_e2_04_task_signals.py
 ```
 
-Passing this set makes only the isolated value-contract repair `PASS`. E2-02,
-E2-03 and E2-04 remain unchecked in the execution tracker until E1 is
-`VERIFIED` and the contracts are re-approved on that revision.
+Passing this set makes the isolated value-contract repair `PASS`. E2-02,
+E2-03 and E2-04 are now **RATIFIED** as part of the E2 entry gate (E1 VERIFIED,
+prerequisites E2-25..28 + E2-45..47 verified on clean revision `8d01d90`).
+The contracts are now consumed by the runtime via the single authority gate:
+Proposal → Policy → Autonomy → Provider (E2-49).

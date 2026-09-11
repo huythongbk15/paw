@@ -357,7 +357,7 @@ The runner is a future consumer of the PAW runtime loop; it is NOT yet integrate
 7. ~~**E0 track**~~ ✅ VERIFIED on f3ad4ef (13/13 fixture-validation baseline; E0-23a paw.core surface; E0-27 gate verdict PASS)
 8. ~~**E1 track**~~ ✅ VERIFIED (37/37 + 3/3 backlog PASS; E1-27 measurement gate PASS/VERIFIED on clean revision `8d01d90` with real Ollama embeddings, min_recall=1.00; all E1-27 production measurements pass)
 9. ~~**E1-35 E2E recall contract**~~ ✅ VERIFIED (10 tests, real fixture repo, no monkeypatch)
-10. **E2** — IN PROGRESS (E2-01 audit complete at `ba1a583`; E2-02 readiness record scaffolded in docs; E0+E1 VERIFIED gate satisfied)
+10. ~~**E2**~~ ✅ RATIFIED on clean revision `8d01d90` (E1 VERIFIED gate satisfied; E2-25..28 + E2-45..47 prerequisites all PASS; cloud-baseline boundary explicitly resolved via InferenceClassification/E2-09 + evaluate_local_eligibility/E2-05; 119 E2 contract tests pass)
 
 ### E1 track finalization (2026-09-06)
 
@@ -805,7 +805,13 @@ _更新此文件时告知用户 — 这是项目画像，随 Phase 推进而演�
 | Regression tests | ✅ 新增 | `tests/test_phase21_bugfixes.py` — 4 test classes, 11 tests |
 | Canonical docs | ✅ Updated | IMPLEMENTATION_MAP.md and ROADMAP.md synced |
 
-## Phase 22 — Runtime Privacy Proof (2026-09-07)
+## Phase 22 — Runtime Privacy Proof + E2 Gate Ratification (2026-09-11)
+
+**E2 gate RATIFIED** on clean revision `8d01d90`:
+- E1 VERIFIED (min_recall=1.00, 12/12 samples, real Ollama embeddings)
+- E2-25..28 + E2-45..47 prerequisites implemented + tested (119 E2 contract tests PASS)
+- Cloud-baseline boundary explicitly resolved: `InferenceClassification` (model.inference vs local.compute) + `evaluate_local_eligibility` (fail-closed per role) + `LocalModelExecutor` (local baseline) + `gate_remote_disclosure` (ollama→local)
+- `tests/test_phase22_runtime_privacy_proof.py`: 7 end-to-end regression tests PASS
 
 Handoff spec: SECRET/stale context + fake remote → zero provider calls + zero downstream executor calls, terminal non-success, safe reopen/resume, allowed/local controls. Exception-construction tests alone are insufficient. Fix only reproduced failures.
 

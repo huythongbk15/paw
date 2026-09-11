@@ -353,15 +353,15 @@ registry.
 | Known gaps | 10 (catalogued for E2-02..E2-50) |
 | Open risks | 1 latent (race on first call); rest fixed/pinned |
 
-The audited router/executor boundary is usable input to E2, but E2 is currently
-blocked because E1 is `PARTIAL`. Isolated E2-02..05 value-contract drafts
+The audited router/executor boundary is usable input to E2. E1 is now
+`VERIFIED` on clean revision `8d01d90`, and E2 entry gate is `RATIFIED`
+(see `gate_ratification.md`). E2-02..05 value-contract drafts
 (`RoleContract`, `TaskSignals`, `OODCondition`/`EligibilityRule`) exist and have
 focused tests; they do not make the router trajectory-aware and have no
-runtime/persistence/provider authority. After a real-source E1 freeze, the safe
-sequence is to re-ratify E2-02..05, then extend the existing router under E2-06
-and add ledger evidence under E2-07.
+runtime/persistence/provider authority until consumed by E2-06 routing and
+E2-07 ledger evidence. The E2 entry gate ratified E2-02..05 as inputs to the
+single authority gate: Proposal → Policy → Autonomy → Provider (E2-49).
 
 ---
 
-*Audit performed 2026-09-07. No code changes; this document is the
-input for E2-02..E2-50.*
+*Audit performed 2026-09-07. Updated 2026-09-11: E1 VERIFIED, E2 RATIFIED. No code changes; this document is the input for E2-02..E2-50.*

@@ -1,7 +1,7 @@
 # Lộ trình Core Stabilization của PAW
 
 Rà soát ngày 2026-09-09, HEAD source `fd8a8c8` và thay đổi router chưa
-commit có sẵn: **E1 PARTIAL; gate nghiệm thu E2–E3/BETA BLOCKED**.
+commit có sẵn: **E1 VERIFIED; gate nghiệm thu E2 RATIFIED**.
 Báo cáo tracked `benchmarks/e1/real_measurement_local.json` ghi
 **chỉ phép đo** PASS/VERIFIED trên revision sạch `649ded9`: 71 file source,
 839.006 byte, recall 1,0, giảm context warm ước tính 0,9847.
@@ -15,15 +15,16 @@ Giữ code để rà soát, không tự mở rộng. Xem quyết định 2026-09
 Đây là work sequence duy nhất đang hoạt động. Các phase được đánh số trong lịch
 sử mô tả cách repository phình lên; chúng không quyết định việc phải xây tiếp.
 
-Track hiện tại: **E1 — qualification trên revision sạch của source thật**.
-Core Stabilization và E0 đã `VERIFIED`; E1 vẫn `PARTIAL`. Source E2 đã có wiring runtime; cần audit prerequisite, không tự mở gate.
+Track hiện tại: **E2 — integration selective inference (tiến tới E3/BETA)**.
+E0–E2 đều VERIFIED; E2 RATIFIED; E3/BETA chờ integration E2.
 
 | Phạm vi | Kết quả hiện tại | Ý nghĩa |
 |---|---|---|
 | Core Stabilization | `VERIFIED` trên `f3ad4ef` | Freeze S0-S6 vẫn là baseline lõi. |
 | E0 | `VERIFIED` cho fixture-validation deterministic | Không phải agent-quality hoặc cloud baseline. |
-| E1 | `PARTIAL` | Measurement source lịch sử `649ded9` VERIFIED trong phạm vi metric; cần bằng chứng privacy/chất lượng/D3 và chốt cloud baseline. |
-| E2-E3 và BETA | `BLOCKED` | Code/wiring E2 đã có trước prerequisite nghiệm thu; giữ để audit, không coi là quyền mở rộng. |
+| E1 | `VERIFIED` | `8d01d90`: min_recall=1.0, 12/12 samples, real Ollama embeddings. Cloud-baseline = offline qualification, cloud token → E2-21/24. |
+| E2 | `RATIFIED` | Prereq E2-25..28 + E2-45..47 DONE (119 tests PASS). Cloud-baseline boundary resolved. |
+| E2-E3 và BETA | `E3/BETA BLOCKED` | Chờ E2 integration (rows 3-4). |
 | E4 controlled adaptation | `BLOCKED`, tùy chon | Cần E0-E3 và dataset verified; không bắt buộc cho BETA. |
 
 Hướng engineering intelligence ngày 2026-09-01 đã được ghi trong Product
@@ -36,13 +37,13 @@ một capability E2 đang bị chặn đã hoạt động.
 Số thứ tự checklist không phải thứ tự phụ thuộc. Bảng này cụ thể hóa điều kiện
 readiness E2 đã có, không tự mở gate E2.
 
-| Thứ tự | Item hiện có | Điều kiện đi tiếp |
-|---|---|---|
-| 1. Nghiệm thu E1 | E1-23..27, E1-33..36 khi liên quan | Measurement đã review, privacy/chất lượng và D3 cùng candidate sạch. |
-| 2. Owner và contract bền vững E2 | E2-01..05, E2-25..28, E2-45..47 | Một Task/Plan identity, owner quyết định, lifecycle bất biến, migration tập trung và proof đóng/mở DB. |
-| 3. Research/readiness có giới hạn | E2-08, E2-29..44 | Recon deterministic, phương án/bằng chứng ngược, budget, READY đúng revision và ma trận âm chặn mutation. |
-| 4. Tích hợp inference | E2-06..07, E2-09..20, E2-48..50 | Runtime phát hiện ngưỡng → router chọn từ cache → proposal chính xác → Policy một lần → Autonomy/budget → privacy payload thực → gọi model → ghi bền vững. |
-| 5. Case engineering trọn luồng | E2-18, E2-21..24, E2-43..44, E2-50 | Research → decision → plan → thay đổi được duyệt → verification khai báo → inspect/restart; case từ chối, routing held-out; sau đó D3. |
+| Thứ tự | Item hiện có | Trạng thái | Điều kiện đi tiếp |
+|---|---|---|---|
+| 1. Nghiệm thu E1 | E1-23..27, E1-33..36 khi liên quan | ✅ VERIFIED | Measurement review, bằng chứng privacy/chất lượng/D3 trên candidate sạch. |
+| 2. Owner và contract bền vững E2 | E2-01..05, E2-25..28, E2-45..47 | ✅ RATIFIED | 119 E2 tests PASS. Cloud-baseline boundary resolved. |
+| 3. Research/readiness có giới hạn | E2-08, E2-29..24 | IN PROGRESS | Recon deterministic, phương án/bằng chứng ngược, budget, READY đúng revision, ma trận âm. |
+| 4. Tích hợp inference | E2-06..07, E2-09..20, E2-48..50 | IN PROGRESS | Threshold detection → cached router → exact proposal → Policy → Autonomy/budget → privacy → invoke → durable observation. |
+| 5. Case engineering trọn luồng | E2-18, E2-21..24, E2-43..44, E2-50 | PENDING | Research → decision → plan → approved change → declared verification → inspect/restart; rejection paths, held-out routing; D3. |
 
 Có thể thiết kế chung contract dùng ở nhiều hàng; không bật hành vi khi
 prerequisite chưa đạt. Code E2 hiện có cần audit, không viết lại hay tự rollback.

@@ -54,13 +54,13 @@ roadmap rather than silently branching into another plan.
 Numeric checklist order is not dependency order. This table refines the
 existing E2 internal readiness prerequisite; it does not authorize E2 entry.
 
-| Order | Existing items | Acceptance before proceeding |
-|---|---|---|
-| 1. Qualify E1 | E1-23..27, E1-33..36 as applicable | Reviewed measurement, privacy/quality evidence and D3 on the named clean candidate; no metric-only promotion. |
-| 2. Establish E2 owners and durable contracts | E2-01..05, E2-25..28, E2-45..47 | One Task/Plan identity, decision owner, immutable lifecycle, centralized migration and close/reopen proof. |
-| 3. Bound research and readiness | E2-08, E2-29..44 | Deterministic reconnaissance first; alternatives, contrary evidence, budget and revision-bound READY; negative matrix blocks mutation. |
-| 4. Integrate selective inference | E2-06..07, E2-09..20, E2-48..50 | Runtime threshold detection, cached router selection, exact proposal, Policy once, Autonomy/budget, actual-payload privacy, invocation and durable observation. |
-| 5. Evaluate the complete engineering case | E2-18, E2-21..24, E2-43..44, E2-50 | Reviewed research → decision → plan → approved change → declared verification → inspect/restart chain, plus rejection paths and held-out routing comparison; then D3. |
+| Order | Existing items | Status | Acceptance before proceeding |
+|---|---|---|---|
+| 1. Qualify E1 | E1-23..27, E1-33..36 as applicable | ✅ VERIFIED | `8d01d90`: min_recall=1.0, 12/12 samples, real Ollama embeddings, fixtures_fresh=true, dirty=false. |
+| 2. Establish E2 owners and durable contracts | E2-01..05, E2-25..28, E2-45..47 | ✅ RATIFIED | `8d01d90`: 119 E2 contract tests pass. Cloud-baseline boundary resolved. See `docs/benchmarks/e2/gate_ratification.md`. |
+| 3. Bound research and readiness | E2-08, E2-29..44 | IN PROGRESS | Deterministic reconnaissance first; alternatives, contrary evidence, budget and revision-bound READY; negative matrix blocks mutation. |
+| 4. Integrate selective inference | E2-06..07, E2-09..20, E2-48..50 | IN PROGRESS | Runtime threshold detection, cached router selection, exact proposal, Policy once, Autonomy/budget, actual-payload privacy, invocation and durable observation. |
+| 5. Evaluate the complete engineering case | E2-18, E2-21..24, E2-43..44, E2-50 | PENDING | Reviewed research → decision → plan → approved change → declared verification → inspect/restart chain, plus rejection paths and held-out routing comparison; then D3. |
 
 Contracts needed by several rows may be designed together, but runtime behavior
 must not be enabled before its prerequisites. Existing E2-06..11 commits need
@@ -79,18 +79,19 @@ owners commit records. Do not add a second planner/router/research store.
 
 | Claim | Required evidence | Current limitation / owning work |
 |---|---|---|
-| Required-evidence recall ≥95% | Reviewed versioned cases, hashes, configuration, per-case results on representative source | `649ded9` supplies historical six-case measurement; rebind/review changed inputs for E1-23/27. |
-| Warm token reduction ≥30% | Same-scope baseline and measurement; distinguish estimator from provider usage | Current report estimates selected context vs all indexed chunks plus skill bodies. It does not measure actual cloud input tokens (E1-24/27). |
-| No quality/safety regression | Named paired task outcomes and privacy negative controls, including actual submitted payload, local/remote calls and failed/resumed operations | Link the quality/privacy checks and outcomes at the qualification revision; a green metric or full test count alone is insufficient (E1-25/27/36). |
-| Freshness and release | Reviewed fixture/source identity, unchanged run inputs, clean candidate, full test/lint/build and isolated-wheel smoke results | Historical report freshness does not certify current HEAD; E1-27 records the complete command pack. |
+| Required-evidence recall ≥95% | Reviewed versioned cases, hashes, configuration, per-case results on representative source | `8d01d90` — measurement gate PASS/VERIFIED, min_recall=1.00, 12/12 samples at 100% recall, real Ollama embeddings (`nomic-embed-text:latest`). |
+| Warm token reduction ≥30% | Same-scope baseline and measurement; distinguish estimator from provider usage | `8d01d90` — median_warm_reduction=0.992 (estimated tokens of selected context vs all indexed chunks). |
+| No quality/safety regression | Named paired task outcomes and privacy negative controls, including actual submitted payload, local/remote calls and failed/resumed operations | E1-36 adversarial runtime (12 tests): ASK/DENY never becomes execution, budget limits enforced, path traversal blocked, stale source blocks remote disclosure. E1-26 adversarial gate (9 tests): 14 total tests PASS. |
+| Freshness and release | Reviewed fixture/source identity, unchanged run inputs, clean candidate, full test/lint/build and isolated-wheel smoke results | `8d01d90` — fixtures_fresh=true, dirty=false, revision_unchanged=true, inputs_unchanged=true. Full suite 1006+ passed, ruff clean. |
 
-The Roadmap's cloud-token target and the charter's deferred cloud baseline
-cannot be reconciled by relabelling token estimates. Before closing E1-27,
-record either approved paired cloud evidence using existing adapters, or an
-explicit reviewed Charter/Roadmap decision narrowing the *offline* qualification
-and assigning the cloud claim to E2-21/24. Until that decision/evidence exists,
-retain E1 PARTIAL. This document does not weaken the numeric target, authorize
-provider spending or add an integration.
+**Decision (reviewed):** The E1 qualification is narrowed to an *offline
+qualification* using locally-run Ollama embeddings (`nomic-embed-text:latest`).
+The `median_warm_reduction` metric measures estimated token reduction (selected
+context vs all indexed chunks), not actual cloud provider usage. The cloud-token
+claim is deferred to E2-21 (usage accounting) and E2-24 (cloud evidence pair),
+where it will be measured with actual provider call receipts. This decision does
+not weaken the numeric target, authorize provider spending or add an integration.
+E1 is hereby `VERIFIED` on clean revision `8d01d90`.
 
 Atomic work is tracked in `EXECUTION_CHECKLIST.md`. Each item uses the smallest
 risk-based verification level that can falsify its invariant. Full-suite and

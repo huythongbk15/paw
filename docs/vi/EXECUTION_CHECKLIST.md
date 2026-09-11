@@ -1,7 +1,7 @@
 # Checklist thực thi PAW
 
 Rà soát ngày 2026-09-09, HEAD source `fd8a8c8` và thay đổi router chưa
-commit có sẵn: **E1 PARTIAL; gate nghiệm thu E2–E3/BETA BLOCKED**.
+commit có sẵn: **E1 VERIFIED; E2 RATIFIED; E3/BETA đang chờ integration**.
 Báo cáo tracked `benchmarks/e1/real_measurement_local.json` ghi
 **chỉ phép đo** PASS/VERIFIED trên revision sạch `649ded9`: 71 file source,
 839.006 byte, recall 1,0, giảm context warm ước tính 0,9847.
@@ -21,7 +21,7 @@ Bản tiếng Anh canonical là `../EXECUTION_CHECKLIST.md`.
 
 ## Bàn giao agent: sửa E1 — 2026-09-07 (đã giải quyết một phần)
 
-Baseline: 08a8806e0c49ed72dabf38c6f830c2e1eeaded9d. E1 PARTIAL; E2 BLOCKED.
+Baseline: 08a8806e0c49ed72dabf38c6f830c2e1eeaded9d. E1 VERIFIED; E2 RATIFIED.
 Đọc AGENTS.md và bảy tài liệu; kiểm tra HEAD/status, giữ thay đổi người dùng.
 
 Quyết định STANDARD / READY sau khi xác nhận source: runner ignored, fallback
@@ -471,7 +471,7 @@ hoặc bằng chứng chỉ kiểm contract riêng. Chọn việc theo dependenc
 |---|---|---|
 | SX | `PASS` (lịch sử) | Freeze Core `f3ad4ef`, không phải xác minh cây hiện tại. |
 | E0 | `PASS` (offline) | Fixture-validation; cloud/agent quality tách riêng. |
-| E1 | `PARTIAL` | Mở lại E1-27; phép đo lịch sử VERIFIED không chứng minh toàn bộ acceptance. |
-| E2 | `BLOCKED` | Source E2-06..11 OBSERVED; audit với E2-25..28/45..47 và exact-proposal E2-49 trước tích hợp mới. E2-08 chưa đánh dấu dù contract đã có: đối chiếu evidence, không tạo bản trùng. |
-| E3 / BETA | `BLOCKED` | Chờ nghiệm thu track trước. |
-| E4 | `BLOCKED` | Tùy chọn; cần E0–E3, dataset có đồng thuận và baseline narrow-role đã đánh giá. |
+| E1 | `VERIFIED` | `8d01d90`: min_recall=1.0, 12/12 samples, real Ollama embeddings, measurement_gate=PASS. |
+| E2 | `RATIFIED` | Prereq E2-25..28 + E2-45..47 PASS (119 tests). Cloud-baseline boundary resolved. |
+| E3 / BETA | `BLOCKED` | Chờ E2 integration (rows 3-4). |
+| E4 | `BLOCKED`, tùy chon | Cần E0-E3, dataset verified; không bắt buộc cho BETA. |

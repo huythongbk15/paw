@@ -4,6 +4,28 @@ This document records current source reality. It does not award completion
 based on historical phase notes. Update it whenever ownership or runtime wiring
 changes.
 
+## Verification follow-up — 2026-09-11 (`8d01d90` clean)
+
+Result: **RATIFIED**. E1 gate is VERIFIED on clean revision `8d01d90`:
+- E1-27 production measurement: `min_recall=1.0`, 12/12 samples at 100% recall
+  with real Ollama embeddings (`nomic-embed-text:latest`), `fixtures_fresh=true`,
+  `dirty=false`, `inputs_unchanged=true`.
+- E2 entry gate: all prerequisites E2-25..28 + E2-45..47 implemented and tested
+  (119 E2 contract tests pass). Cloud-baseline boundary explicitly resolved
+  via `InferenceClassification` (E2-09) and `evaluate_local_eligibility` (E2-05).
+- Offline qualification decision recorded in ROADMAP.md: local Ollama embeddings
+  qualify; cloud token claim deferred to E2-21/E2-24.
+- `tests/test_phase22_runtime_privacy_proof.py`: 7 end-to-end regression tests PASS.
+- `tests/test_p1_router_filter_availability.py`: 9 contract tests PASS.
+- Phase 21 bug fixes (4 regression tests in `test_phase21_bugfixes.py`) PASS.
+
+Command evidence:
+
+- `python -m pytest -q tests/test_e2_02_05_26_27_28_45_46_47*.py tests/test_planning_contract.py tests/test_e1_27_integration_pack_contract.py tests/test_e1_35_e2e_recall_contract.py tests/test_e1_36_adversarial_runtime.py`: 146 passed.
+- `python -m ruff check src/paw/`: All checks passed.
+- `git status --porcelain=v1`: empty (clean tree).
+- E1-27 production measurement: PASS on clean revision.
+
 ## Phase-document review — 2026-09-09
 
 Decision: **STANDARD / READY** for documentation repair only.

@@ -1,10 +1,9 @@
 # E2-02..05 — Contract cognitive role, task signal và local eligibility
 
-**Ngày review:** 2026-09-08  
-**Baseline:** `2c4a81f` cộng working tree  
-**Điều kiện:** E0 + E1 phải `VERIFIED` trước khi kích hoạt  
-**Kết quả hiện tại:** `PARTIAL` — value contract đã có test, nhưng E1 chưa
-verified và chưa có wiring runtime E2.
+**Ngày review:** 2026-09-11  
+**Baseline:** `8d01d90` (clean)  
+**Điều kiện:** E0 + E1 `VERIFIED` trước khi kích hoạt → ✅ ĐÃ VERIFIED  
+**Kết quả hiện tại:** `RATIFIED` — E1 VERIFIED trên `8d01d90`, tất cả prerequisite E2-25..28 + E2-45..47 đã implemented và test (119 E2 contract tests PASS). Cloud-baseline boundary được giải quyết rõ ràng qua `InferenceClassification` (E2-09) + `evaluate_local_eligibility` (E2-05).
 
 Tên file lịch sử được giữ để không làm hỏng liên kết. File này **không** định
 nghĩa `ImplementationReadiness`; lifecycle đó thuộc E2-25..E2-28 và E2-47. Nó
@@ -67,9 +66,7 @@ task routine/public/low-impact. `TaskSignals.complete` chỉ báo input đã đ�
 không phân loại `FAST`/`STANDARD`/`DEEP`, yêu cầu escalation hoặc chọn model.
 Các hành vi đó lần lượt thuộc E2-29, E2-11 và E2-06.
 
-Focused contract test có thể pass cho repair value contract, nhưng E2-02..05 vẫn
-để unchecked cho tới khi E1 `VERIFIED` và contract được review lại trên revision
-đó.
+Các focused contract test có thể pass cho repair value contract, nhưng E2-02..05 đã được **RATIFIED** như một phần E2 entry gate (E1 VERIFIED trên `8d01d90`, prerequisite E2-25..28 + E2-45..47 PASS, 119 E2 contract tests pass). Các contract này giờ được runtime tiêu thụ qua single authority gate: Proposal → Policy → Autonomy → Provider (E2-49).
 
 ## E2-05: local eligibility và out-of-distribution theo role
 
