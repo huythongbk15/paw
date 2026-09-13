@@ -896,3 +896,44 @@ Handoff spec: `_filter_for_availability` restore supported-role filtering + desc
 - **Report**: `benchmarks/e1/e1_production_report.md` on clean revision `ae5344a`: `dirty=false`, `metric_gate=PASS`, `measurement_gate=PASS`, `evidence_state=VERIFIED`, min_recall=1.00, median_warm_reduction=0.871 (fixtures_paw corpus, 12 files, max_tokens=8000, max_fragments=5, max_sources=3). The E1-27 fix's `0.981` reduction was measured on the PAW source corpus (69 files, max_tokens=5000) — see E1-27 section above.
 - **Production re-run (2026-09-11)**: E1-27 re-VERIFIED on clean revision `8d01d90` with real Ollama embeddings (`nomic-embed-text:latest`), full PAW source corpus (71 files, 300+ chunks), `max_tokens=5000, max_fragments=30, max_sources=10`. **min_recall=1.00, all 12 samples (6 cases × cold/warm) at 100% recall**; median_warm_reduction=0.992. `metric_gate=PASS`, `measurement_gate=PASS`, `evidence_state=VERIFIED`, `fixtures_fresh=true`, `dirty=false`. E1 gate status: **VERIFIED** on clean revision `8d01d90`.
 
+---
+
+## Phase BETA — Daily Engineering-Partner Slice (2026-09-13)
+
+**Goal**: One clean install supports analyze, ideate, change, review profiles through the same runtime and evidence model.
+
+| Item | Status | Notes |
+|------|--------|-------|
+| B-01 | ✅ VERIFIED | Profiles as config: `BetaProfile` dataclass + `SideEffectPolicy` enum + 4 presets (analyze/ideate/change/review) |
+| B-02 | ✅ VERIFIED | Side-effect defaults: analyze/ideate READ_ONLY, change GATED, review non-mutating; `WRITE_CAPABILITIES` frozenset |
+| B-03 | ✅ VERIFIED | Answer contract: `RuntimeOutcome.to_answer()` with evidence/uncertainty/next_action/stop_reason |
+| B-04 | ✅ VERIFIED | `demos/demo_analyze.py` — analyzes a repo, returns structured answer |
+| B-05 | ✅ VERIFIED | `demos/demo_ideate.py` — proposes alternatives + decision record |
+| B-06 | ✅ VERIFIED | `demos/demo_change.py` — multi-file change with gated approval + verification |
+| B-07 | ✅ VERIFIED | `demos/demo_review.py` — regression detection without writing |
+| B-08 | ✅ VERIFIED | Restart safety: denied=zero side effects, approved=idempotent |
+| B-09 | ✅ VERIFIED | `paw beta inspect skills\|routing\|ledger <id>\|context <id>` |
+| B-10 | ✅ VERIFIED | Privacy review: all demos use PolicyGuard LOCAL_ONLY, no remote provider calls |
+| B-11 | ✅ VERIFIED | Wheel builds clean, installs in /tmp venv, CLI works outside repo |
+| B-12 | ✅ VERIFIED | `docs/BETA_LIMITATIONS.md` — release decision + 8 limitations + guarantees table |
+| B-13 | ✅ VERIFIED | Research depth/evidence/options/ready/stop_reason in all 4 profiles via `to_answer()` |
+| B-14 | ✅ VERIFIED | Single-user: session/project IDs are NOT tenant isolation; 9 tests + documentation |
+
+**Tests**: 22 beta tests pass (13 demos + 9 single-user), ruff clean. No regressions in Phase 14/16/19/20/E1 suite (177 tests pass).
+
+**Commit**: `e5b055d` — pushed to origin/main.
+
+**BETA = COMPLETE** — all 14 Beta items verified. Ready for next track.
+
+---
+
+## Current progress snapshot
+
+| Track | Status | Evidence |
+|---|---|---|
+| Phase 0–22 | PASS | Full suite green, ruff clean |
+| E0–E3 | VERIFIED/RATIFIED | All contract + adversarial tests pass |
+| E1 | VERIFIED | 200+ E1 contract/adversarial tests, E1-27 min_recall=1.00 on clean revision `8d01d90` |
+| BETA | COMPLETE | 14 items VERIFIED, 22 tests pass, commit `e5b055d` |
+| E4 | BLOCKED | Optional; requires E0–E3 + verified dataset + evaluated narrow role |
+
