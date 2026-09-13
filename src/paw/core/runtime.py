@@ -495,7 +495,13 @@ def _context_summary(compiled_ctx: Any) -> dict[str, Any]:
 
 @dataclass
 class RuntimeOutcome:
-    """Result of a ``PawRuntime.run`` / ``run_agent`` invocation."""
+    """Result of a ``PawRuntime.run`` / ``run_agent`` invocation.
+
+    The user-visible answer contract (B-03) exposes:
+    - ``evidence``: structured evidence gathered during execution
+    - ``uncertainty``: uncertainty assessment (confidence, unknown risks)
+    - ``next_action``: what to do next (if not complete)
+    """
 
     stopped: bool
     reason: StopReason | str | None
@@ -511,6 +517,28 @@ class RuntimeOutcome:
     model_selections: list[str] = field(default_factory=list)
     skills_used: list[str] = field(default_factory=list)
     context_compiled: bool = False
+    # B-03: User-visible answer contract
+    evidence: list[dict[str, Any]] = field(default_factory=list)
+    uncertainty: dict[str, Any] = field(default_factory=dict)
+    next_action: str | None = None
+
+    def to_answer(self) -> dict[str, Any]:
+        """Return the user-visible answer contract (B-03).
+
+        Exposes evidence, uncertainty, next action, and stop reason in a
+        structured format for CLI/library consumers.
+        """
+        return {
+            "stopped": self.stopped,
+            "stop_reason": str(self.reason) if self.reason else None,
+            "steps": self.iterations,
+            "operations_completed": self.operations_completed,
+            "model_selections": self.model_selections,
+            "skills_used": self.skills_used,
+            "evidence": self.evidence,
+            "uncertainty": self.uncertainty,
+            "next_action": self.next_action,
+        }
 
 
 @dataclass

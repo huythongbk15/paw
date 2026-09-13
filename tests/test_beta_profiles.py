@@ -63,6 +63,44 @@ class TestBetaProfiles:
         assert get_beta_profile("Change") is CHANGE
         assert get_beta_profile("UNKNOWN") is None
 
+class TestAnswerContract:
+    def test_runtime_outcome_has_answer_fields(self):
+        from paw.core.runtime import RuntimeOutcome
+        o = RuntimeOutcome(stopped=True, reason=None, step_called=False)
+        assert o.evidence == []
+        assert o.uncertainty == {}
+        assert o.next_action is None
+
+class TestAnswerContract:
+    def test_runtime_outcome_has_answer_fields(self):
+        from paw.core.runtime import RuntimeOutcome
+        o = RuntimeOutcome(stopped=True, reason=None, step_called=False)
+        assert o.evidence == []
+        assert o.uncertainty == {}
+        assert o.next_action is None
+
+    def test_to_answer_returns_structured_format(self):
+        from paw.core.runtime import RuntimeOutcome
+        o = RuntimeOutcome(
+            stopped=True, reason="task_completed", step_called=True, iterations=3,
+            operations_completed=2, model_selections=["gpt-4"], skills_used=["echo"],
+            evidence=[{"type": "memory", "value": "test"}],
+            uncertainty={"confidence": 0.9},
+            next_action=None,
+        )
+        answer = o.to_answer()
+        assert answer["stopped"] is True
+        assert answer["stop_reason"] == "task_completed"
+        assert answer["steps"] == 3
+        assert answer["operations_completed"] == 2
+        assert answer["model_selections"] == ["gpt-4"]
+        assert answer["skills_used"] == ["echo"]
+        assert answer["evidence"] == [{"type": "memory", "value": "test"}]
+        assert answer["uncertainty"] == {"confidence": 0.9}
+        assert answer["next_action"] is None
+
+
+class TestAllFourShareCanonicalRuntime:
     def test_all_four_share_canonical_runtime(self):
         """Profiles are config objects, not runtimes — they share the same PawRuntime."""
         # Verify all profiles have the same execution_profile type
