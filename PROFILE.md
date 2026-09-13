@@ -919,11 +919,11 @@ Handoff spec: `_filter_for_availability` restore supported-role filtering + desc
 | B-13 | ✅ VERIFIED | Research depth/evidence/options/ready/stop_reason in all 4 profiles via `to_answer()` |
 | B-14 | ✅ VERIFIED | Single-user: session/project IDs are NOT tenant isolation; 9 tests + documentation |
 
-**Tests**: 22 beta tests pass (13 demos + 9 single-user), ruff clean. No regressions in Phase 14/16/19/20/E1 suite (177 tests pass).
+**Tests**: 36 beta tests pass (13 demos + 9 single-user + 14 chat REPL), ruff clean. No regressions in Phase 14/16/19/20/E1 suite (76 tests pass).
 
-**Commit**: `e5b055d` — pushed to origin/main.
+**Commits**: `e5b055d` + `66f6751` — pushed to origin/main.
 
-**BETA = COMPLETE** — all 14 Beta items verified. Ready for next track.
+**BETA = COMPLETE** — all 14 Beta items verified, plus `paw chat` REPL CLI with full runtime integration. Ready for next track.
 
 ---
 
@@ -934,6 +934,6 @@ Handoff spec: `_filter_for_availability` restore supported-role filtering + desc
 | Phase 0–22 | PASS | Full suite green, ruff clean |
 | E0–E3 | VERIFIED/RATIFIED | All contract + adversarial tests pass |
 | E1 | VERIFIED | 200+ E1 contract/adversarial tests, E1-27 min_recall=1.00 on clean revision `8d01d90` |
-| BETA | COMPLETE | 14 items VERIFIED, 22 tests pass, commit `e5b055d` |
+| BETA | COMPLETE | 14 items VERIFIED, 36 tests pass (demos + single-user + chat REPL), commits `e5b055d`+`66f6751` |
 | E4 | BLOCKED | Optional; requires E0–E3 + verified dataset + evaluated narrow role |
 
