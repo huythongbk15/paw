@@ -592,10 +592,11 @@ async def _do_beta_inspect(kind: str, task_id: str | None, limit: int) -> None:
     from ..core.ledger import TaskLedger
 
     if kind == "memory":
-        from ..core.memory import MemoryManager
+        from ..core.memory import MemoryRetriever
         try:
             await db.initialize()
-            records = await MemoryManager.list_all(limit=limit)
+            retriever = MemoryRetriever()
+            records = await retriever.get_recent(limit=limit)
         except Exception as exc:
             console.print(f"[yellow]Cannot load memory: {exc}[/yellow]")
             return
@@ -691,12 +692,17 @@ async def _do_beta_inspect(kind: str, task_id: str | None, limit: int) -> None:
         if not task_id:
             console.print("[red]task_id is required for context inspection.[/red]")
             raise typer.Exit(code=1)
-        from ..core.runtime_persistence import RuntimePersistence  # noqa: F401
         try:
             await db.initialize()
-            from ..core.ledger import TaskLedger
             events = await TaskLedger.get_events(task_id, limit=limit)
-            rows = [{"op_type": e.event_type.value, "status": "recorded"} for e in events]
+            rows = [
+                {
+                    "op_type": e.event_type.value if hasattr(e, "event_type") else "—",
+                    "status": "recorded",
+                    "timestamp": e.timestamp.isoformat() if hasattr(e, "timestamp") else "",
+                }
+                for e in events
+            ]
         except Exception as exc:
             console.print(f"[yellow]Cannot load context: {exc}[/yellow]")
             return
@@ -704,11 +710,15 @@ async def _do_beta_inspect(kind: str, task_id: str | None, limit: int) -> None:
             console.print(f"[yellow]No operations recorded for task: {task_id}[/yellow]")
             return
         table = Table(title=f"PAW Context/Operations: {task_id}")
-        table.add_column("Op ID")
-        table.add_column("Type")
+        table.add_column("Timestamp")
+        table.add_column("Op Type")
         table.add_column("Status")
-        for i, r in enumerate(rows):
-            table.add_row(str(i)[:12], r.get("op_type", "—"), r.get("status", "—"))
+        for r in rows:
+            table.add_row(
+                r.get("timestamp", "")[:19],
+                r.get("op_type", "—"),
+                r.get("status", "—"),
+            )
         console.print(table)
 
     else:
