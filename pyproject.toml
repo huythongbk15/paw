@@ -50,6 +50,7 @@ unfixable = []
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["E501", "N", "W292", "T201", "W291", "W293", "I001", "F401", "F811", "F841", "RUF012", "SIM102", "SIM110", "SIM116", "B007", "E402", "PTH118", "UP017", "UP015", "RUF001", "RUF002", "RUF059", "B904"]
+"demos/*" = ["T201", "E501"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

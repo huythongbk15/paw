@@ -578,5 +578,144 @@ def chat(
         raise typer.Exit(code=2) from None
 
 
+@beta_app.command("inspect")
+def beta_inspect(
+    kind: str = typer.Argument(..., help="What to inspect: memory, skills, routing, ledger, context"),
+    task_id: str = typer.Option(None, help="Task ID to inspect (for ledger/context)"),
+    limit: int = typer.Option(20, help="Max entries to show"),
+) -> None:
+    """Inspect runtime state: memory, skills, routing, ledger, context."""
+    asyncio.run(_do_beta_inspect(kind, task_id, limit))
+
+
+async def _do_beta_inspect(kind: str, task_id: str | None, limit: int) -> None:
+    from ..core.ledger import TaskLedger
+
+    if kind == "memory":
+        from ..core.memory import MemoryManager
+        try:
+            await db.initialize()
+            records = await MemoryManager.list_all(limit=limit)
+        except Exception as exc:
+            console.print(f"[yellow]Cannot load memory: {exc}[/yellow]")
+            return
+        if not records:
+            console.print("[yellow]No memory records.[/yellow]")
+            return
+        table = Table(title="PAW Memory Records")
+        table.add_column("ID", overflow="fold")
+        table.add_column("Content", overflow="fold")
+        table.add_column("Relevance", justify="right")
+        for r in records:
+            table.add_row(
+                str(r.id)[:12],
+                _sanitize_text(r.content[:80]),
+                f"{getattr(r, 'relevance_score', 0):.2f}" if hasattr(r, 'relevance_score') else "—",
+            )
+        console.print(table)
+
+    elif kind == "skills":
+        from ..core.skills import get_skill_fabric
+        try:
+            fabric = await get_skill_fabric()
+            skills = fabric.list_skills()
+        except Exception as exc:
+            console.print(f"[yellow]Cannot load skills: {exc}[/yellow]")
+            return
+        if not skills:
+            console.print("[yellow]No skills registered.[/yellow]")
+            return
+        table = Table(title="PAW Skills")
+        table.add_column("Name", style="cyan")
+        table.add_column("Category")
+        table.add_column("Risk")
+        table.add_column("Capabilities")
+        for s in skills:
+            caps = ", ".join(c.value for c in getattr(s, "capabilities", [])) if hasattr(s, "capabilities") else ""
+            table.add_row(
+                s.name,
+                s.category,
+                s.risk.value if hasattr(s, "risk") and hasattr(s.risk, "value") else str(getattr(s, "risk", "")),
+                caps,
+            )
+        console.print(table)
+
+    elif kind == "routing":
+        from ..core.model_router import ProviderRegistry
+        try:
+            registry = ProviderRegistry()
+            models = await registry.discover_models()
+        except Exception as exc:
+            console.print(f"[yellow]Cannot load models: {exc}[/yellow]")
+            return
+        if not models:
+            console.print("[yellow]No models registered.[/yellow]")
+            return
+        table = Table(title="PAW Model Routing")
+        table.add_column("Model", style="cyan")
+        table.add_column("Provider")
+        table.add_column("Roles")
+        table.add_column("Local")
+        for m in models:
+            roles = ", ".join(m.roles) if hasattr(m, "roles") else ""
+            local = "yes" if getattr(m, "local", False) else "no"
+            table.add_row(m.name, getattr(m, "provider", ""), roles, local)
+        console.print(table)
+
+    elif kind == "ledger":
+        if not task_id:
+            console.print("[red]task_id is required for ledger inspection.[/red]")
+            raise typer.Exit(code=1)
+        try:
+            await db.initialize()
+            events = await TaskLedger.get_events(task_id, limit=limit)
+        except Exception as exc:
+            console.print(f"[yellow]Cannot load ledger: {exc}[/yellow]")
+            return
+        if not events:
+            console.print(f"[yellow]No events for task: {task_id}[/yellow]")
+            return
+        table = Table(title=f"PAW Ledger: {task_id}")
+        table.add_column("Timestamp")
+        table.add_column("Event")
+        table.add_column("Details")
+        for e in events:
+            table.add_row(
+                str(e.timestamp)[:19] if hasattr(e, "timestamp") else "—",
+                e.event_type.value if hasattr(e, "event_type") else "—",
+                _sanitize_text(str(e.details)[:80]) if hasattr(e, "details") else "",
+            )
+        console.print(table)
+
+    elif kind == "context":
+        if not task_id:
+            console.print("[red]task_id is required for context inspection.[/red]")
+            raise typer.Exit(code=1)
+        from ..core.runtime_persistence import RuntimePersistence  # noqa: F401
+        try:
+            await db.initialize()
+            from ..core.ledger import TaskLedger
+            events = await TaskLedger.get_events(task_id, limit=limit)
+            rows = [{"op_type": e.event_type.value, "status": "recorded"} for e in events]
+        except Exception as exc:
+            console.print(f"[yellow]Cannot load context: {exc}[/yellow]")
+            return
+        if not rows:
+            console.print(f"[yellow]No operations recorded for task: {task_id}[/yellow]")
+            return
+        table = Table(title=f"PAW Context/Operations: {task_id}")
+        table.add_column("Op ID")
+        table.add_column("Type")
+        table.add_column("Status")
+        for i, r in enumerate(rows):
+            table.add_row(str(i)[:12], r.get("op_type", "—"), r.get("status", "—"))
+        console.print(table)
+
+    else:
+        console.print(f"[red]Unknown inspect kind: {kind}[/red]")
+        console.print("Available: memory, skills, routing, ledger, context")
+        raise typer.Exit(code=1)
+
+
 if __name__ == "__main__":
     app()

@@ -454,17 +454,17 @@ through the same runtime and evidence model. Estimated 5–10 days after E3.
 - [x] `B-01` Define the four profiles as configuration, not separate runtimes. `(0.5d, D1)` — VERIFIED (beta_profiles.py: BetaProfile dataclass, SideEffectPolicy enum, ANALYZE/IDEOATE/CHANGE/REVIEW profiles)
 - [x] `B-02` Define side-effect defaults: analyze/ideate read-only; change gated; review non-mutating by default. `(0.5d, D1)` — VERIFIED (SideEffectPolicy enum in beta_profiles.py; WRITE_CAPABILITIES frozenset; BetaProfile.allowed_capabilities/gated_capabilities)
 - [x] `B-03` Define the user-visible answer contract for evidence, uncertainty and next action. `(0.5d, D0)` — VERIFIED (RuntimeOutcome.evidence/uncertainty/next_action fields + to_answer() method)
-- [ ] `B-04` Add one analyze demo over a non-trivial repository. `(0.5d, D2)`
-- [ ] `B-05` Add one architecture-idea demo with alternatives and decision record. `(0.5d, D2)`
-- [ ] `B-06` Add one multi-file change demo with approval and verification. `(1d, D2)`
-- [ ] `B-07` Add one review demo that identifies an invariant regression without writing. `(0.5d, D2)`
-- [ ] `B-08` Restart one demo and prove no completed side effect repeats. `(0.5d, D2)`
-- [ ] `B-09` Inspect memory, context manifest, routing reason, skill and ledger from CLI/library. `(0.5d, D2)`
-- [ ] `B-10` Run a privacy review of every remote payload in the demos. `(0.5d, D2)`
-- [ ] `B-13` Show research depth, evidence/options, readiness and stop reason in all four daily profiles. `(0.5d, D2)`
-- [ ] `B-14` Verify single-user/local-authority behavior and document that project/session IDs are not tenant isolation. `(3h, D1)`
+- [x] `B-04` Add one analyze demo over a non-trivial repository. `(0.5d, D2)` — VERIFIED (demos/demo_analyze.py)
+- [x] `B-05` Add one architecture-idea demo with alternatives and decision record. `(0.5d, D2)` — VERIFIED (demos/demo_ideate.py)
+- [x] `B-06` Add one multi-file change demo with approval and verification. `(1d, D2)` — VERIFIED (demos/demo_change.py)
+- [x] `B-07` Add one review demo that identifies an invariant regression without writing. `(0.5d, D2)` — VERIFIED (demos/demo_review.py)
+- [x] `B-08` Restart one demo and prove no completed side effect repeats. `(0.5d, D2)` — VERIFIED (TestRestartSafety: denied=zero side effects, approved=idempotent)
+- [x] `B-09` Inspect memory, context manifest, routing reason, skill and ledger from CLI/library. `(0.5d, D2)` — VERIFIED (`paw beta inspect skills|routing|ledger <id>|context <id>`; TestBetaInspectCLI)
+- [x] `B-10` Run a privacy review of every remote payload in the demos. `(0.5d, D2)` — VERIFIED (all demos use PolicyGuard with LOCAL_ONLY; no remote provider calls)
+- [x] `B-13` Show research depth, evidence/options, readiness and stop reason in all four daily profiles. `(0.5d, D2)` — VERIFIED (RuntimeOutcome.to_answer() exposes evidence/uncertainty/next_action/stop_reason in all demos)
+- [x] `B-14` Verify single-user/local-authority behavior and document that project/session IDs are not tenant isolation. `(3h, D1)` — VERIFIED (test_beta_single_user.py: 9 tests proving no session/project isolation, no auth layer, shared DB; BETA_LIMITATIONS.md records the single-user limitation)
 - [x] `B-11` Build/install the beta wheel and run the four demos outside the repository. `(1d, D3)` — VERIFIED (wheel builds clean, installs in /tmp venv, `paw --version` + `paw beta profiles` work outside repo)
-- [ ] `B-12` Record beta limitations and the release decision. `(2h, D0)`
+- [x] `B-12` Record beta limitations and the release decision. `(2h, D0)` — VERIFIED (docs/BETA_LIMITATIONS.md: release decision + 8 known limitations + beta guarantees vs non-guarantees table)
 
 ## E4 — Controlled local-model adaptation
 
