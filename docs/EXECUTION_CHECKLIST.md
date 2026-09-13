@@ -1,6 +1,6 @@
 # PAW execution checklist
 
-Review — 2026-09-13, source HEAD `3e39ded` (clean + E3-20 changes): **E1 VERIFIED; E2 RATIFIED; E3 COMPLETE (E3-01..25, E3-20 VERIFIED, E3-23 gate PASS — 69 E3 tests pass)**.
+Review — 2026-09-13, source HEAD `3e39ded` (clean + E3-20 + BETA B-01/B-02): **E1 VERIFIED; E2 RATIFIED; E3 COMPLETE; BETA B-01/B-02 PASS**. 77 E3 tests pass + 8 beta profile tests pass.
 E1 measurement gate PASS/VERIFIED on clean revision `8d01d90`: min_recall=1.0,
 12/12 samples at 100% recall with real Ollama embeddings (`nomic-embed-text:latest`),
 fixtures_fresh=true, dirty=false. E2 entry gate RATIFIED: prerequisites E2-25..28
@@ -451,8 +451,8 @@ Do not compensate by weakening the replay case.
 Exit: one clean install supports analyze, ideate, change and review profiles
 through the same runtime and evidence model. Estimated 5–10 days after E3.
 
-- [ ] `B-01` Define the four profiles as configuration, not separate runtimes. `(0.5d, D1)`
-- [ ] `B-02` Define side-effect defaults: analyze/ideate read-only; change gated; review non-mutating by default. `(0.5d, D1)`
+- [x] `B-01` Define the four profiles as configuration, not separate runtimes. `(0.5d, D1)` — DONE (beta_profiles.py: BetaProfile dataclass, SideEffectPolicy enum, ANALYZE/IDEOATE/CHANGE/REVIEW profiles)
+- [x] `B-02` Define side-effect defaults: analyze/ideate read-only; change gated; review non-mutating by default. `(0.5d, D1)` — DONE (SideEffectPolicy enum in beta_profiles.py; WRITE_CAPABILITIES frozenset; BetaProfile.allowed_capabilities/gated_capabilities)
 - [ ] `B-03` Define the user-visible answer contract for evidence, uncertainty and next action. `(0.5d, D0)`
 - [ ] `B-04` Add one analyze demo over a non-trivial repository. `(0.5d, D2)`
 - [ ] `B-05` Add one architecture-idea demo with alternatives and decision record. `(0.5d, D2)`

@@ -48,6 +48,50 @@ app = typer.Typer(
 console = Console()
 
 
+# ── Beta subcommand group ──
+beta_app = typer.Typer(name="beta", help="Beta: daily engineering-partner profiles", no_args_is_help=True)
+app.add_typer(beta_app, name="beta")
+
+
+@beta_app.command("profiles")
+def beta_profiles(
+    name: str = typer.Argument(None, help="Beta profile name to show (analyze|ideate|change|review)"),
+) -> None:
+    """List or show the four daily beta profiles."""
+    from ..core.beta_profiles import BETA_PROFILES, get_beta_profile, list_beta_profiles
+
+    if name:
+        profile = get_beta_profile(name)
+        if profile is None:
+            console.print(f"[red]Unknown beta profile:[/red] {name}")
+            console.print(f"Available: {', '.join(list_beta_profiles())}")
+            raise typer.Exit(code=1)
+
+        console.print(f"[bold]Beta Profile:[/bold] {profile.name}\n")
+        console.print(f"Description: {profile.description}")
+        console.print(f"Side Effect Policy: {profile.side_effect_policy.value}")
+        ep = profile.execution_profile
+        console.print(f"Autonomy Profile: {ep.autonomy_profile.value}")
+        console.print(f"Privacy Preference: {ep.privacy_preference.value}")
+        console.print(f"Skill Risk Tolerance: {ep.skill_risk_tolerance.value}")
+        if profile.allowed_capabilities is not None:
+            console.print(f"Allowed Capabilities: {len(profile.allowed_capabilities)} (read-only subset)")
+        if profile.gated_capabilities:
+            console.print(f"Gated Capabilities: {len(profile.gated_capabilities)} (require approval)")
+    else:
+        table = Table(title="PAW Beta Profiles")
+        table.add_column("Profile", style="cyan")
+        table.add_column("Policy", style="yellow")
+        table.add_column("Description")
+        for _pname, profile in BETA_PROFILES.items():
+            table.add_row(
+                profile.name,
+                profile.side_effect_policy.value,
+                profile.description,
+            )
+        console.print(table)
+
+
 def _print_chat_reply(reply: Any, json_output: bool) -> None:
     if json_output:
         typer.echo(json.dumps(reply.to_dict(), ensure_ascii=False))
