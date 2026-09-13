@@ -27,6 +27,7 @@ from .models import (
     ReviewRecord,
     SkillRisk,
     SkillState,
+    SkillVersionMetrics,
     TraceLink,
 )
 from .storage import db
@@ -877,6 +878,107 @@ class SkillFabric:
         manifest.state = state
         await self._save_to_db(manifest)
         return True
+
+    # E3-20: Per-version selection metrics
+    async def record_skill_selection(self, name: str, version: str) -> None:
+        """Record that a skill version was selected for execution."""
+        row = await db.fetchone(
+            "SELECT times_selected FROM skill_version_metrics "
+            "WHERE skill_name = ? AND version = ?",
+            (name, version),
+        )
+        if row is None:
+            await db.write(
+                """INSERT INTO skill_version_metrics
+                   (id, skill_name, version, times_selected, total_selections)
+                   VALUES (?, ?, ?, 1, 0)""",
+                (f"{name}:{version}", name, version),
+            )
+        else:
+            await db.write(
+                "UPDATE skill_version_metrics SET times_selected = times_selected + 1 "
+                "WHERE skill_name = ? AND version = ?",
+                (name, version),
+            )
+
+    async def record_skill_outcome(
+        self, name: str, version: str, success: bool,
+        tokens_consumed: float = 0.0, duration_seconds: float = 0.0,
+        failure_reason: str | None = None,
+    ) -> None:
+        """Record the outcome of a skill execution for per-version metrics."""
+        row = await db.fetchone(
+            "SELECT successful_completions, failure_cases, avg_tokens_consumed, "
+            "avg_duration_seconds, total_selections FROM skill_version_metrics "
+            "WHERE skill_name = ? AND version = ?",
+            (name, version),
+        )
+        if row is None:
+            # Outcome without prior selection — initialize
+            await db.write(
+                """INSERT INTO skill_version_metrics
+                   (id, skill_name, version, times_selected, successful_completions,
+                    failure_cases, avg_tokens_consumed, avg_duration_seconds,
+                    total_selections, last_evaluated)
+                   VALUES (?, ?, ?, 0, ?, ?, ?, ?, 1, ?)""",
+                (
+                    f"{name}:{version}", name, version,
+                    1 if success else 0,
+                    json.dumps([failure_reason]) if failure_reason else "[]",
+                    tokens_consumed, duration_seconds,
+                    datetime.now(UTC).isoformat(),
+                ),
+            )
+        else:
+            successes, failures_json, avg_tokens, avg_dur, _total_sel = row
+            old_successes = successes or 0
+            old_failures = json.loads(failures_json) if failures_json else []
+            new_failures = old_failures + ([failure_reason] if failure_reason else [])
+            new_successes = old_successes + (1 if success else 0)
+            # Running average over prior outcomes (successes + failures before this update)
+            prior_outcomes = old_successes + len(old_failures)
+            new_total = prior_outcomes + 1
+            new_avg_tokens = ((avg_tokens or 0.0) * prior_outcomes + tokens_consumed) / new_total
+            new_avg_dur = ((avg_dur or 0.0) * prior_outcomes + duration_seconds) / new_total
+
+            await db.write(
+                """UPDATE skill_version_metrics
+                   SET successful_completions = ?, failure_cases = ?,
+                       avg_tokens_consumed = ?, avg_duration_seconds = ?,
+                       total_selections = ?, last_evaluated = ?
+                   WHERE skill_name = ? AND version = ?""",
+                (
+                    new_successes, json.dumps(new_failures),
+                    new_avg_tokens, new_avg_dur, new_total,
+                    datetime.now(UTC).isoformat(),
+                    name, version,
+                ),
+            )
+
+    async def get_skill_metrics(self, name: str, version: str) -> SkillVersionMetrics | None:
+        """Retrieve per-version metrics for a skill. Returns None if not found."""
+        row = await db.fetchone(
+            "SELECT skill_name, version, times_selected, successful_completions, "
+            "failure_cases, avg_tokens_consumed, avg_duration_seconds, "
+            "total_selections, last_evaluated FROM skill_version_metrics "
+            "WHERE skill_name = ? AND version = ?",
+            (name, version),
+        )
+        if row is None:
+            return None
+        (r_name, r_ver, sel, succ, failures, tokens, dur, total, evaluated) = row
+        return SkillVersionMetrics(
+            skill_name=r_name,
+            version=r_ver,
+            times_selected=sel,
+            successful_completions=succ,
+            failure_cases=json.loads(failures) if failures else [],
+            avg_tokens_consumed=tokens or 0.0,
+            avg_duration_seconds=dur or 0.0,
+            total_selections=total or 0,
+            last_evaluated=evaluated,
+        )
+
     async def _save_to_db(self, manifest: SkillManifest) -> None:
         async with db.transaction() as conn:
             await conn.execute(

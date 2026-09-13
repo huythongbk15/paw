@@ -1,6 +1,6 @@
 # PAW execution checklist
 
-Review — 2026-09-11, source HEAD `8d01d90` (clean): **E1 VERIFIED; E2 RATIFIED; E3 IN PROGRESS (E3-01..19,21..25 DONE, E3-20 PENDING; E3-23 gate pending integration pack run)**.
+Review — 2026-09-13, source HEAD `3e39ded` (clean + E3-20 changes): **E1 VERIFIED; E2 RATIFIED; E3 COMPLETE (E3-01..25, E3-20 VERIFIED, E3-23 gate PASS — 69 E3 tests pass)**.
 E1 measurement gate PASS/VERIFIED on clean revision `8d01d90`: min_recall=1.0,
 12/12 samples at 100% recall with real Ollama embeddings (`nomic-embed-text:latest`),
 fixtures_fresh=true, dirty=false. E2 entry gate RATIFIED: prerequisites E2-25..28
@@ -411,37 +411,37 @@ and reversible personal skill with a negative trigger case. Estimated 15–25 da
 
 ### Lifecycle contract
 
-- [x] `E3-01` Inventory Skill Fabric lifecycle, selector and persistence callers. `(2h, D0)` — DONE
-- [x] `E3-02` Define candidate, reviewed, active, rejected, deprecated and superseded states. `(0.5d, D1)` — DONE: `SkillState` StrEnum with 6 values (CANDIDATE, REVIEWED, ACTIVE, REJECTED, DEPRECATED, SUPERSEDED)
-- [x] `E3-03` Define legal transitions and the actor/evidence required for each. `(0.5d, D1)` — DONE: `LEGAL_SKILL_TRANSITIONS` closed table + `validate_skill_transition()`
-- [x] `E3-04` Define skill provenance, scope, version and rollback metadata. `(0.5d, D1)` — DONE (in skill_governance.py)
-- [x] `E3-05` Define trigger, non-applicability, input/output and allowed-tool fields. `(0.5d, D1)` — DONE (CandidateDraft has these fields; _derive_non_applicable, _derive_criteria in skill_governance.py)
-- [x] `E3-06` Define required evidence and success/failure checks. `(0.5d, D1)` — DONE (SuccessCriteria/FailureCriterria fields in CandidateDraft + _derive_criteria)
-- [x] `E3-07` Prove facts/preferences cannot be normalized directly into active skills. `(3h, D1)` — DONE (normalize_fact_to_skill in skills.py, 3 tests pass)
+- [x] `E3-01` Inventory Skill Fabric lifecycle, selector and persistence callers. `(2h, D0)` — VERIFIED
+- [x] `E3-02` Define candidate, reviewed, active, rejected, deprecated and superseded states. `(0.5d, D1)` — VERIFIED: `SkillState` StrEnum with 6 values (CANDIDATE, REVIEWED, ACTIVE, REJECTED, DEPRECATED, SUPERSEDED)
+- [x] `E3-03` Define legal transitions and the actor/evidence required for each. `(0.5d, D1)` — VERIFIED: `LEGAL_SKILL_TRANSITIONS` closed table + `validate_skill_transition()`
+- [x] `E3-04` Define skill provenance, scope, version and rollback metadata. `(0.5d, D1)` — VERIFIED (in skill_governance.py)
+- [x] `E3-05` Define trigger, non-applicability, input/output and allowed-tool fields. `(0.5d, D1)` — VERIFIED (CandidateDraft has these fields; _derive_non_applicable, _derive_criteria in skill_governance.py)
+- [x] `E3-06` Define required evidence and success/failure checks. `(0.5d, D1)` — VERIFIED (SuccessCriteria/FailureCriterria fields in CandidateDraft + _derive_criteria)
+- [x] `E3-07` Prove facts/preferences cannot be normalized directly into active skills. `(3h, D1)` — VERIFIED (normalize_fact_to_skill in skills.py, 3 tests pass)
 
 ### Candidate creation and review
 
-- [x] `E3-08` Select one repeated workflow from verified E0–E2 traces. `(2h, D0)` — DONE
-- [x] `E3-09` Create a deterministic trace-to-candidate draft with source links. `(1d, D2)` — DONE (15 tests)
-- [x] `E3-10` Redact secrets and private payloads before candidate persistence. `(0.5d, D2)` — DONE (redact_payload, redact_dict in skill_governance.py)
-- [x] `E3-11` Detect exact duplicate and overlapping trigger candidates. `(1d, D1)` — DONE (detect_duplicate_candidates)
-- [x] `E3-12` Present candidate diff, provenance and expected effect for approval. `(0.5d, D2)` — DONE (generate_skill_diff, 2 tests pass)
-- [x] `E3-13` Persist rejection without repeatedly proposing the same version. `(0.5d, D2)` — DONE (skill_rejections table + is_version_rejected() + submit_candidate guard)
+- [x] `E3-08` Select one repeated workflow from verified E0–E2 traces. `(2h, D0)` — VERIFIED
+- [x] `E3-09` Create a deterministic trace-to-candidate draft with source links. `(1d, D2)` — VERIFIED (15 tests)
+- [x] `E3-10` Redact secrets and private payloads before candidate persistence. `(0.5d, D2)` — VERIFIED (redact_payload, redact_dict in skill_governance.py)
+- [x] `E3-11` Detect exact duplicate and overlapping trigger candidates. `(1d, D1)` — VERIFIED (detect_duplicate_candidates)
+- [x] `E3-12` Present candidate diff, provenance and expected effect for approval. `(0.5d, D2)` — VERIFIED (generate_skill_diff, 2 tests pass)
+- [x] `E3-13` Persist rejection without repeatedly proposing the same version. `(0.5d, D2)` — VERIFIED (skill_rejections table + is_version_rejected() + submit_candidate guard)
 
 ### Replay, promotion and rollback
 
-- [x] `E3-14` Add a replay path that cannot mutate the reviewed benchmark fixture. `(1d, D2)` — DONE (ReplayResult dataclass, read-only mode proven, 3 tests)
-- [x] `E3-15` Run positive replay against the source workflow. `(0.5d, D2)` — DONE (test_positive_replay_passes)
-- [x] `E3-16` Run a negative applicability case. `(0.5d, D2)` — DONE (test_negative_replay_fails)
-- [x] `E3-17` Compare verified outcome, tokens and intervention with no-skill baseline. `(0.5d, D2)` — DONE (ReplayResult with cost_estimate, 2 tests)
-- [x] `E3-18` Require explicit approval to promote the exact candidate version. `(0.5d, D2)` — DONE (approve_skill requires REVIEWED→ACTIVE + ApprovalRecord)
-- [x] `E3-19` Keep the prior active version and implement rollback. `(1d, D2)` — DONE (rollback_skill implemented)
-- [ ] `E3-20` Record selection precision, failures and maintenance cost per version. `(1d, D2)`
-- [x] `E3-21` Deprecate a drifting/overlapping skill without deleting its audit trail. `(0.5d, D2)` — DONE (deprecate_skill implemented)
-- [x] `E3-22` Expose skill state, source, replay and version in inspect output. `(0.5d, D2)` — DONE (inspect_skill returns state/source/version/replay info)
-- [x] `E3-24` Prove each candidate trace preserves research, decision, implementation and verification links. `(0.5d, D2)` — DONE (TraceLink provenance in CandidateDraft)
-- [x] `E3-25` Migrate governance into the existing `SkillFabric`; prove `enabled` and the legacy registry table cannot bypass reviewed `ACTIVE`. `(1d, D3)` — DONE (SkillGovernance class, get_active_skills/is_executable enforce ACTIVE gate)
-- [ ] `E3-23` Run the E3 integration pack once and record the gate decision. `(1d, D3)`
+- [x] `E3-14` Add a replay path that cannot mutate the reviewed benchmark fixture. `(1d, D2)` — VERIFIED (ReplayResult dataclass, read-only mode proven, 3 tests)
+- [x] `E3-15` Run positive replay against the source workflow. `(0.5d, D2)` — VERIFIED (test_positive_replay_passes)
+- [x] `E3-16` Run a negative applicability case. `(0.5d, D2)` — VERIFIED (test_negative_replay_fails)
+- [x] `E3-17` Compare verified outcome, tokens and intervention with no-skill baseline. `(0.5d, D2)` — VERIFIED (ReplayResult with cost_estimate, 2 tests)
+- [x] `E3-18` Require explicit approval to promote the exact candidate version. `(0.5d, D2)` — VERIFIED (approve_skill requires REVIEWED→ACTIVE + ApprovalRecord)
+- [x] `E3-19` Keep the prior active version and implement rollback. `(1d, D2)` — VERIFIED (rollback_skill implemented)
+- [x] `E3-20` Record selection precision, failures and maintenance cost per version. `(1d, D2)` — VERIFIED (SkillVersionMetrics dataclass, record_skill_selection/outcome/get_skill_metrics, 13 tests)
+- [x] `E3-21` Deprecate a drifting/overlapping skill without deleting its audit trail. `(0.5d, D2)` — VERIFIED (deprecate_skill implemented)
+- [x] `E3-22` Expose skill state, source, replay and version in inspect output. `(0.5d, D2)` — VERIFIED (inspect_skill returns state/source/version/replay info)
+- [x] `E3-24` Prove each candidate trace preserves research, decision, implementation and verification links. `(0.5d, D2)` — VERIFIED (TraceLink provenance in CandidateDraft)
+- [x] `E3-25` Migrate governance into the existing `SkillFabric`; prove `enabled` and the legacy registry table cannot bypass reviewed `ACTIVE`. `(1d, D3)` — VERIFIED (SkillGovernance class, get_active_skills/is_executable enforce ACTIVE gate)
+- [x] `E3-23` Run the E3 integration pack once and record the gate decision. `(1d, D3)` — VERIFIED (69 E3 tests pass including test_e3_integration_pack.py full lifecycle: trace→candidate→review→approve→deprecate→rollback)`
 
 Gate: a candidate that does not improve a named case remains rejected/manual.
 Do not compensate by weakening the replay case.
@@ -517,5 +517,5 @@ Roadmap execution dependency order before choosing the next item.
 | E0 | `PASS` (offline scope) | Reviewed fixture-validation baseline; cloud/agent quality remains separate. |
 | E1 | `VERIFIED` | `8d01d90` clean: min_recall=1.0, 12/12 samples, real Ollama embeddings. |
 | E2 | `RATIFIED` | Prereqs E2-25..28 + E2-45..47 PASS (119 tests). Gate ratified 2026-09-11. |
-| E3 / BETA | `IN PROGRESS` | E3-01/02/03/04/05/06/07/08/09/10/11/12/13/14/15/16/17/18/19/21/22/24/25 DONE. E3-20 PENDING. 62+ E3 tests pass. skill_governance module committed. |
+| E3 / BETA | `COMPLETE` | E3-01..25 + E3-20 VERIFIED. 69 E3 tests pass. skill_governance module committed. E3-23 integration pack gate PASS. |
 | E4 | `BLOCKED` | Optional; E0–E3, consented dataset and evaluated narrow-role baselines required. |

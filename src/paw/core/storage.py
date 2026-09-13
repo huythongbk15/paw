@@ -177,6 +177,20 @@ CREATE TABLE IF NOT EXISTS skill_rejections (
     rejected_at TEXT NOT NULL
 );
 
+-- E3-20: Track per-version selection metrics for precision/maintenance analysis
+CREATE TABLE IF NOT EXISTS skill_version_metrics (
+    id TEXT PRIMARY KEY,          -- "<skill_name>:<version>"
+    skill_name TEXT NOT NULL,
+    version TEXT NOT NULL,
+    times_selected INTEGER NOT NULL DEFAULT 0,
+    successful_completions INTEGER NOT NULL DEFAULT 0,
+    failure_cases TEXT,           -- JSON array of failure_reason strings
+    avg_tokens_consumed REAL NOT NULL DEFAULT 0.0,
+    avg_duration_seconds REAL NOT NULL DEFAULT 0.0,
+    total_selections INTEGER NOT NULL DEFAULT 0,  -- for running average
+    last_evaluated TEXT           -- ISO timestamp of last outcome recording
+);
+
 -- FTS5 Virtual Table for Skill Search
 CREATE VIRTUAL TABLE IF NOT EXISTS skill_fts USING fts5(
     name, description, body, tokenize='porter unicode61'

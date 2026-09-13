@@ -7,7 +7,7 @@ All domain objects are owned by PAW. No external framework types leak into these
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Annotated, Any, TypeVar
@@ -233,6 +233,33 @@ class CandidateMetadata:
     expected_effect: str
     safety_assessment: str
     cost_estimate: dict[str, Any]
+
+
+# --- E3-20: Per-version selection metrics ---
+
+@dataclass
+class SkillVersionMetrics:
+    """Per-version selection metrics for precision/maintenance analysis (E3-20).
+
+    Tracks how often a skill version was selected, how many selections
+    succeeded, what failures occurred, and the average resource cost.
+    """
+    skill_name: str
+    version: str
+    times_selected: int = 0
+    successful_completions: int = 0
+    failure_cases: list[str] = field(default_factory=list)  # failure reasons
+    avg_tokens_consumed: float = 0.0
+    avg_duration_seconds: float = 0.0
+    total_selections: int = 0  # count of outcomes recorded (for running average)
+    last_evaluated: str | None = None  # ISO timestamp
+
+    @property
+    def selection_precision(self) -> float:
+        """Fraction of selections that led to successful completion."""
+        if self.times_selected == 0:
+            return 0.0
+        return self.successful_completions / self.times_selected
 
 
 # --- Phase 10: Autonomy Decisions ---

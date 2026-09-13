@@ -15,7 +15,7 @@ Result: **RATIFIED**. E1 gate is VERIFIED on clean revision `8d01d90`:
   via `InferenceClassification` (E2-09) and `evaluate_local_eligibility` (E2-05).
 - Offline qualification decision recorded in ROADMAP.md: local Ollama embeddings
   qualify; cloud token claim deferred to E2-21/E2-24.
-- `tests/test_phase22_runtime_privacy_proof.py`: 7 end-to-end regression tests PASS.
+- `tests/test_runtime_privacy_proof.py`: 7 end-to-end regression tests PASS.
 - `tests/test_p1_router_filter_availability.py`: 9 contract tests PASS.
 - Phase 21 bug fixes (4 regression tests in `test_phase21_bugfixes.py`) PASS.
 
