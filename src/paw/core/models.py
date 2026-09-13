@@ -596,6 +596,7 @@ class ExecutionObservation(BaseModel):
     resources_used: ResourceUsage = Field(default_factory=ResourceUsage)
     success: bool = True
     error: str | None = None
+    thinking: str | None = None  # Model reasoning/thought chain from this step
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict[str, Any]:
@@ -613,6 +614,8 @@ class ProposedAction(BaseModel):
     idempotency_key: str | None = None
     # Estimated cost for autonomy budget pre-check
     estimated_cost: ResourceUsage = Field(default_factory=ResourceUsage)
+    # Model reasoning/thought chain behind this proposal
+    thinking: str | None = None
     # E2-36: mutating proposals require READY readiness artifact
     is_mutating: bool = True
     # E2-38: research proposals are the only mutating operations allowed

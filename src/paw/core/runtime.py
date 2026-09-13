@@ -538,7 +538,27 @@ class RuntimeOutcome:
             "evidence": self.evidence,
             "uncertainty": self.uncertainty,
             "next_action": self.next_action,
+            "reasoning": self._extract_reasoning(),
         }
+
+    def _extract_reasoning(self) -> str | None:
+        """Pull model thinking/reasoning from evidence or last observation (B-03)."""
+        # Check evidence list first
+        for item in reversed(self.evidence):
+            if isinstance(item, dict):
+                thinking = item.get("thinking") or item.get("reasoning")
+                if thinking:
+                    return str(thinking)
+        # Fall back to last observation's thinking field
+        if self.last_observation is not None:
+            thinking = self.last_observation.thinking
+            if thinking:
+                return str(thinking)
+            if isinstance(self.last_observation.result, dict):
+                thinking = self.last_observation.result.get("thinking") or self.last_observation.result.get("reasoning")
+                if thinking:
+                    return str(thinking)
+        return None
 
 
 @dataclass
@@ -2459,6 +2479,9 @@ class PawRuntime:
             "artifacts": executor_result.artifacts,
             "executor_metadata": executor_result.metadata,
             "effect_intent": effect_intent.to_dict() if effect_intent else None,
+            "thinking": (
+                model_result.get("thinking") if isinstance(model_result, dict) else None
+            ) or action.metadata.get("thinking"),
         }
 
         resources = action.estimated_cost.model_copy(deep=True)
@@ -2472,6 +2495,7 @@ class PawRuntime:
             resources_used=resources,
             success=executed,
             error=executor_result.error,
+            thinking=result.get("thinking"),
         )
 
     def inspect_state(self) -> dict[str, Any]:

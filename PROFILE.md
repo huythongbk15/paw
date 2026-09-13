@@ -925,6 +925,25 @@ Handoff spec: `_filter_for_availability` restore supported-role filtering + desc
 
 **BETA = COMPLETE** — all 14 Beta items verified, plus `paw chat` REPL CLI with full runtime integration. Ready for next track.
 
+### Phase BETA — Log Reduction + Thinking Display (2026-09-14)
+
+**Goal:** Reduce noisy INFO-level runtime logs in the Chat REPL (`paw chat`) so interactive output stays clean; default logs go to stderr, with `--quiet`/`--debug` flags. Also add model thinking display in REPL output and `/why`.
+
+| Component | Status | Notes |
+|----------|--------|-------|
+| CLI flags | ✅ 完成 | `--quiet`/`-q` (ERROR level), `--debug` (DEBUG level), default (WARNING level) on `paw chat` |
+| Log redirection | ✅ | structlog already writes to stderr (`PrintLoggerFactory(file=sys.stderr)` in `core/logging.py`); CLI now configures level per flags |
+| `ChatReply.thinking` | ✅ 新增 | New `thinking: str \| None` field on `ChatReply` dataclass; populated from `result.get("thinking") or result.get("model_thinking")` in `_reply_from_outcome` |
+| `ExecutionObservation.thinking` | ✅ 新增 | New `thinking: str \| None` field on `ExecutionObservation` model; set from `model_result.get("thinking")` in `_execute_unit` |
+| `ProposedAction.thinking` | ✅ 新增 | New `thinking: str \| None` field; allows thinking to flow from action proposal |
+| REPL display | ✅ | `_print_chat_reply` renders thinking inline: `paw (thinking): ...` in dim italic; content after |
+| `/why` (explain) | ✅ | `plan_projection` now includes `thinking` field; surfaced in JSON output |
+| `RuntimeOutcome.to_answer()` | ✅ | Added `_extract_reasoning()` method that pulls thinking from evidence list or last observation; `to_answer()` returns `reasoning` key |
+| **Tests** | ✅ 19 passed | `tests/test_phase_beta_log_thinking.py` — 4 log level tests + 8 thinking capture tests + 3 chat reply tests + 4 plan projection tests |
+| **ruff** | ✅ clean | All modified files pass |
+
+**Phase BETA Log/Thinking = PASS** — INFO logs suppressed by default in REPL (stderr), `--quiet`/`--debug` control available, thinking surfaced inline + in `/why` + in `to_answer()`.
+
 ---
 
 ## Current progress snapshot
@@ -935,5 +954,6 @@ Handoff spec: `_filter_for_availability` restore supported-role filtering + desc
 | E0–E3 | VERIFIED/RATIFIED | All contract + adversarial tests pass |
 | E1 | VERIFIED | 200+ E1 contract/adversarial tests, E1-27 min_recall=1.00 on clean revision `8d01d90` |
 | BETA | COMPLETE | 14 items VERIFIED, 36 tests pass (demos + single-user + chat REPL), commits `e5b055d`+`66f6751` |
+| **BETA Log/Thinking** | ✅ PASS | 19 new tests pass, `--quiet`/`--debug` working, thinking in REPL + `/why` + `to_answer()` |
 | E4 | BLOCKED | Optional; requires E0–E3 + verified dataset + evaluated narrow role |
 

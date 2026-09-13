@@ -121,6 +121,7 @@ class ChatReply:
     executor: str | None = None
     context_compiled: bool = False
     artifacts: list[dict[str, Any]] = field(default_factory=list)
+    thinking: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -554,6 +555,7 @@ class ChatService:
             executor=executor,
             context_compiled=outcome.context_compiled,
             artifacts=artifacts,
+            thinking=result.get("thinking") or result.get("model_thinking"),
         )
 
     async def approve(

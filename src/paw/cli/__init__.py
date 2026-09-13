@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import logging
 import sys
 from typing import Any
 
@@ -96,6 +97,8 @@ def _print_chat_reply(reply: Any, json_output: bool) -> None:
     if json_output:
         typer.echo(json.dumps(reply.to_dict(), ensure_ascii=False))
         return
+    if reply.thinking:
+        console.print(f"[dim italic]paw (thinking):[/dim italic] {escape(_sanitize_text(reply.thinking))}")
     console.print(f"[bold cyan]paw>[/bold cyan] {escape(_sanitize_text(reply.content))}")
     details = [f"status={reply.status}", f"session={reply.session_id}"]
     if reply.task_id:
@@ -375,6 +378,8 @@ async def _chat_async(
     show_policy: bool,
     show_skills: bool,
     show_artifacts: bool,
+    quiet: bool = False,
+    debug: bool = False,
 ) -> None:
     from ..application.chat import ChatService
 
@@ -531,6 +536,8 @@ def chat(
     show_policy: bool = typer.Option(False, "--policy", help="Show policy and approval state."),
     show_skills: bool = typer.Option(False, "--skills", help="Show skill/context selection."),
     show_artifacts: bool = typer.Option(False, "--artifacts", help="Show task artifacts."),
+    quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress INFO logs (only show errors)."),
+    debug: bool = typer.Option(False, "--debug", help="Show DEBUG-level logs for troubleshooting."),
 ) -> None:
     """Chat through the full PAW runtime with policy, approval and resume."""
     modes = [
@@ -551,6 +558,22 @@ def chat(
     if sum(modes) > 1:
         console.print("[red]Choose only one chat action or inspection flag.[/red]")
         raise typer.Exit(code=2)
+
+    # Configure structured logging based on flags (Option B: stderr separation)
+    # By default in REPL mode: only WARNING+ goes to stderr, keeping stdout clean.
+    if debug:
+        structlog.configure(
+            wrapper_class=structlog.make_filtering_bound_logger(structlog.DEBUG)
+        )
+    elif quiet:
+        structlog.configure(
+            wrapper_class=structlog.make_filtering_bound_logger(logging.ERROR)
+        )
+    else:
+        structlog.configure(
+            wrapper_class=structlog.make_filtering_bound_logger(logging.WARNING)
+        )
+
     try:
         asyncio.run(
             _chat_async(
@@ -571,6 +594,8 @@ def chat(
                 show_policy=show_policy,
                 show_skills=show_skills,
                 show_artifacts=show_artifacts,
+                quiet=quiet,
+                debug=debug,
             )
         )
     except ValueError as exc:

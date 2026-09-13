@@ -22,6 +22,7 @@ def plan_projection(task_id: str | None, action: Any) -> dict[str, Any] | None:
         "capabilities": action.get("capabilities") or [],
         "filesystem": metadata.get("filesystem"),
         "change_preview": metadata.get("change_preview"),
+        "thinking": action.get("thinking"),
     }
 
 
