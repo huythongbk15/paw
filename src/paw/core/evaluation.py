@@ -67,9 +67,9 @@ class EvaluationRubric:
 
         reasons: list[str] = []
         if field_score < 1.0:
-            missing = set(self.required_fields) - set(evidence.keys())
+            missing = [f for f in self.required_fields if f not in evidence or evidence[f] is None]
             if missing:
-                reasons.append(f"missing fields: {missing}")
+                reasons.append(f"missing or null fields: {missing}")
         if quality.level == QualityLevel.STRONG and reasons:
             reasons.insert(0, "strong match with minor issues")
 

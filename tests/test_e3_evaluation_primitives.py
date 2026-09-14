@@ -55,7 +55,7 @@ class TestEvaluationRubric:
         quality = rubric.assess_evidence(evidence)
         assert quality.level == QualityLevel.WEAK
         assert quality.passes is False
-        assert any("missing fields" in r for r in quality.reasons)
+        assert any("missing or null fields" in r for r in quality.reasons)
 
     def test_kind_mismatch_insufficient(self):
         rubric = EvaluationRubric(
@@ -67,6 +67,33 @@ class TestEvaluationRubric:
         quality = rubric.assess_evidence(evidence)
         assert quality.level == QualityLevel.INSUFFICIENT
         assert quality.score == 0.0
+
+
+    def test_none_field_value_reported_in_reasons(self):
+        """Field present but None should appear in reasons, not silently ignored."""
+        rubric = EvaluationRubric(
+            name="test", evidence_kind="policy_decision",
+            min_quality=QualityLevel.STRONG,
+            required_fields=("target", "value"),
+        )
+        evidence = {"kind": "policy_decision", "target": "blocked", "value": None}
+        quality = rubric.assess_evidence(evidence)
+        assert quality.level == QualityLevel.WEAK
+        assert quality.score == 0.5  # 1/2 fields present
+        assert any("value" in r for r in quality.reasons)
+        assert quality.reasons != ()
+
+    def test_missing_field_reported_in_reasons(self):
+        """Truly missing field (key absent) should also appear in reasons."""
+        rubric = EvaluationRubric(
+            name="test", evidence_kind="policy_decision",
+            min_quality=QualityLevel.STRONG,
+            required_fields=("target", "value"),
+        )
+        evidence = {"kind": "policy_decision", "target": "blocked"}
+        quality = rubric.assess_evidence(evidence)
+        assert quality.level == QualityLevel.WEAK
+        assert any("value" in r for r in quality.reasons)
 
     def test_weighted_scoring(self):
         rubric = EvaluationRubric(
