@@ -957,3 +957,18 @@ Handoff spec: `_filter_for_availability` restore supported-role filtering + desc
 | **BETA Log/Thinking** | ✅ PASS | 19 new tests pass, `--quiet`/`--debug` working, thinking in REPL + `/why` + `to_answer()` |
 | E4 | BLOCKED | Optional; requires E0–E3 + verified dataset + evaluated narrow role |
 
+### E4-11..14 Provider Scaffolds (2026-09-07)
+
+**Mục tiêu:** Định nghĩa contract structure cho cloud teacher baseline, bounded training, artifact versioning và evaluation gating — **BLOCKED** cho đến khi cloud provider adapter available bên ngoài core.
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| E4-11 | ✅ scaffold | `CloudTeacherBaselineResult` + `measure_cloud_teacher_baseline()` → NotImplementedError |
+| E4-12 | ✅ scaffold | `TrainingConfig` + `train_dataset()` → NotImplementedError |
+| E4-13 | ✅ scaffold | `TrainingArtifact` + `register_training_artifact()` → NotImplementedError |
+| E4-14 | ✅ scaffold | `TrainingEvaluation` + `should_accept_artifact()` (pure logic) |
+| Tests | ✅ 17 pass | `test_e4_provider_scaffolds.py` — proves contracts exist + blocked |
+| **No provider SDK imported, no network call** | ✅ | AGENTS.md scope lock respected |
+
+E4-11..14 = BLOCKED (contract scaffolded, not activated). Awaiting Đại ca direction on whether to implement external adapter post-gate.
+
