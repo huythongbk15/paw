@@ -219,17 +219,23 @@ def evaluate_case(
     scores: dict[str, float] = {}
 
     for rubric in rubrics:
-        # Find matching observed evidence
+        # Find matching observed evidence (or synthesize a missing-evidence
+        # dict so assess_evidence / score receive a consistent shape).
         obs = _find_evidence(observed_evidence, rubric.evidence_kind)
-        quality = rubric.assess_evidence(obs or {"kind": rubric.evidence_kind, "value": None})
+        missing = {"kind": rubric.evidence_kind, "value": None}
+        obs_or_missing = obs if obs is not None else missing
+        quality = rubric.assess_evidence(obs_or_missing)
         qualities[rubric.evidence_kind] = quality
-        scores[rubric.name] = rubric.score(obs or {"kind": rubric.evidence_kind, "value": None})
+        scores[rubric.name] = rubric.score(obs_or_missing)
 
     raw_score = sum(scores.values()) / len(scores) if scores else 0.0
 
-    # Check if any required evidence was missing or insufficient
+    # Check if any required evidence was missing or insufficient.
+    # ``min_quality`` is the rubric's declared minimum acceptable level;
+    # evidence below it (even if partially present) fails the rubric.
     all_pass = all(
-        q.passes for q in qualities.values()
+        _meets_min_quality(q, rubric.min_quality)
+        for q, rubric in _zip_qualities_rubrics(rubrics, qualities)
     ) if qualities else False
 
     status = "PASS" if all_pass else "FAIL"
@@ -257,6 +263,38 @@ def _infer_rubrics(expected_evidence: list[dict[str, Any]]) -> list[EvaluationRu
             required_fields=("target", "value"),
         ))
     return rubrics
+
+
+_QUALITY_ORDER: dict[QualityLevel, int] = {
+    QualityLevel.INSUFFICIENT: 0,
+    QualityLevel.WEAK: 1,
+    QualityLevel.SUFFICIENT: 2,
+    QualityLevel.STRONG: 3,
+}
+
+
+def _meets_min_quality(
+    quality: EvidenceQuality, min_quality: QualityLevel
+) -> bool:
+    """Return True if *quality* is at least *min_quality*.
+
+    Uses the ordinal ordering INSUFFICIENT < WEAK < SUFFICIENT < STRONG so
+    that a rubric declaring ``min_quality=SUFFICIENT`` rejects WEAK evidence
+    even when ``EvidenceQuality.passes`` would agree (both check ≥ SUFFICIENT).
+    """
+    return _QUALITY_ORDER[quality.level] >= _QUALITY_ORDER[min_quality]
+
+
+def _zip_qualities_rubrics(
+    rubrics: list[EvaluationRubric],
+    qualities: dict[str, EvidenceQuality],
+) -> list[tuple[EvidenceQuality, EvaluationRubric]]:
+    """Pair each quality with its rubric by evidence_kind (order-preserving)."""
+    return [
+        (qualities[r.evidence_kind], r)
+        for r in rubrics
+        if r.evidence_kind in qualities
+    ]
 
 
 def _find_evidence(evidence: list[dict[str, Any]], kind: str) -> dict[str, Any] | None:
