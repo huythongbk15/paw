@@ -19,26 +19,27 @@ measurement. All 18 tests pass (`test_e4_dataset_governance.py`,
 `test_e4_local_baseline.py`), ruff clean, fully operational without any
 provider integration.
 
-**BLOCKED (E4-11..14):** Provider scaffolds implemented (contract defined,
-NotImplementedError enforced) but training/teaching measurement cannot run
-until a cloud provider adapter is available outside the core per AGENTS.md
-scope lock. 17 tests pass (`test_e4_provider_scaffolds.py`) proving
-contracts exist + are blocked.
+**OPERATIONAL (E4-11..14):** Provider adapter (`OpenAITrainingProvider` in
+`src/paw/providers/openai/`) implemented. Contracts defined + wired in
+`src/paw/core/dataset.py`. Graceful degradation: no API key → returns
+zero-accuracy result (E4-11), raises NotImplementedError (E4-12). 13 tests
+pass (`test_e4_provider_scaffolds.py`), ruff clean. Live integration tests
+skipped without `OPENAI_API_KEY`.
 
 **Implementation:**
 - `CloudTeacherBaselineResult` — dataclass with cost tracking
 - `TrainingConfig` — config with `config_hash()`
 - `TrainingArtifact` — versioned artifact with `artifact_hash()`
 - `TrainingEvaluation` — comparison metrics
-- `measure_cloud_teacher_baseline()` → NotImplementedError
-- `train_dataset()` → NotImplementedError
-- `register_training_artifact()` → NotImplementedError
-- `evaluate_training_artifact()` → NotImplementedError
-- `should_accept_artifact()` → pure logic (acceptance gate, no provider)
+- `measure_cloud_teacher_baseline()` → uses OpenAI provider, degrades gracefully
+- `train_dataset()` → uses OpenAI fine-tuning, NotImplementedError without key
+- `register_training_artifact()` → SQLite registry (INSERT OR REPLACE)
+- `evaluate_training_artifact()` → evaluates trained model vs baselines
+- `should_accept_artifact()` → pure logic acceptance gate (no provider)
 
 ## Implementation
 
-**Module:** `src/paw/core/dataset.py` (299 lines)
+**Module:** `src/paw/core/dataset.py` (core contracts) + `src/paw/providers/openai/provider.py` (provider adapter)
 
 **Key components:**
 
@@ -48,6 +49,12 @@ contracts exist + are blocked.
 | `DatasetSplit` | `@dataclass` | `name`, `examples` |
 | `DatasetManifest` | `@dataclass` | `dataset_id`, `version`, `description`, `created_at`, `content_hash`, `example_count`, `splits`, `consent_statement`, `retention_days`, `deletion_policy`, `source_trace_ids`, `base_model`, `environment`, `excluded_trace_ids` |
 | `LocalBaselineResult` | class | `model_name`, `accuracy`, `mean_latency_ms`, `total_tokens`, `examples_evaluated` |
+| `CloudTeacherBaselineResult` | class | `model_name`, `accuracy`, `mean_latency_ms`, `total_tokens`, `examples_evaluated`, `cost_estimate_usd` |
+| `TrainingConfig` | `@dataclass` | `base_model`, `dataset_hash`, `dataset_version`, `epochs`, `learning_rate`, `batch_size`, `max_tokens`, `budget_tokens`, `consent_statement`, `config_hash()` |
+| `TrainingArtifact` | `@dataclass` | `artifact_id`, `config`, `checkpoint_path`, `trained_at`, `metrics`, `model_version`, `artifact_hash` |
+| `TrainingEvaluation` | `@dataclass` | `artifact_id`, `local_baseline_accuracy`, `cloud_teacher_accuracy`, `trained_accuracy`, `improvement_over_local`, `quality_regression`, `cost_reduction_pct`, `verified` |
+| `OpenAITrainingProvider` | class | `ModelProvider` + training lifecycle; `TrainingProvider` protocol |
+| `estimate_training_cost()` | function | Pure cost calculation from examples/epochs/model |
 
 **Core functions:**
 
