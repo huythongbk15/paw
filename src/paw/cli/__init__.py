@@ -561,18 +561,16 @@ def chat(
 
     # Configure structured logging based on flags (Option B: stderr separation)
     # By default in REPL mode: only WARNING+ goes to stderr, keeping stdout clean.
+    # configure_logging() sets cache_logger_on_first_use=False in core/logging.py.
+    from ..core.logging import configure_logging as _configure_logging
+
     if debug:
-        structlog.configure(
-            wrapper_class=structlog.make_filtering_bound_logger(structlog.DEBUG)
-        )
+        _log_level = logging.DEBUG
     elif quiet:
-        structlog.configure(
-            wrapper_class=structlog.make_filtering_bound_logger(logging.ERROR)
-        )
+        _log_level = logging.ERROR
     else:
-        structlog.configure(
-            wrapper_class=structlog.make_filtering_bound_logger(logging.WARNING)
-        )
+        _log_level = logging.WARNING
+    _configure_logging(_log_level)
 
     try:
         asyncio.run(

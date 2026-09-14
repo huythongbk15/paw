@@ -36,9 +36,12 @@ def _filter_secrets(_logger: Any, _method_name: str, event_dict: EventDict) -> E
     return event_dict
 
 
-def configure_logging() -> None:
-    """Configure structlog based on settings."""
-    processors: list[Processor] = [
+def configure_logging(level: int | None = None) -> None:
+    """Configure structlog based on settings.
+
+    Pass ``level`` to override the log level at runtime (e.g. CLI --quiet/--debug).
+    """
+    _processors: list[Processor] = [
         structlog.contextvars.merge_contextvars,
         _add_service_name,
         _add_timestamp,
@@ -49,18 +52,20 @@ def configure_logging() -> None:
     ]
 
     if settings.log_format == "json":
-        processors.append(structlog.processors.JSONRenderer())
+        _processors.append(structlog.processors.JSONRenderer())
     else:
-        processors.append(structlog.dev.ConsoleRenderer(colors=True))
+        _processors.append(structlog.dev.ConsoleRenderer())
+
+    _level = level if level is not None else getattr(
+        logging, settings.log_level.upper(), logging.INFO
+    )
 
     structlog.configure(
-        processors=processors,
-        wrapper_class=structlog.make_filtering_bound_logger(
-            getattr(logging, settings.log_level.upper(), logging.INFO)
-        ),
+        processors=_processors,
+        wrapper_class=structlog.make_filtering_bound_logger(_level),
         context_class=dict,
         logger_factory=structlog.PrintLoggerFactory(file=sys.stderr),
-        cache_logger_on_first_use=True,
+        cache_logger_on_first_use=False,
     )
 
 

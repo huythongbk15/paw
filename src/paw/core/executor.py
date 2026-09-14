@@ -605,7 +605,7 @@ class ExecutorRegistry:
         self._executors: dict[str, Executor] = {}
         self._capability_index: dict[str, list[str]] = {}  # capability -> executor names
 
-    def register(self, executor: Executor) -> None:
+    def register(self, executor: Executor, *, _silent: bool = False) -> None:
         """Register an executor and update capability index."""
         self._executors[executor.name] = executor
         # Update capability index
@@ -615,7 +615,8 @@ class ExecutorRegistry:
                 self._capability_index[cap_value] = []
             if executor.name not in self._capability_index[cap_value]:
                 self._capability_index[cap_value].append(executor.name)
-        logger.info("executor_registered", name=executor.name)
+        if not _silent:
+            logger.info("executor_registered", name=executor.name)
 
     def unregister(self, name: str) -> bool:
         """Remove an executor."""
@@ -667,8 +668,8 @@ class ExecutorRegistry:
 # Global registry
 executor_registry = ExecutorRegistry()
 
-# Register mock by default
-executor_registry.register(MockExecutor())
+# Register mock by default (silent at import time to avoid log noise)
+executor_registry.register(MockExecutor(), _silent=True)
 
 
 # Global capability router
