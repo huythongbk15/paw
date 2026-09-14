@@ -257,8 +257,8 @@ skip_no_openai_key = pytest.mark.skipif(
 class TestE4LiveProvider:
     """When OPENAI_API_KEY is set, E4-11 provider functions work against real API."""
 
-    @pytest.mark.asyncio
     @skip_no_openai_key
+    @pytest.mark.asyncio
     async def test_cloud_teacher_baseline_live(self):
         """E4-11: Real provider measures baseline with accuracy > 0."""
         examples = _make_examples(3)

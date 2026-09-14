@@ -969,3 +969,16 @@ Handoff spec: `_filter_for_availability` restore supported-role filtering + desc
 | E4-22 | ✅ PASS | Integration pack gate (11 tests, full pipeline) |
 | E4-10 | ⚠️ BLOCKED | Cloud teacher baseline (out of scope per AGENTS.md) |
 
+---
+
+## E3 Track — Evaluation Primitives (2026-09-14)
+
+**Status:** E3-01 DONE. E3 = COMPLETE.
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| E3-01 | ✅ VERIFIED | EvaluationRubric, EvidenceQuality, QualityLevel, ConfidenceCalibrator (Platt scaling), EvaluationResult, evaluate_case in `src/paw/core/evaluation.py` |
+| Tests | ✅ 20 passed | `tests/test_e3_evaluation_primitives.py` — quality levels, rubric scoring, confidence calibration (fitted + default + monotonic + boundary), evaluate_case (pass/fail/multi/evidence/kinds/custom rubrics), EvaluationResult serialization |
+| ruff | ✅ clean | src/paw/core/evaluation.py + tests |
+| E3-02 | ✅ VERIFIED | Rubric-based grading for E2 benchmark cases; 8 tests pass |
+
