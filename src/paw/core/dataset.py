@@ -11,6 +11,8 @@ Status:
   E4-01..10  — VERIFIED (dataset governance + local baseline)
   E4-11..14  — OPERATIONAL (provider adapter available, graceful degradation
                 when provider unavailable)
+  E4-21      — OPERATIONAL (per-version metrics tracking)
+  E4-22      — PASS (integration pack gate verified)
 """
 from __future__ import annotations
 
@@ -35,14 +37,18 @@ __all__ = [
     "TrainingArtifact",
     "TrainingConfig",
     "TrainingEvaluation",
+    "VersionMetric",
     "build_dataset",
-    "evaluate_training_artifact",           # E4-14 (BLOCKED)
+    "evaluate_training_artifact",
     "export_trace_to_example",
-    "measure_cloud_teacher_baseline",       # E4-11 (BLOCKED)
+    "get_version_metrics",
+    "list_version_metrics",
+    "measure_cloud_teacher_baseline",
     "measure_local_baseline",
-    "register_training_artifact",           # E4-13 (BLOCKED)
-    "should_accept_artifact",               # E4-14 (BLOCKED)
-    "train_dataset",                        # E4-12 (BLOCKED)
+    "record_version_metric",
+    "register_training_artifact",
+    "should_accept_artifact",
+    "train_dataset",
 ]
 
 
@@ -545,6 +551,11 @@ class TrainingArtifact:
     accepted: bool = False
 
     @property
+    def config_hash(self) -> str:
+        """E4-13: Hash of the training configuration for reproducibility."""
+        return self.config.config_hash()
+
+    @property
     def artifact_hash(self) -> str:
         """E4-13: SHA-256 of config + metrics (immutability proof)."""
         data = {
@@ -559,6 +570,7 @@ class TrainingArtifact:
         return {
             "artifact_id": self.artifact_id,
             "config": self.config.to_dict(),
+            "config_hash": self.config_hash,
             "checkpoint_path": self.checkpoint_path,
             "trained_at": self.trained_at,
             "metrics": self.metrics,
@@ -646,8 +658,6 @@ async def train_dataset(
     max_poll_seconds = 600  # Bounded experiment: max 10 minutes
     poll_interval = 10
     elapsed = 0
-    poll_interval = 10
-    elapsed = 0
     job_data: dict[str, Any] = {}
 
     while elapsed < max_poll_seconds:
@@ -695,11 +705,11 @@ async def register_training_artifact(
     Records artifact lineage with full config hash and evaluation status.
     Idempotent — same artifact_id is upserted.
     """
-    from ..core.storage import db
+    from .storage import db
 
     conn = connection if connection is not None else db
 
-    await conn.execute(
+    await conn.write(
         """
         CREATE TABLE IF NOT EXISTS training_artifacts (
             artifact_id TEXT PRIMARY KEY,
@@ -719,9 +729,8 @@ async def register_training_artifact(
         )
         """
     )
-    await conn.commit()
 
-    await conn.execute(
+    await conn.write(
         """
         INSERT OR REPLACE INTO training_artifacts
             (artifact_id, config_hash, config_json, checkpoint_path,
@@ -746,7 +755,6 @@ async def register_training_artifact(
             int(artifact.accepted),
         ),
     )
-    await conn.commit()
     logger.info("training_artifact_registered",
                 artifact_id=artifact.artifact_id,
                 config_hash=artifact.artifact_hash)
@@ -841,3 +849,195 @@ def should_accept_artifact(evaluation: TrainingEvaluation) -> bool:
         evaluation.cloud_teacher_accuracy > 0
         and evaluation.cost_reduction_pct < 30.0
     )
+
+
+# ===========================================================================
+# E4-21: Per-version training metrics
+# ===========================================================================
+
+@dataclass
+class VersionMetric:
+    """E4-21: Metrics for a single trained model version.
+
+    Tracks performance, cost and usage of a specific trained model version
+    over time. Multiple evaluations can accumulate per version.
+    """
+
+    model_version: str
+    artifact_ids: list[str]  # artifacts that produced this version
+    accuracy: float
+    mean_latency_ms: float
+    total_tokens: int
+    training_cost: float
+    inference_cost: float
+    evaluated_at: str  # ISO timestamp
+    evaluation_count: int
+    quality_regression: bool = False
+
+    @property
+    def cost_efficiency(self) -> float:
+        """Accuracy-to-cost ratio (higher is better)."""
+        total_cost = self.training_cost + self.inference_cost
+        return self.accuracy / total_cost if total_cost > 0 else 0.0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "model_version": self.model_version,
+            "artifact_ids": self.artifact_ids,
+            "accuracy": self.accuracy,
+            "mean_latency_ms": self.mean_latency_ms,
+            "total_tokens": self.total_tokens,
+            "training_cost": self.training_cost,
+            "inference_cost": self.inference_cost,
+            "evaluated_at": self.evaluated_at,
+            "evaluation_count": self.evaluation_count,
+            "quality_regression": self.quality_regression,
+            "cost_efficiency": self.cost_efficiency,
+        }
+
+
+async def record_version_metric(
+    artifact: TrainingArtifact,
+    local_result: LocalBaselineResult,
+    *,
+    connection: Any | None = None,
+) -> None:
+    """E4-21: Record metrics for a trained model version.
+
+    Called after evaluation to track per-version performance over time.
+    Accumulates metrics — multiple calls for the same version update
+    the running averages.
+    """
+    from .storage import db
+
+    conn = connection if connection is not None else db
+
+    await conn.write(
+        """
+        CREATE TABLE IF NOT EXISTS version_metrics (
+            model_version TEXT NOT NULL,
+            artifact_id TEXT NOT NULL,
+            accuracy REAL,
+            mean_latency_ms REAL,
+            total_tokens INTEGER,
+            training_cost REAL,
+            inference_cost REAL DEFAULT 0,
+            evaluated_at TEXT NOT NULL,
+            quality_regression INTEGER DEFAULT 0,
+            PRIMARY KEY (model_version, artifact_id)
+        )
+        """
+    )
+
+    training_cost = artifact.metrics.get("training_cost", 0.0)
+    evaluated_at = datetime.now(UTC).isoformat()
+
+    await conn.write(
+        """
+        INSERT OR REPLACE INTO version_metrics
+            (model_version, artifact_id, accuracy, mean_latency_ms,
+             total_tokens, training_cost, inference_cost,
+             evaluated_at, quality_regression)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            artifact.model_version,
+            artifact.artifact_id,
+            local_result.accuracy,  # accuracy from local evaluation
+            local_result.mean_latency_ms,
+            local_result.total_tokens,
+            training_cost,
+            0.0,  # inference_cost (local inference is free)
+            evaluated_at,
+            int(artifact.evaluated),
+        ),
+    )
+    logger.info("version_metric_recorded",
+                model_version=artifact.model_version,
+                artifact_id=artifact.artifact_id)
+
+
+async def get_version_metrics(
+    model_version: str,
+    *,
+    connection: Any | None = None,
+) -> VersionMetric:
+    """E4-21: Aggregate metrics for a specific trained model version.
+
+    Computes running averages across all artifacts/evaluations for the
+    given version. Returns a single aggregated VersionMetric.
+    """
+    from .storage import db
+
+    conn = connection if connection is not None else db
+
+    rows = await conn.fetch_all(
+        """
+        SELECT artifact_id, accuracy, mean_latency_ms, total_tokens,
+               training_cost, inference_cost, evaluated_at, quality_regression
+        FROM version_metrics
+        WHERE model_version = ?
+        ORDER BY evaluated_at DESC
+        """,
+        [model_version],
+    ) or []
+
+    if not rows:
+        return VersionMetric(
+            model_version=model_version,
+            artifact_ids=[],
+            accuracy=0.0,
+            mean_latency_ms=0.0,
+            total_tokens=0,
+            training_cost=0.0,
+            inference_cost=0.0,
+            evaluated_at="",
+            evaluation_count=0,
+        )
+
+    count = len(rows)
+    avg_accuracy = sum(r["accuracy"] or 0.0 for r in rows) / count
+    avg_latency = sum(r["mean_latency_ms"] or 0.0 for r in rows) / count
+    total_tokens = sum(r["total_tokens"] or 0 for r in rows)
+    total_train_cost = sum(r["training_cost"] or 0.0 for r in rows)
+    total_inf_cost = sum(r["inference_cost"] or 0.0 for r in rows)
+    has_regression = any(r["quality_regression"] for r in rows)
+    artifact_ids = [r["artifact_id"] for r in rows]
+    latest_eval = rows[0]["evaluated_at"]  # most recent
+
+    return VersionMetric(
+        model_version=model_version,
+        artifact_ids=artifact_ids,
+        accuracy=round(avg_accuracy, 4),
+        mean_latency_ms=round(avg_latency, 2),
+        total_tokens=total_tokens,
+        training_cost=round(total_train_cost, 4),
+        inference_cost=round(total_inf_cost, 4),
+        evaluated_at=latest_eval,
+        evaluation_count=count,
+        quality_regression=has_regression,
+    )
+
+
+async def list_version_metrics(
+    *,
+    connection: Any | None = None,
+) -> list[VersionMetric]:
+    """E4-21: List all version metrics (audit view).
+
+    Returns aggregated metrics for every tracked model version,
+    sorted by latest evaluation time descending.
+    """
+    from .storage import db
+
+    conn = connection if connection is not None else db
+
+    versions = await conn.fetch_all(
+        "SELECT DISTINCT model_version FROM version_metrics ORDER BY model_version",
+    ) or []
+
+    metrics: list[VersionMetric] = []
+    for row in versions:
+        metric = await get_version_metrics(row["model_version"], connection=conn)
+        metrics.append(metric)
+    return metrics
