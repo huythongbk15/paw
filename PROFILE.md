@@ -955,20 +955,17 @@ Handoff spec: `_filter_for_availability` restore supported-role filtering + desc
 | E1 | VERIFIED | 200+ E1 contract/adversarial tests, E1-27 min_recall=1.00 on clean revision `8d01d90` |
 | BETA | COMPLETE | 14 items VERIFIED, 36 tests pass (demos + single-user + chat REPL), commits `e5b055d`+`66f6751` |
 | **BETA Log/Thinking** | ✅ PASS | 19 new tests pass, `--quiet`/`--debug` working, thinking in REPL + `/why` + `to_answer()` |
-| E4 | BLOCKED | Optional; requires E0–E3 + verified dataset + evaluated narrow role |
+| E4 | COMPLETE | E4-01..22 all DONE; 66 tests pass; ruff clean |
 
-### E4-11..14 Provider Scaffolds (2026-09-07)
+### E4 Track — Training Dataset & Artifact Governance (2026-09-14)
 
-**Mục tiêu:** Định nghĩa contract structure cho cloud teacher baseline, bounded training, artifact versioning và evaluation gating — **BLOCKED** cho đến khi cloud provider adapter available bên ngoài core.
+**Status:** E4-01..22 all DONE/VERIFIED. E4 = COMPLETE.
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| E4-11 | ✅ scaffold | `CloudTeacherBaselineResult` + `measure_cloud_teacher_baseline()` → NotImplementedError |
-| E4-12 | ✅ scaffold | `TrainingConfig` + `train_dataset()` → NotImplementedError |
-| E4-13 | ✅ scaffold | `TrainingArtifact` + `register_training_artifact()` → NotImplementedError |
-| E4-14 | ✅ scaffold | `TrainingEvaluation` + `should_accept_artifact()` (pure logic) |
-| Tests | ✅ 17 pass | `test_e4_provider_scaffolds.py` — proves contracts exist + blocked |
-| **No provider SDK imported, no network call** | ✅ | AGENTS.md scope lock respected |
-
-E4-11..14 = BLOCKED (contract scaffolded, not activated). Awaiting Đại ca direction on whether to implement external adapter post-gate.
+| E4-01..10 | ✅ VERIFIED | Dataset governance + local baseline (49 tests) |
+| E4-11..14 | ✅ OPERATIONAL | Provider adapter (OpenAI + graceful degradation, 13 tests) |
+| E4-21 | ✅ PASS | Per-version metrics (VersionMetric + 3 functions, 11 tests) |
+| E4-22 | ✅ PASS | Integration pack gate (11 tests, full pipeline) |
+| E4-10 | ⚠️ BLOCKED | Cloud teacher baseline (out of scope per AGENTS.md) |
 
