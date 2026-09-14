@@ -633,6 +633,143 @@ class KnowledgeSourceManager:
         validation is the same."""
         return await self.mark_invalid(source_id, "path_missing")
 
+    async def find_references(
+        self,
+        qualified_name: str,
+    ) -> list[dict[str, Any]]:
+        """Find all references to a symbol across the knowledge graph.
+
+        Cross-file symbol search: uses dependency edges (E1-09) and symbol
+        ownership (E1-10) to locate every usage of ``qualified_name``.
+
+        Example::
+
+            references = await ksm.find_references("paw.core.runtime.PawRuntime.run")
+            # Returns list of (source_id, line, col, kind) tuples
+
+        Args:
+            qualified_name: Fully qualified name of the symbol to find.
+
+        Returns:
+            List of dicts with keys: source_id, file_path, line, col, kind,
+            symbol_name.  Empty list when the symbol is not referenced.
+        """
+        symbol_rows = await db.fetch_all(
+            """
+            SELECT name, source_file as file_path, line, col, kind
+            FROM symbol_registry
+            WHERE qualified_name = ?
+            """,
+            [qualified_name],
+        ) or []
+
+        if not symbol_rows:
+            return []
+
+        results: list[dict[str, Any]] = []
+        for sr in symbol_rows:
+            results.append({
+                "source_id": sr.get("source_id", ""),
+                "file_path": sr.get("file", "") or sr.get("file_path", ""),
+                "line": sr.get("line", 0),
+                "col": sr.get("col", 0),
+                "kind": sr.get("kind", ""),
+                "symbol_name": sr.get("name", "") or qualified_name.rsplit(".", 1)[-1],
+            })
+
+        # Find imports of this symbol in other files
+        # The import target name matches the last component of qualified_name
+        parts = qualified_name.rsplit(".", 1)
+        if len(parts) == 2:
+            module_prefix, symbol_name = parts
+            # Find import edges pointing to this symbol
+            import_rows = await db.fetch_all(
+                """
+                SELECT from_path, from_line, from_col, kind
+                FROM dependency_edges
+                WHERE to_name = ? AND from_path != ?
+                """,
+                [symbol_name, f"{module_prefix}.{symbol_name}"],
+            ) or []
+
+            for imp in import_rows:
+                results.append({
+                    "source_id": "",
+                    "file_path": imp["from_path"],
+                    "line": imp["from_line"],
+                    "col": imp["from_col"],
+                    "kind": imp["kind"],
+                    "symbol_name": symbol_name,
+                })
+
+        return results
+
+    async def get_inheritance_chain(
+        self,
+        class_qualified_name: str,
+    ) -> list[str]:
+        """Get the inheritance chain for a class.
+
+        Uses symbol metadata to trace parent classes.
+        Returns class names from most-derived to base.
+        """
+        row = await db.fetch_one(
+            "SELECT metadata FROM symbol_registry WHERE qualified_name = ?",
+            [class_qualified_name],
+        )
+        if not row:
+            return [class_qualified_name]
+
+        chain: list[str] = [class_qualified_name]
+        raw_metadata = row.get("metadata", "{}")
+        if isinstance(raw_metadata, str):
+            try:
+                raw_metadata = json.loads(raw_metadata)
+            except (json.JSONDecodeError, TypeError):
+                raw_metadata = {}
+        metadata = raw_metadata if isinstance(raw_metadata, dict) else {}
+        parents = metadata.get("bases", [])
+        if isinstance(parents, str):
+            try:
+                parents = json.loads(parents)
+            except (json.JSONDecodeError, TypeError):
+                parents = []
+
+        for parent in parents:
+            if parent and isinstance(parent, str):
+                chain.append(parent)
+                # Recursively get parent chain
+                parent_chain = await self.get_inheritance_chain(parent)
+                chain.extend(parent_chain[1:])
+
+        return list(dict.fromkeys(chain))  # preserve order, dedupe
+
+    async def resolve_type_annotations(
+        self,
+        symbol_qualified_name: str,
+    ) -> dict[str, str]:
+        """Resolve type annotations for a function/method's parameters.
+
+        Uses symbol metadata to return a mapping of parameter name to
+        resolved type string.
+        """
+        row = await db.fetch_one(
+            "SELECT metadata FROM symbol_registry WHERE qualified_name = ?",
+            [symbol_qualified_name],
+        )
+        if not row:
+            return {}
+
+        metadata = row.get("metadata", {})
+        if isinstance(metadata, str):
+            try:
+                metadata = json.loads(metadata)
+            except (json.JSONDecodeError, TypeError):
+                metadata = {}
+
+        return metadata.get("annotations", {}) if isinstance(metadata, dict) else {}
+
+
     async def delete(self, source_id: str) -> bool:
         """Delete a knowledge source."""
         # Remove chunks first
