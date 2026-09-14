@@ -967,7 +967,7 @@ Handoff spec: `_filter_for_availability` restore supported-role filtering + desc
 | E4-11..14 | ✅ OPERATIONAL | Provider adapter (OpenAI + graceful degradation, 13 tests) |
 | E4-21 | ✅ PASS | Per-version metrics (VersionMetric + 3 functions, 11 tests) |
 | E4-22 | ✅ PASS | Integration pack gate (11 tests, full pipeline) |
-| E4-10 | ⚠️ BLOCKED | Cloud teacher baseline (out of scope per AGENTS.md) |
+| E4-10 | ⚠️ BLOCKED | Cloud teacher baseline (out of scope per AGENTS.md); live test rate-limited (429), skipif ordering fixed; 43/43 non-live E4 tests pass |
 
 ---
 
