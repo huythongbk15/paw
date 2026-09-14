@@ -218,7 +218,24 @@ class TestPlanProjectionThinking:
         assert result["thinking"] is None
 
 
-class TestLoggingSeparation:
+class TestLocalExecutorThinking:
+    """Test that LocalModelExecutor produces thinking for offline display."""
+
+    @pytest.mark.asyncio
+    async def test_local_executor_returns_thinking(self):
+        from paw.core.model_executor import LocalModelExecutor
+        executor = LocalModelExecutor()
+        result = await executor.complete({"model": "local", "messages": [{"role": "user", "content": "hello"}]})
+        assert "thinking" in result
+        assert result["thinking"] is not None
+        assert len(result["thinking"]) > 0
+
+    @pytest.mark.asyncio
+    async def test_local_executor_thinking_contains_offline_note(self):
+        from paw.core.model_executor import LocalModelExecutor
+        executor = LocalModelExecutor()
+        result = await executor.complete({"model": "local", "messages": [{"role": "user", "content": "test"}]})
+        assert "offline" in result["thinking"].lower()
     """Verify runtime logs go to stderr, REPL output to stdout."""
 
     def test_configure_logging_uses_stderr(self):

@@ -60,6 +60,12 @@ class LocalModelExecutor:
         return {
             "model": model,
             "response": f"[local-standin] {prompt[:200]}",
+            "thinking": (
+                f"[local-standin] Analyzing request: '{prompt[:100]}'. "
+                "No external model available; using deterministic offline "
+                "placeholder. Capability routing and execution proceed "
+                "without model inference."
+            ),
             "done": True,
         }
 
