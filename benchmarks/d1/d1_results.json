@@ -1,0 +1,136 @@
+{
+  "D8": {
+    "scenario": "D8 \u2014 Partial failure + recovery",
+    "state_before_rev": "25f410de35d9",
+    "d4_after_failure": {
+      "scenario": "Step 1 SUCCESS, Step 2 FAILURE, Step 3 NOT EXECUTED",
+      "step_1_completed": true,
+      "step_2_status": "failed",
+      "step_3_executed": true,
+      "config_yaml_exists": true
+    },
+    "d5_reconciliation": {
+      "classification": {
+        "step_1": "CONFIRMED_COMPLETE",
+        "step_2": "CONFIRMED_FAILED",
+        "config_yaml_exists": true,
+        "ambiguous": []
+      },
+      "completed_side_effects": [
+        "config.yaml created by Step 1"
+      ],
+      "pending_side_effects": [
+        "src/config_loader.py update",
+        "tests/test_app.py update",
+        "tests pass"
+      ],
+      "ambiguous_effects": []
+    },
+    "d6_decision": "RESUME",
+    "d8_recovery": {
+      "checkpoints_before": 2,
+      "last_checkpoint": "d5d83324",
+      "resume_outcome": {
+        "stopped": true,
+        "reason": "task_completed",
+        "iterations": 2,
+        "operations_completed": 2
+      },
+      "step1_skipped_on_resume": true
+    },
+    "d13_final_verification": {
+      "config_yaml_exists": true,
+      "yaml_loader_imported": true,
+      "no_duplicate_yaml": true,
+      "step1_not_duplicated": true,
+      "step2_completed": true,
+      "step3_completed": true
+    },
+    "state_before_rev_full": "25f410de35d9ed39dd9da6bd1efc143a394f1fd2"
+  },
+  "D9": {
+    "scenario": "D9 \u2014 Restart after checkpoint",
+    "state_before_rev": "64baa11898e3",
+    "phase_1": {
+      "step_1_completed": true,
+      "config_yaml_exists": true,
+      "checkpoints_created": 2,
+      "outcome_stopped": true,
+      "step_1_skipped": false
+    },
+    "phase_2_resume": {
+      "fresh_runtime": true,
+      "resumed_from_checkpoint": "a49d3d15",
+      "outcome_stopped": true,
+      "outcome_reason": "task_completed",
+      "iterations": 2,
+      "operations_completed": 2,
+      "step_2_completed": true,
+      "step_3_completed": true
+    },
+    "final_state": {
+      "config_yaml_exists": true,
+      "yaml_loader_imported": true
+    }
+  },
+  "D10": {
+    "scenario": "D10 \u2014 Already-completed effect",
+    "state_before_rev": "0a9b5a8f1592",
+    "pre_state": {
+      "config_yaml_exists": true,
+      "step_1_pre_completed": true
+    },
+    "execution": {
+      "outcome_stopped": true,
+      "iterations": 2,
+      "operations_completed": 2
+    },
+    "verification": {
+      "yaml_file_count": 1,
+      "no_duplicate": true,
+      "content_hash_match": true,
+      "step_2_completed": true,
+      "step_3_completed": true,
+      "step_1_not_duplicated": true
+    }
+  },
+  "D11": {
+    "scenario": "D11 \u2014 Ambiguous state",
+    "state_before_rev": "d1ce0dc5f777",
+    "pre_state": {
+      "config_yaml_exists": true,
+      "step_1_op_record_exists": true,
+      "step_1_op_record_status": "failed"
+    },
+    "execution": {
+      "outcome_stopped": true,
+      "outcome_reason": "task_failed",
+      "step_1_record_status": "failed",
+      "iterations": 1
+    },
+    "verification": {
+      "file_exists_but_op_failed": true,
+      "ambiguous_handled": true,
+      "not_blind_retry": true,
+      "ambiguity_preserved": true
+    }
+  },
+  "D12": {
+    "scenario": "D12 \u2014 Idempotency",
+    "state_before_rev": "d5d4aaa30ae2",
+    "run_1": {
+      "outcome_stopped": true,
+      "operations_completed": 3
+    },
+    "run_2_resume": {
+      "outcome_stopped": true,
+      "operations_completed": 1,
+      "skipped_all": false
+    },
+    "verification": {
+      "yaml_content_identical": true,
+      "loader_content_identical": true,
+      "can_safely_run_twice": true
+    }
+  }
+}

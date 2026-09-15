@@ -39,8 +39,8 @@ _INSPECT_COMMANDS = [
 class Sidebar(Vertical):
     """Right sidebar: session info + inspection command list."""
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
         self._session_id: str = ""
         self._provider: str = ""
         self._message_count: int = 0
@@ -117,7 +117,7 @@ class PawTuiApp(App):
         border-top: solid $primary;
         padding: 0 1;
         color: $text-muted;
-        font-size: 0.8;
+        text-style: dim;
     }
 
     #input-wrapper {
@@ -181,11 +181,11 @@ class PawTuiApp(App):
             sidebar = self.query_one(Sidebar)
             sidebar.set_session(session.session_id, self.provider_mode)
             sidebar.set_status("Sẵn sàng")
-            self._add_status("Kết nối với PAW — session "
+            await self._add_status("Kết nối với PAW — session "
                              f"{self._session_id[:8]}...", "success")
         except Exception as exc:
             log.error("tui_init_failed", error=str(exc))
-            self._add_status(f"Lỗi khởi tạo: {exc}", "error")
+            await self._add_status(f"Lỗi khởi tạo: {exc}", "error")
             self.query_one(Sidebar).set_status("Lỗi")
 
         self.query_one("#message-input", Input).focus()

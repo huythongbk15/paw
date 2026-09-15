@@ -982,3 +982,38 @@ Handoff spec: `_filter_for_availability` restore supported-role filtering + desc
 | ruff | ✅ clean | src/paw/core/evaluation.py + tests |
 | E3-02 | ✅ VERIFIED | Rubric-based grading for E2 benchmark cases; 8 tests pass |
 
+---
+
+## Phase BETA — TUI Implementation (2026-09-15)
+
+**Framework:** Textual 8.2.8 (confirmed by user). **Command:** new `paw tui` (parallel to `paw chat`). **Layout:** 3-panel (conversation | sidebar | input). **Streaming:** token-by-token.
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| `src/paw/tui/__init__.py` | ✅ 新增 | Package marker, exports `PawTuiApp` + `run_tui` |
+| `src/paw/tui/app.py` | ✅ 新增 | Textual App: 3-panel `Markdown` conversation + `Sidebar` (OptionList) + `Input`; token-by-token streaming via `@work` worker + `send_streaming()`; `/help`, `/clear`, `/exit` commands; `/status`, `/plan`, `/why`, `/ledger`, `/checkpoint`, `/policy`, `/skills`, `/artifacts` inspection via sidebar |
+| `ChatService.send_streaming()` | ✅ 新增 | `src/paw/application/chat.py` — async generator yielding `StreamEvent` (thinking/model_selected/token/complete/error); sets `runtime._stream_callback` + consumes from `asyncio.Queue` |
+| `Runtime._execute_model()` | ✅ 新增 | `src/paw/core/runtime.py` — when `_stream_callback` set, uses `model_executor.stream()` + callback (backward compatible: `None` = `complete()`) |
+| `StreamEvent` dataclass | ✅ 新增 | `src/paw/application/chat.py` — `event_type`, `content`, `reply`, `data` fields |
+| `paw tui` CLI command | ✅ 新增 | `src/paw/cli/__init__.py` — `--session`, `--provider`, `--workspace`, `--quiet/-q`, `--debug` flags |
+| `pyproject.toml` | ✅ 更新 | Add `textual>=8.0` dependency |
+| `uv.lock` | ✅ 更新 | textual 8.2.8 + linkify-it-py, mdit-py-plugins, platformdirs |
+| Regression tests | ✅ 80 passed | test_chat_repl, phase19, phase20, phase21, phase11, phase15, phase14 |
+| ruff | ✅ clean | All modified files |
+| Gate 7 (_wheel) | ✅ PASS | Wheel builds, install OK, CLI works outside repo |
+| Commit | ✅ pushed | `f1f9a35` on origin/main |
+
+**TUI = PASS** — Textual 3-panel app with true token-by-token streaming, full inspection command set, zero vendor lock-in (provider injected via parameter).
+
+---
+
+## Current progress snapshot (2026-09-15)
+
+| Track | Status | Evidence |
+|---|---|---|
+| Phase 0–22 + E0–E4 + E3 | PASS | Full suite green, ruff clean |
+| BETA (demos + chat REPL + log/thinking) | COMPLETE | 55 beta tests pass |
+| **TUI** | ✅ COMPLETE | `paw tui` command, 3-panel, token streaming. 80 regression tests pass. Commit `f1f9a35` pushed. |
+| E1 | VERIFIED | 200+ E1 tests, min_recall=1.00 on `8d01d90` |
+| **Next** | await Đại ca | TUI runtime testing or next feature track
+

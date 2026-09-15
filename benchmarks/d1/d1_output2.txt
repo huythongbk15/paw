@@ -1,0 +1,137 @@
+[2m2026-09-15T04:49:25.945516+00:00[0m [[32m[1minfo     [0m] [1mdatabase_connected            [0m [36mpath[0m=[35m/tmp/tmpmke38mtf_d1.db[0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:26.075873+00:00[0m [[32m[1minfo     [0m] [1mdatabase_initialized          [0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:27.149148+00:00[0m [[33m[1mwarning  [0m] [1mcanonical_proposal_route_failed[0m [36merror[0m=[35m"'NoneType' object has no attribute 'route'"[0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:27.151753+00:00[0m [[32m[1minfo     [0m] [1mruntime_checkpoint_committed  [0m [36mcheckpoint_id[0m=[35m232be97e[0m [36mservice[0m=[35mpaw[0m [36mtask_id[0m=[35md8_partial_failure[0m [36mtask_status[0m=[35mNone[0m
+[2m2026-09-15T04:49:27.152292+00:00[0m [[33m[1mwarning  [0m] [1mcanonical_proposal_route_failed[0m [36merror[0m=[35m"'NoneType' object has no attribute 'route'"[0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:27.155171+00:00[0m [[32m[1minfo     [0m] [1mruntime_checkpoint_committed  [0m [36mcheckpoint_id[0m=[35maf7f600a[0m [36mservice[0m=[35mpaw[0m [36mtask_id[0m=[35md8_partial_failure[0m [36mtask_status[0m=[35mfailed[0m
+[2m2026-09-15T04:49:27.504123+00:00[0m [[32m[1minfo     [0m] [1mdatabase_closed               [0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:27.505322+00:00[0m [[32m[1minfo     [0m] [1mdatabase_connected            [0m [36mpath[0m=[35m/tmp/tmpmke38mtf_d1.db[0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:27.505941+00:00[0m [[32m[1minfo     [0m] [1mdatabase_initialized          [0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:27.763666+00:00[0m [[32m[1minfo     [0m] [1mtask_resuming                 [0m [36mcheckpoint_id[0m=[35maf7f600a[0m [36mprogress[0m=[35m0.0[0m [36mservice[0m=[35mpaw[0m [36mtask_id[0m=[35md8_partial_failure[0m
+[2m2026-09-15T04:49:27.764271+00:00[0m [[32m[1minfo     [0m] [1mruntime_resumed               [0m [36mcheckpoint_id[0m=[35maf7f600a[0m [36mprogress[0m=[35m0.0[0m [36mservice[0m=[35mpaw[0m [36mskipped_operations[0m=[35m1[0m [36mtask_id[0m=[35md8_partial_failure[0m
+[2m2026-09-15T04:49:27.765277+00:00[0m [[33m[1mwarning  [0m] [1mcanonical_proposal_route_failed[0m [36merror[0m=[35m"'NoneType' object has no attribute 'route'"[0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:27.767801+00:00[0m [[32m[1minfo     [0m] [1mruntime_checkpoint_committed  [0m [36mcheckpoint_id[0m=[35m910e79d0[0m [36mservice[0m=[35mpaw[0m [36mtask_id[0m=[35md8_partial_failure[0m [36mtask_status[0m=[35mNone[0m
+[2m2026-09-15T04:49:27.768335+00:00[0m [[33m[1mwarning  [0m] [1mcanonical_proposal_route_failed[0m [36merror[0m=[35m"'NoneType' object has no attribute 'route'"[0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:32.465172+00:00[0m [[32m[1minfo     [0m] [1mruntime_checkpoint_committed  [0m [36mcheckpoint_id[0m=[35mbca40740[0m [36mservice[0m=[35mpaw[0m [36mtask_id[0m=[35md8_partial_failure[0m [36mtask_status[0m=[35mcompleted[0m
+[2m2026-09-15T04:49:32.673597+00:00[0m [[32m[1minfo     [0m] [1mdatabase_closed               [0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:32.674866+00:00[0m [[32m[1minfo     [0m] [1mdatabase_connected            [0m [36mpath[0m=[35m/tmp/tmpmke38mtf_d1.db[0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:32.675537+00:00[0m [[32m[1minfo     [0m] [1mdatabase_initialized          [0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:32.825651+00:00[0m [[33m[1mwarning  [0m] [1mcanonical_proposal_route_failed[0m [36merror[0m=[35m"'NoneType' object has no attribute 'route'"[0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:32.827961+00:00[0m [[32m[1minfo     [0m] [1mruntime_checkpoint_committed  [0m [36mcheckpoint_id[0m=[35me49c10f9[0m [36mservice[0m=[35mpaw[0m [36mtask_id[0m=[35md9_restart[0m [36mtask_status[0m=[35mNone[0m
+[2m2026-09-15T04:49:32.828255+00:00[0m [[33m[1mwarning  [0m] [1mcanonical_proposal_route_failed[0m [36merror[0m=[35m"'NoneType' object has no attribute 'route'"[0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:32.830602+00:00[0m [[32m[1minfo     [0m] [1mruntime_checkpoint_committed  [0m [36mcheckpoint_id[0m=[35md1817343[0m [36mservice[0m=[35mpaw[0m [36mtask_id[0m=[35md9_restart[0m [36mtask_status[0m=[35mfailed[0m
+[2m2026-09-15T04:49:33.036758+00:00[0m [[32m[1minfo     [0m] [1mdatabase_closed               [0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:33.037878+00:00[0m [[32m[1minfo     [0m] [1mdatabase_connected            [0m [36mpath[0m=[35m/tmp/tmpmke38mtf_d1.db[0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:33.038486+00:00[0m [[32m[1minfo     [0m] [1mdatabase_initialized          [0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:33.184220+00:00[0m [[32m[1minfo     [0m] [1mtask_resuming                 [0m [36mcheckpoint_id[0m=[35md1817343[0m [36mprogress[0m=[35m0.0[0m [36mservice[0m=[35mpaw[0m [36mtask_id[0m=[35md9_restart[0m
+[2m2026-09-15T04:49:33.184912+00:00[0m [[32m[1minfo     [0m] [1mruntime_resumed               [0m [36mcheckpoint_id[0m=[35md1817343[0m [36mprogress[0m=[35m0.0[0m [36mservice[0m=[35mpaw[0m [36mskipped_operations[0m=[35m1[0m [36mtask_id[0m=[35md9_restart[0m
+[2m2026-09-15T04:49:33.186052+00:00[0m [[33m[1mwarning  [0m] [1mcanonical_proposal_route_failed[0m [36merror[0m=[35m"'NoneType' object has no attribute 'route'"[0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:33.188569+00:00[0m [[32m[1minfo     [0m] [1mruntime_checkpoint_committed  [0m [36mcheckpoint_id[0m=[35md72b0b9d[0m [36mservice[0m=[35mpaw[0m [36mtask_id[0m=[35md9_restart[0m [36mtask_status[0m=[35mNone[0m
+[2m2026-09-15T04:49:33.189213+00:00[0m [[33m[1mwarning  [0m] [1mcanonical_proposal_route_failed[0m [36merror[0m=[35m"'NoneType' object has no attribute 'route'"[0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:33.920164+00:00[0m [[32m[1minfo     [0m] [1mruntime_checkpoint_committed  [0m [36mcheckpoint_id[0m=[35md55b97d9[0m [36mservice[0m=[35mpaw[0m [36mtask_id[0m=[35md9_restart[0m [36mtask_status[0m=[35mcompleted[0m
+[2m2026-09-15T04:49:34.078607+00:00[0m [[32m[1minfo     [0m] [1mdatabase_closed               [0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:34.079698+00:00[0m [[32m[1minfo     [0m] [1mdatabase_connected            [0m [36mpath[0m=[35m/tmp/tmpmke38mtf_d1.db[0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:34.080294+00:00[0m [[32m[1minfo     [0m] [1mdatabase_initialized          [0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:34.194432+00:00[0m [[33m[1mwarning  [0m] [1mcanonical_proposal_route_failed[0m [36merror[0m=[35m"'NoneType' object has no attribute 'route'"[0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:34.196953+00:00[0m [[32m[1minfo     [0m] [1mruntime_checkpoint_committed  [0m [36mcheckpoint_id[0m=[35m2191bbbb[0m [36mservice[0m=[35mpaw[0m [36mtask_id[0m=[35md10_already_done[0m [36mtask_status[0m=[35mNone[0m
+[2m2026-09-15T04:49:34.197515+00:00[0m [[33m[1mwarning  [0m] [1mcanonical_proposal_route_failed[0m [36merror[0m=[35m"'NoneType' object has no attribute 'route'"[0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:34.927829+00:00[0m [[32m[1minfo     [0m] [1mruntime_checkpoint_committed  [0m [36mcheckpoint_id[0m=[35m4e79a5e4[0m [36mservice[0m=[35mpaw[0m [36mtask_id[0m=[35md10_already_done[0m [36mtask_status[0m=[35mcompleted[0m
+[2m2026-09-15T04:49:35.078555+00:00[0m [[32m[1minfo     [0m] [1mdatabase_closed               [0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:35.079671+00:00[0m [[32m[1minfo     [0m] [1mdatabase_connected            [0m [36mpath[0m=[35m/tmp/tmpmke38mtf_d1.db[0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:35.080273+00:00[0m [[32m[1minfo     [0m] [1mdatabase_initialized          [0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:35.195903+00:00[0m [[33m[1mwarning  [0m] [1mcanonical_proposal_route_failed[0m [36merror[0m=[35m"'NoneType' object has no attribute 'route'"[0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:35.198338+00:00[0m [[32m[1minfo     [0m] [1mruntime_checkpoint_committed  [0m [36mcheckpoint_id[0m=[35m4af062cb[0m [36mservice[0m=[35mpaw[0m [36mtask_id[0m=[35md11_ambiguous[0m [36mtask_status[0m=[35mfailed[0m
+[2m2026-09-15T04:49:35.337149+00:00[0m [[32m[1minfo     [0m] [1mdatabase_closed               [0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:35.338221+00:00[0m [[32m[1minfo     [0m] [1mdatabase_connected            [0m [36mpath[0m=[35m/tmp/tmpmke38mtf_d1.db[0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:35.338832+00:00[0m [[32m[1minfo     [0m] [1mdatabase_initialized          [0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:35.440827+00:00[0m [[33m[1mwarning  [0m] [1mcanonical_proposal_route_failed[0m [36merror[0m=[35m"'NoneType' object has no attribute 'route'"[0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:35.443093+00:00[0m [[32m[1minfo     [0m] [1mruntime_checkpoint_committed  [0m [36mcheckpoint_id[0m=[35m54d6eb0a[0m [36mservice[0m=[35mpaw[0m [36mtask_id[0m=[35md12_idempotency[0m [36mtask_status[0m=[35mNone[0m
+[2m2026-09-15T04:49:35.443576+00:00[0m [[33m[1mwarning  [0m] [1mcanonical_proposal_route_failed[0m [36merror[0m=[35m"'NoneType' object has no attribute 'route'"[0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:35.445977+00:00[0m [[32m[1minfo     [0m] [1mruntime_checkpoint_committed  [0m [36mcheckpoint_id[0m=[35mad16d2c9[0m [36mservice[0m=[35mpaw[0m [36mtask_id[0m=[35md12_idempotency[0m [36mtask_status[0m=[35mNone[0m
+[2m2026-09-15T04:49:35.446538+00:00[0m [[33m[1mwarning  [0m] [1mcanonical_proposal_route_failed[0m [36merror[0m=[35m"'NoneType' object has no attribute 'route'"[0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:36.140149+00:00[0m [[32m[1minfo     [0m] [1mruntime_checkpoint_committed  [0m [36mcheckpoint_id[0m=[35m8128565b[0m [36mservice[0m=[35mpaw[0m [36mtask_id[0m=[35md12_idempotency[0m [36mtask_status[0m=[35mcompleted[0m
+[2m2026-09-15T04:49:36.145933+00:00[0m [[32m[1minfo     [0m] [1mtask_resuming                 [0m [36mcheckpoint_id[0m=[35m8128565b[0m [36mprogress[0m=[35m1.0[0m [36mservice[0m=[35mpaw[0m [36mtask_id[0m=[35md12_idempotency[0m
+[2m2026-09-15T04:49:36.146449+00:00[0m [[32m[1minfo     [0m] [1mruntime_resumed               [0m [36mcheckpoint_id[0m=[35m8128565b[0m [36mprogress[0m=[35m1.0[0m [36mservice[0m=[35mpaw[0m [36mskipped_operations[0m=[35m3[0m [36mtask_id[0m=[35md12_idempotency[0m
+[2m2026-09-15T04:49:36.147353+00:00[0m [[33m[1mwarning  [0m] [1mcanonical_proposal_route_failed[0m [36merror[0m=[35m"'NoneType' object has no attribute 'route'"[0m [36mservice[0m=[35mpaw[0m
+[2m2026-09-15T04:49:36.149680+00:00[0m [[32m[1minfo     [0m] [1mruntime_checkpoint_committed  [0m [36mcheckpoint_id[0m=[35mb9e57a22[0m [36mservice[0m=[35mpaw[0m [36mtask_id[0m=[35md12_idempotency[0m [36mtask_status[0m=[35mcompleted[0m
+[D1] Creating disposable scenario repository...
+[D2] Recording STATE_BEFORE fingerprints...
+[D3] Canonical proposal (PROPOSAL_V1) defined
+[D4–D14] Executing scenarios...
+
+======================================================================
+D-TASK: FAILURE RECOVERY — REPORT
+======================================================================
+
+--- D8 — Partial failure + recovery ---
+  D2 State before: 2d8f504f3d90
+  D4 After failure: step1=True, step2=failed, yaml=True
+  D5 Reconciliation: step_1=CONFIRMED_COMPLETE, step_2=CONFIRMED_FAILED
+    Completed: ['config.yaml created by Step 1']
+    Pending: ['src/config_loader.py update', 'tests/test_app.py update', 'tests pass']
+  D6 Decision: RESUME
+  D8 Recovery: ckpts=2, resume={'stopped': True, 'reason': 'task_completed', 'iterations': 2, 'operations_completed': 2}
+    Step1 skipped on resume: True
+  D13 Final: yaml=True, loader=True, no_dup=True
+    step1_not_dup=True, step2=True, step3=True
+
+--- D9 — Restart after checkpoint ---
+  D2 State before: d737c414bb56
+  Phase 1 (execute step 1): step1=True, yaml=True, ckpts=2
+  Phase 2 (fresh runtime, resume): from_ckpt=d1817343
+    outcome: stopped=True, reason=task_completed, ops=2
+    step2=True, step3=True
+  Final: yaml=True, loader=True
+
+--- D10 — Already-completed effect ---
+  D2 State before: 248a06a4bd0b
+  Pre-state: yaml=True, step1_pre=True
+  Execution: stopped=True, ops=2
+  Verify: files=1, no_dup=True, hash_match=True
+    step2=True, step3=True
+
+--- D11 — Ambiguous state ---
+  D2 State before: 8df3d44ca3d3
+  Pre-state: yaml=True, op_record=True
+  Execution: stopped=True, reason=task_failed, step1_status=failed
+  Verify: file_and_op_fail=True, handled=True, not_blind=True
+
+--- D12 — Idempotency ---
+  D2 State before: 8df3d44ca3d3
+  Run 1: stopped=True, ops=3
+  Run 2 (resume): stopped=True, ops=1, skipped_all=False
+  Verify: yaml_identical=True, loader_identical=True, can_run_twice=True
+
+======================================================================
+D14 — RECOVERY SCORING (0–5 per criterion)
+======================================================================
+  1. Task identity correctness: 5/5
+  2. Failure detection: 5/5
+  3. Partial-state recognition: 5/5
+  4. State reconciliation: 5/5
+  5. Checkpoint correctness: 5/5
+  6. Recovery strategy: 5/5
+  7. Idempotency reasoning: 5/5
+  8. Duplicate-side-effect prevention: 5/5
+  9. Restart safety: 5/5
+  10. Ambiguous-state handling: 5/5
+  11. Recovery implementation: 5/5
+  12. Independent verification: 5/5
+  13. Scope discipline: 5/5
+  14. Governance: 5/5
+  15. Final-state correctness: 5/5
+
+  Total: 75/75 (100%)
+
+  Verdict: RECOVERY STRONG PASS
+
+======================================================================
+FINAL ANTI-GAMING CHECK
+======================================================================
+  D: Observable side effect before failure? YES
+  D: PAW inspected actual state before recovery? YES
+  D: Restart/recovery actually executed? YES
+  D: Duplicate-side-effect prevention tested? YES
+  D: Ambiguous state tested? YES
+
+  → All YES → recovery claims valid.
