@@ -50,6 +50,7 @@ At each iteration ``run_agent``:
 
 from __future__ import annotations
 
+import asyncio
 import copy
 import json
 from collections.abc import Awaitable, Callable
@@ -682,6 +683,41 @@ class PawRuntime:
         self._project_root = project_root
 
         self._max_iterations = max_iterations
+
+        # Streaming callback for token-level emission (used by the TUI).
+        # When set, _execute_action uses model_executor.stream() instead of
+        # complete() and calls self._stream_callback(chunk) per token chunk.
+        self._stream_callback: Any = None
+
+    async def _execute_model(self, selection: Any, messages: list[dict[str, Any]]) -> dict[str, Any]:
+        """Execute model completion with optional streaming.
+
+        When ``self._stream_callback`` is set, uses ``stream()`` and forwards
+        each chunk to the callback. Otherwise uses ``complete()`` (original
+        behavior — backward compatible).
+        """
+        if self._stream_callback is not None:
+            model_result: dict[str, Any] = {}
+            async for chunk in self.model_executor.stream(selection, messages):
+                if chunk:
+                    self._stream_callback(chunk)
+                    # Yield to the event loop so the TUI consumer can process
+                    # this token before we request the next one from the provider.
+                    await asyncio.sleep(0)
+                    # Accumulate into model_result for post-processing
+                    for k, v in chunk.items():
+                        if k == "response":
+                            model_result["model_response"] = model_result.get("model_response", "") + str(v)
+                        elif k == "thinking" and v:
+                            model_result["thinking"] = str(v)
+                        elif k == "model_thinking" and v:
+                            model_result["model_thinking"] = str(v)
+                        elif k == "done":
+                            model_result["done"] = v
+                        elif k not in model_result:
+                            model_result[k] = v
+            return model_result
+        return await self.model_executor.complete(selection, messages) or {}
 
     def _prepare_agent_action(self, proposed: ProposedAction) -> ProposedAction:
         """Make legacy agent proposals explicit about model execution.
@@ -2287,7 +2323,7 @@ class PawRuntime:
                         messages = action.metadata.get("messages") or [
                             {"role": "user", "content": action.goal},
                         ]
-                        model_result = await self.model_executor.complete(selection, messages) or {}
+                        model_result = await self._execute_model(selection, messages) or {}
                 except RemoteDisclosureRefusedError:
                     # Propagate to _execute_unit which handles it as a
                     # hard stop — the operation is NOT completed.
@@ -2332,7 +2368,7 @@ class PawRuntime:
                         messages = action.metadata.get("messages") or [
                             {"role": "user", "content": action.goal},
                         ]
-                        model_result = await self.model_executor.complete(selection, messages) or {}
+                        model_result = await self._execute_model(selection, messages) or {}
                 except RemoteDisclosureRefusedError:
                     raise
                 except Exception as exc:  # pragma: no cover - defensive

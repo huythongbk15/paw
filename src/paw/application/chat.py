@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
+from collections.abc import AsyncGenerator
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -125,6 +127,16 @@ class ChatReply:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+@dataclass
+class StreamEvent:
+    """Event yielded by ChatService.send_streaming() for TUI consumption."""
+
+    event_type: str  # "thinking", "token", "model_selected", "complete", "error"
+    content: str | None = None
+    reply: ChatReply | None = None
+    data: dict[str, Any] = field(default_factory=dict)
 
 
 class ChatStateStore:
@@ -461,6 +473,186 @@ class ChatService:
         )
         return await self._reply_from_outcome(task, outcome)
 
+    async def send_streaming(
+        self,
+        message: str,
+    ) -> AsyncGenerator[StreamEvent, None]:
+        """Send a message with token-level streaming for TUI consumption.
+
+        Yields :class:`StreamEvent` objects as they occur:
+        - ``"thinking"`` — model thinking/reasoning (once)
+        - ``"model_selected"`` — model selection info (once)
+        - ``"token"`` — individual response tokens
+        - ``"complete"`` — final :class:`ChatReply`
+        - ``"error"`` — error messages
+        """
+        session = self._require_session()
+
+        # --- same setup as send() ---
+        filesystem_intent = self._parse_filesystem_intent(message)
+        capabilities = self.infer_capabilities(message)
+        task = await TaskManager.create(
+            session_id=session.session_id,
+            goal=message,
+            requested_capabilities=capabilities,
+        )
+        session.current_task_id = task.id
+        session.pending_approval_id = None
+        await ChatStateStore.save_session(session)
+        await ChatStateStore.add_message(
+            session.session_id,
+            ChatRole.USER,
+            message,
+            task_id=task.id,
+        )
+
+        history = await ChatStateStore.history(session.session_id)
+        action_context: dict[str, Any] = {
+            "session_id": session.session_id,
+            "provider_mode": self.provider_mode,
+            "history_messages": len(history),
+            "workspace_root": str(self.workspace_root),
+        }
+        action_metadata: dict[str, Any] = {
+            "done": True,
+            "messages": self._bounded_model_messages(history),
+            "chat_session_id": session.session_id,
+            "preferred_executor": "mock",
+        }
+        if filesystem_intent:
+            target = (
+                self.workspace_root / str(filesystem_intent.get("path") or ".")
+            ).resolve(strict=False)
+            action_context.update(
+                {
+                    "path": str(target),
+                    "filesystem_operation": filesystem_intent["operation"],
+                    "size": len(
+                        str(filesystem_intent.get("content") or "").encode("utf-8")
+                    ),
+                }
+            )
+            action_metadata.update(
+                {
+                    "filesystem": filesystem_intent,
+                    "preferred_executor": "local-filesystem",
+                    "model_required": False,
+                    "change_preview": self._change_preview(filesystem_intent),
+                }
+            )
+
+        action = ProposedAction(
+            goal=message,
+            capabilities=capabilities,
+            context=action_context,
+            metadata=action_metadata,
+            operation_id=f"chat-{task.id}",
+            idempotency_key=f"chat:{task.id}",
+        )
+        session.metadata["last_action"] = action.to_dict()
+        await ChatStateStore.save_session(session)
+
+        # --- build runtime and wire streaming callback ---
+        runtime = await self._build_runtime()
+        stream_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+
+        def _chunk_callback(chunk: dict[str, Any]) -> None:
+            """Called synchronously from PawRuntime._execute_model for each token."""
+            model = chunk.get("model", "")
+            thinking = chunk.get("thinking") or chunk.get("model_thinking")
+            text = chunk.get("response", "")
+            done = chunk.get("done", False)
+
+            event_data: dict[str, Any] = {}
+            if model:
+                event_data["model"] = model
+
+            if thinking:
+                stream_queue.put_nowait(
+                    {"type": "thinking", "content": str(thinking), "data": event_data}
+                )
+
+            if text:
+                stream_queue.put_nowait(
+                    {"type": "token", "content": str(text), "data": event_data}
+                )
+
+            if done and event_data:
+                stream_queue.put_nowait(
+                    {"type": "model_selected", "content": None, "data": event_data}
+                )
+
+        runtime._stream_callback = _chunk_callback
+
+        async def brain(
+            _task_id: str,
+            _goal: str,
+            _context: dict[str, Any],
+            _last_observation: Any,
+        ) -> ProposedAction:
+            return action
+
+        # --- run the full pipeline in a background task ---
+        agent_task = asyncio.create_task(
+            runtime.run_agent(
+                task.id,
+                task_goal=task.goal,
+                session_id=session.session_id,
+                initial_context=action.context,
+                max_iterations=1,
+                brain_fn=brain,
+            )
+        )
+
+        # --- consume stream events while the agent runs ---
+        while not agent_task.done() or not stream_queue.empty():
+            try:
+                item = await asyncio.wait_for(stream_queue.get(), timeout=0.05)
+            except TimeoutError:
+                continue
+            if item is None:
+                continue
+            yield StreamEvent(
+                event_type=item["type"],
+                content=item.get("content"),
+                data=item.get("data", {}),
+            )
+
+        # --- drain any final chunks from the provider ---
+        while not stream_queue.empty():
+            item = stream_queue.get_nowait()
+            if item is None:
+                continue
+            yield StreamEvent(
+                event_type=item["type"],
+                content=item.get("content"),
+                data=item.get("data", {}),
+            )
+
+        # --- build the final reply from the outcome ---
+        try:
+            outcome = await agent_task
+        except Exception as exc:
+            yield StreamEvent(
+                event_type="error",
+                content=str(exc),
+                reply=ChatReply(
+                    session_id=session.session_id,
+                    content=f"Lỗi: {exc}",
+                    status="failed",
+                    task_id=task.id,
+                    reason="runtime_error",
+                ),
+            )
+            return
+
+        reply = await self._reply_from_outcome(task, outcome)
+        yield StreamEvent(
+            event_type="complete",
+            reply=reply,
+            data={"model": reply.model, "reason": reply.reason},
+        )
+
     async def _reply_from_outcome(self, task: Task, outcome: RuntimeOutcome) -> ChatReply:
         session = self._require_session()
         observation = outcome.last_observation
@@ -730,4 +922,5 @@ __all__ = [
     "ChatService",
     "ChatSessionRecord",
     "ChatStateStore",
+    "StreamEvent",
 ]

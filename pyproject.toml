@@ -13,6 +13,7 @@ dependencies = [
     "PyYAML>=6.0",
     "python-dotenv>=1.0",
     "structlog>=24.1",
+    "textual>=8.0",
 ]
 
 [project.scripts]

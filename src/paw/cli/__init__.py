@@ -601,6 +601,51 @@ def chat(
         raise typer.Exit(code=2) from None
 
 
+@app.command()
+def tui(
+    session_id: str | None = typer.Option(
+        None,
+        "--session",
+        "-s",
+        help="Resume a durable chat session.",
+    ),
+    provider: str = typer.Option(
+        "auto",
+        "--provider",
+        help="Model provider mode: auto (try Ollama, fall back to local), local (offline), or ollama.",
+    ),
+    workspace: str = typer.Option(
+        ".",
+        "--workspace",
+        help="Workspace boundary for local filesystem operations.",
+    ),
+    quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress INFO logs (only show errors)."),
+    debug: bool = typer.Option(False, "--debug", help="Show DEBUG-level logs."),
+) -> None:
+    """Launch the interactive Textual TUI with 3-panel layout and token streaming."""
+    from ..core.logging import configure_logging as _configure_logging
+
+    if debug:
+        _log_level = logging.DEBUG
+    elif quiet:
+        _log_level = logging.ERROR
+    else:
+        _log_level = logging.WARNING
+    _configure_logging(_log_level)
+
+    from ..tui import run_tui
+
+    try:
+        run_tui(
+            provider_mode=provider,
+            workspace=workspace,
+            session_id=session_id,
+        )
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from None
+
+
 @beta_app.command("inspect")
 def beta_inspect(
     kind: str = typer.Argument(..., help="What to inspect: memory, skills, routing, ledger, context"),
