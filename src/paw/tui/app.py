@@ -15,7 +15,6 @@ Design inspired by OpenCode's clean terminal aesthetic:
 
 from __future__ import annotations
 
-import asyncio
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -256,7 +255,7 @@ class PawTuiApp(App):
         self._service: ChatService | None = None
         self._session_id: str = ""
         self._streaming: bool = False
-        self._current_worker: asyncio.Task[None] | None = None
+        self._current_worker: Any | None = None
         self._current_assistant_widget: AssistantMessage | None = None
         self._stream_buffer: str = ""
         self._thinking: str = ""
@@ -564,7 +563,9 @@ class PawTuiApp(App):
                 await db.close()
             except Exception:
                 pass
-        if self._current_worker and not self._current_worker.done():
+        if self._current_worker is not None and getattr(
+            self._current_worker, "is_running", lambda: False
+        )():
             self._current_worker.cancel()
 
     @on(Input.Submitted)
