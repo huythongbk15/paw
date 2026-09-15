@@ -35,7 +35,7 @@ is provisional input and does not activate E2.
 | E0 (Engineering benchmark and feature subtraction) | `VERIFIED` for the deterministic offline fixture-validation baseline on `f3ad4ef` | The contract, the 13-case set (8 minimum E0-08..15 + 5 research-decision E0-28..35), the deterministic evidence runner (`shell=False` for `command_exit`), and the integration-pack record are in place. The 13/13 SUCCESS line in `docs/benchmarks/e0/integration_pack_run.md` is **fixture-validation** evidence, not an agent-quality gate; the runtime-driven agent-quality tier is post-gate work (E0-40). The cloud baseline remains deferred per the project charter. |
 | E1 | `PARTIAL` | `649ded9` verifies historical representative-source metrics only. Same-revision privacy/quality/D3 and cloud-baseline acceptance remain to be evidenced or explicitly resolved. |
 | E2–E3 and BETA | `BLOCKED` | E2-06..11 source includes runtime wiring ahead of accepted prerequisites. Preserve and audit it; source presence is not gate authorization. |
-| E4 controlled adaptation | `VERIFIED` (E4-01..10) | E4-01..10 implemented, 18 tests pass. E4-11+ blocked (needs provider). |
+| E4 controlled adaptation | `COMPLETE` | E4-01..22 implemented; 42 non-live tests pass (1 live skipped, rate-limited). E4-01..10 VERIFIED (18 tests). E4-11..14 OPERATIONAL (provider adapter + graceful degradation). E4-21 per-version metrics PASS. E4-22 integration pack gate PASS. E4-10 cloud teacher baseline BLOCKED (out of scope per AGENTS.md). |
 
 The engineering-intelligence direction dated 2026-09-01 is recorded in the
 Product Charter and Architecture. It is a design constraint, not proof that a

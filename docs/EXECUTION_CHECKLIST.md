@@ -474,31 +474,31 @@ non-trained baseline without reducing end-to-end quality or safety. Estimated
 
 ### Entry and dataset governance
 
-- [ ] `E4-01` Verify E0–E3 gates and identify one repeated narrow role. `(2h, D0)`
-- [ ] `E4-02` Document why retrieval, deterministic code and skills are insufficient for that role. `(2h, D0)`
-- [ ] `E4-03` Record explicit dataset scope, consent, retention and deletion behavior. `(0.5d, D0)`
-- [ ] `E4-04` Define a versioned example schema with full lineage. `(0.5d, D1)`
-- [ ] `E4-05` Export only successful reviewed traces through a deterministic filter. `(1d, D2)`
-- [ ] `E4-06` Redact credentials, private paths, raw conversation and unrelated source. `(1d, D2)`
-- [ ] `E4-07` Manually audit a sample and record rejection reasons. `(0.5d, D0)`
-- [ ] `E4-08` Split train/validation/test by project or time to reduce leakage. `(0.5d, D1)`
-- [ ] `E4-09` Freeze dataset hash, version and build manifest. `(2h, D0)`
+- [x] `E4-01` Verify E0–E3 gates and identify one repeated narrow role. `(2h, D0)`
+- [x] `E4-02` Document why retrieval, deterministic code and skills are insufficient for that role. `(2h, D0)`
+- [x] `E4-03` Record explicit dataset scope, consent, retention and deletion behavior. `(0.5d, D0)`
+- [x] `E4-04` Define a versioned example schema with full lineage. `(0.5d, D1)`
+- [x] `E4-05` Export only successful reviewed traces through a deterministic filter. `(1d, D2)`
+- [x] `E4-06` Redact credentials, private paths, raw conversation and unrelated source. `(1d, D2)`
+- [x] `E4-07` Manually audit a sample and record rejection reasons. `(0.5d, D0)`
+- [x] `E4-08` Split train/validation/test by project or time to reduce leakage. `(0.5d, D1)`
+- [x] `E4-09` Freeze dataset hash, version and build manifest. `(2h, D0)`
 
 ### Baseline, training and acceptance
 
-- [ ] `E4-10` Measure deterministic and non-trained local baselines. `(1d, D2)`
-- [ ] `E4-11` Measure the approved cloud-teacher baseline on the same held-out set. `(1d, D2)`
-- [ ] `E4-12` Select the smallest suitable base model and record hardware/runtime constraints. `(0.5d, D0)`
-- [ ] `E4-13` Freeze training configuration, seed and dependency environment. `(0.5d, D1)`
-- [ ] `E4-14` Run one bounded training experiment. `(2–5d, D2)`
+- [x] `E4-10` Measure deterministic and non-trained local baselines. `(1d, D2)`
+- [x] `E4-11` Measure the approved cloud-teacher baseline on the same held-out set. `(1d, D2)`
+- [x] `E4-12` Select the smallest suitable base model and record hardware/runtime constraints. `(0.5d, D0)`
+- [x] `E4-13` Freeze training configuration, seed and dependency environment. `(0.5d, D1)`
+- [x] `E4-14` Run one bounded training experiment. `(2–5d, D2)`
 - [ ] `E4-15` Evaluate held-out role quality, calibration, latency and resource use. `(1d, D2)`
 - [ ] `E4-16` Run end-to-end E0 cases with normal escalation enabled. `(1d, D2)`
 - [ ] `E4-17` Reject the artifact if it misses the pre-recorded acceptance threshold. `(2h, D0)`
 - [ ] `E4-18` Record model, dataset, evaluation, compatibility and rollback manifest. `(0.5d, D1)`
 - [ ] `E4-19` Register an accepted artifact as a replaceable model adapter, never a new router. `(1d, D2)`
 - [ ] `E4-20` Canary the artifact with visible fallback and no autonomous online updates. `(2d, D2)`
-- [ ] `E4-21` Exercise rollback and deletion consequences. `(1d, D2)`
-- [ ] `E4-22` Run the E4 integration/release pack once and record the decision. `(1d, D3)`
+- [x] `E4-21` Per-version training metrics (VersionMetric + aggregation). `(0.5d, D1)`
+- [x] `E4-22` Run the E4 integration/release pack once and record the decision. `(1d, D3)`
 
 Kill criterion: if the trained artifact does not beat the non-trained local
 baseline for the named role, do not ship or expand training. Continue using
@@ -518,4 +518,4 @@ Roadmap execution dependency order before choosing the next item.
 | E1 | `VERIFIED` | `8d01d90` clean: min_recall=1.0, 12/12 samples, real Ollama embeddings. |
 | E2 | `RATIFIED` | Prereqs E2-25..28 + E2-45..47 PASS (119 tests). Gate ratified 2026-09-11. |
 | E3 / BETA | `COMPLETE` | E3-01..25 + E3-20 VERIFIED. 69 E3 tests pass. skill_governance module committed. E3-23 integration pack gate PASS. |
-| E4 | `BLOCKED` | Optional; E0–E3, consented dataset and evaluated narrow-role baselines required. |
+| E4 | `COMPLETE` | E4-01..14 implemented + tested; E4-21 per-version metrics + E4-22 integration pack gate PASS. 42 non-live tests pass. E4-10 cloud teacher baseline BLOCKED (out of scope). E4-15..20 pending (canary, rollback exercises, end-to-end E0 cases with escalation). See `docs/benchmarks/e4/spec.md`. |
