@@ -6,6 +6,6 @@ with token-by-token streaming of model output.
 
 from __future__ import annotations
 
-from .app import PawTuiApp
+from .app import PawTuiApp, run_tui
 
-__all__ = ["PawTuiApp"]
+__all__ = ["PawTuiApp", "run_tui"]
