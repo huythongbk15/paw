@@ -276,6 +276,7 @@ class PawTuiApp(App):
             yield Input(
                 placeholder="Nhắn tin... (gõ /help để xem lệnh)",
                 id="message-input",
+                select_on_focus=False,
             )
         yield Footer()
 
