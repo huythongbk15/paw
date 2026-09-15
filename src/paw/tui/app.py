@@ -15,6 +15,7 @@ Design inspired by OpenCode's clean terminal aesthetic:
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -373,7 +374,9 @@ class PawTuiApp(App):
 
     # ── Message handling ────────────────────────────────────────────
 
-    def _clear_input(self) -> None:
+    async def _clear_input(self) -> None:
+        """Clear the input field after a brief delay to allow IME commit."""
+        await asyncio.sleep(0.05)
         inp = self.query_one("#message-input", Input)
         inp.value = ""
 
@@ -386,7 +389,7 @@ class PawTuiApp(App):
 
         if stripped.startswith("/"):
             await self._handle_command(stripped)
-            self._clear_input()
+            await self._clear_input()
             return
 
         if self._streaming:
@@ -396,7 +399,7 @@ class PawTuiApp(App):
         self._streaming = True
         self.query_one("#message-input", Input).disabled = True
         await self._add_user_message(stripped)
-        self._clear_input()
+        await self._clear_input()
         self.query_one(Sidebar).increment_messages()
         self.query_one(Sidebar).set_status("Đang suy nghĩ...")
 
@@ -571,8 +574,15 @@ class PawTuiApp(App):
 
     @on(Input.Submitted)
     async def on_message_input_submitted(self, event: Input.Submitted) -> None:
-        """Handle Enter key in the input field."""
-        value = event.value
+        """Handle Enter key in the input field.
+
+        With Vietnamese IME (telex), the terminal may not have committed
+        the final composed character when Enter fires. We add a tiny delay
+        and read the live input value to ensure nothing is lost.
+        """
+        await asyncio.sleep(0.1)
+        inp = self.query_one("#message-input", Input)
+        value = inp.value
         await self._on_message_submitted(value)
 
 
