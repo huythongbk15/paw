@@ -129,6 +129,8 @@ class PawTuiApp(App):
     #message-input {
         width: 100%;
         height: 1;
+        border: none;
+        padding: 0;
     }
     """
 
