@@ -4,9 +4,13 @@ Layout: conversation (left, 3/4) | sidebar (right, 1/4) | input (bottom).
 
 Token-by-token streaming of model output via ChatService.send_streaming().
 
-Inspired by OpenCode's clean terminal aesthetic: minimal borders,
-distinct color-coded message blocks, compact sidebar, and inline
-thinking.
+Design inspired by OpenCode's clean terminal aesthetic:
+- Each message is a separate widget in a scrollable container (no full re-render)
+- User messages: blue left border, right-aligned header
+- Assistant messages: green left border, left-aligned header
+- Status messages: muted dim style with colored icon
+- Thinking: collapsible details block
+- Compact sidebar with session info + inspection command list
 """
 
 from __future__ import annotations
@@ -19,12 +23,11 @@ from typing import Any, ClassVar
 
 from textual import on
 from textual.app import App, ComposeResult
-from textual.containers import Vertical
+from textual.containers import Vertical, VerticalScroll
 from textual.widgets import (
     Footer,
     Header,
     Input,
-    Markdown,
     OptionList,
     Static,
 )
@@ -39,7 +42,7 @@ log = get_logger(__name__)
 # Sidebar inspection commands in display order.
 _INSPECT_COMMANDS = [
     ("status", "📊 Trạng thái"),
-    ("plan", "📋 Kế hoạch"),
+    ("plan", "📋 Kế hoạp"),
     ("why", "🤔 Tại sao"),
     ("ledger", "📒 Nhật ký"),
     ("checkpoint", "💾 Checkpoint"),
@@ -47,16 +50,6 @@ _INSPECT_COMMANDS = [
     ("skills", "🔧 Kỹ năng"),
     ("artifacts", "📦 Artifacts"),
 ]
-
-# ANSI-ish color tokens for message prefixes (rendered in markdown via HTML spans).
-_USER_COLOR = "#4da6ff"
-_ASSISTANT_COLOR = "#66cc66"
-_STATUS_COLORS = {
-    "info": "#66cc66",
-    "warning": "#ffaa00",
-    "error": "#ff6666",
-    "success": "#66cc66",
-}
 
 
 def _timestamp() -> str:
@@ -108,6 +101,52 @@ class Sidebar(Vertical):
         self.query_one("#session-info", Static).update(content)
 
 
+class UserMessage(Static):
+    """A user message widget with blue accent."""
+
+    DEFAULT_CSS = """
+    UserMessage {
+        border-left: solid cyan;
+        padding: 0 0 0 2;
+        margin: 0 0 1 0;
+    }
+    """
+
+    def __init__(self, content: str, **kwargs: Any) -> None:
+        super().__init__(content, **kwargs)
+
+
+class AssistantMessage(Static):
+    """An assistant message widget with green accent."""
+
+    DEFAULT_CSS = """
+    AssistantMessage {
+        border-left: solid green;
+        padding: 0 0 0 2;
+        margin: 0 0 1 0;
+    }
+    """
+
+    def __init__(self, content: str, **kwargs: Any) -> None:
+        super().__init__(content, **kwargs)
+
+
+class StatusMessage(Static):
+    """A status message widget (dim, muted)."""
+
+    DEFAULT_CSS = """
+    StatusMessage {
+        color: $text-muted;
+        text-style: dim;
+        padding: 0 0 0 1;
+        margin: 0 0 0 0;
+    }
+    """
+
+    def __init__(self, content: str, **kwargs: Any) -> None:
+        super().__init__(content, **kwargs)
+
+
 class PawTuiApp(App):
     """PAW TUI — 3-panel agent chat with token streaming."""
 
@@ -117,6 +156,17 @@ class PawTuiApp(App):
         layout: vertical;
         background: $surface;
         color: $foreground;
+    }
+
+    Header {
+        background: $panel;
+        color: $primary;
+        text-style: bold;
+    }
+
+    Footer {
+        background: $panel;
+        color: $text-muted;
     }
 
     /* ── Main area ────────────────────── */
@@ -133,6 +183,12 @@ class PawTuiApp(App):
         background: $panel;
     }
 
+    #messages {
+        height: 1fr;
+        width: 100%;
+        padding: 0 1;
+    }
+
     /* ── Sidebar ──────────────────────── */
     #sidebar {
         width: 26;
@@ -144,7 +200,7 @@ class PawTuiApp(App):
     #inspect-list {
         height: 1fr;
         border: none;
-        padding: 1 1;
+        padding: 1;
     }
 
     #inspect-list OptionList.item-highlighted {
@@ -158,12 +214,6 @@ class PawTuiApp(App):
         padding: 0 1;
         color: $text-muted;
         text-style: dim;
-        layers: base;
-    }
-
-    #session-info.-focused {
-        color: $text;
-        text-style: bold;
     }
 
     /* ── Input area ───────────────────── */
@@ -181,13 +231,6 @@ class PawTuiApp(App):
         padding: 0;
         color: $text;
         background: transparent;
-    }
-
-    /* ── Status message styling ───────── */
-    Markdown .paw-status {
-        padding: 0 0 0 2;
-        color: $text-muted;
-        text-style: dim;
     }
     """
 
@@ -214,9 +257,9 @@ class PawTuiApp(App):
         self._session_id: str = ""
         self._streaming: bool = False
         self._current_worker: asyncio.Task[None] | None = None
-        self._history_parts: list[str] = []
-        self._current_stream_buf: str = ""
-        self._thinking_buf: str = ""
+        self._current_assistant_widget: AssistantMessage | None = None
+        self._stream_buffer: str = ""
+        self._thinking: str = ""
         self._sidebar_visible: bool = True
 
     # ── Composition ─────────────────────────────────────────────────
@@ -224,7 +267,11 @@ class PawTuiApp(App):
     def compose(self) -> ComposeResult:
         yield Header("✧ PAW TUI")
         with Vertical(id="main-area"):
-            yield Markdown("", id="conversation")
+            with VerticalScroll(
+                Vertical(id="messages"),
+                id="conversation",
+            ):
+                pass
             yield Sidebar(id="sidebar")
         with Vertical(id="input-wrapper"):
             yield Input(
@@ -256,87 +303,77 @@ class PawTuiApp(App):
 
         self.query_one("#message-input", Input).focus()
 
-    # ── Conversation rendering ───────────────────────────────────────
+    # ── Message rendering ───────────────────────────────────────────
 
-    async def _render_conversation(self) -> None:
-        """Rebuild and render the full conversation markdown."""
-        md = self.query_one("#conversation", Markdown)
-        await md.update("\n\n".join(self._history_parts) or "")
-        md.scroll_to(y=1000000, animate=False)
+    def _get_messages(self) -> Vertical:
+        return self.query_one("#messages", Vertical)
+
+    async def _scroll_to_bottom(self) -> None:
+        conv = self.query_one("#conversation", VerticalScroll)
+        # scroll_to is synchronous in Textual 8.x; just call it
+        conv.scroll_to(y=1000000, animate=False)
+
+    def _thinking_block(self) -> str:
+        """Render thinking as a collapsible details block, or empty string."""
+        if not self._thinking:
+            return ""
+        return (
+            f"<details><summary>🧠 Suy nghĩ</summary>\n\n"
+            f"{self._thinking}\n\n</details>\n\n"
+        )
+
+    def _format_assistant_msg(self) -> str:
+        """Format the full assistant message (header + thinking + content)."""
+        ts = _timestamp()
+        return (
+            f"**🤖 Trợ lý PAW** _• {ts}_\n\n"
+            f"{self._thinking_block()}"
+            f"{self._stream_buffer}"
+        )
 
     async def _add_user_message(self, content: str) -> None:
         ts = _timestamp()
-        self._history_parts.append(
-            f'<div class="paw-user" style="border-left: 2px solid {_USER_COLOR}; padding-left: 8px;">'
-            f'<strong>👤 Bạn</strong> <span style="color: {_USER_COLOR};">• {ts}</span>\n\n'
-            f"{content}</div>"
+        widget = UserMessage(
+            f"**👤 Bạn** _• {ts}_\n\n{content}",
         )
-        await self._render_conversation()
+        await self._get_messages().mount(widget)
+        await self._scroll_to_bottom()
 
     async def _start_streaming(self) -> None:
-        self._current_stream_buf = ""
-        self._thinking_buf = ""
+        self._stream_buffer = ""
+        self._thinking = ""
         ts = _timestamp()
-        self._history_parts.append(
-            f'<div class="paw-assistant" style="border-left: 2px solid {_ASSISTANT_COLOR}; padding-left: 8px;">'
-            f'<strong>🤖 Trợ lý PAW</strong> '
-            f'<span style="color: {_ASSISTANT_COLOR};">• {ts}</span>\n\n'
-            f"{self._current_stream_buf}</div>"
+        widget = AssistantMessage(
+            f"**🤖 Trợ lý PAW** _• {ts}_\n\n",
         )
-        await self._render_conversation()
+        await self._get_messages().mount(widget)
+        self._current_assistant_widget = widget
+        await self._scroll_to_bottom()
 
     async def _append_token(self, token: str) -> None:
-        self._current_stream_buf += token
-        # Rebuild the last message block with updated content
-        ts = _timestamp()
-        self._history_parts[-1] = (
-            f'<div class="paw-assistant" style="border-left: 2px solid {_ASSISTANT_COLOR}; padding-left: 8px;">'
-            f'<strong>🤖 Trợ lý PAW</strong> '
-            f'<span style="color: {_ASSISTANT_COLOR};">• {ts}</span>\n\n'
-            f"{self._current_stream_buf}</div>"
-        )
-        await self._render_conversation()
+        """Append a token to the streaming message and update the widget."""
+        self._stream_buffer += token
+        if self._current_assistant_widget is not None:
+            self._current_assistant_widget.update(self._format_assistant_msg())
+            await self._scroll_to_bottom()
 
-    async def _finish_streaming(self, thinking: str | None = None) -> None:
-        ts = _timestamp()
-        header = (
-            f'<div class="paw-assistant" style="border-left: 2px solid {_ASSISTANT_COLOR}; padding-left: 8px;">'
-            f'<strong>🤖 Trợ lý PAW</strong> '
-            f'<span style="color: {_ASSISTANT_COLOR};">• {ts}</span>\n\n'
-        )
-        thinking_html = ""
-        if thinking:
-            thinking_html = (
-                f'<details style="margin: 8px 0; padding: 4px 0; border-left: 1px solid {_ASSISTANT_COLOR};">'
-                f'<summary style="color: {_ASSISTANT_COLOR}; cursor: pointer;">🧠 Suy nghĩ</summary>\n\n'
-                f"{thinking}\n\n</details>\n\n"
-            )
-        self._history_parts[-1] = (
-            header
-            + thinking_html
-            + f"{self._current_stream_buf}</div>"
-        )
-        await self._render_conversation()
+    async def _finish_streaming(self) -> None:
+        """Finalize the streaming message (update timestamp one last time)."""
+        if self._current_assistant_widget is not None:
+            self._current_assistant_widget.update(self._format_assistant_msg())
+            self._current_assistant_widget = None
+            await self._scroll_to_bottom()
 
     async def _add_status(self, content: str, level: str = "info") -> None:
-        color = _STATUS_COLORS.get(level, _STATUS_COLORS["info"])
         icon = {"info": "•", "warning": "⚠", "error": "✗", "success": "✓"}.get(level, "•")
         ts = _timestamp()
-        self._history_parts.append(
-            f'<div class="paw-status" style="color: {color};">'
-            f'[{icon} {ts}] {content}</div>'
-        )
-        await self._render_conversation()
-
-    def _clear_conversation(self) -> None:
-        self._history_parts = []
-        self._current_stream_buf = ""
-        self._thinking_buf = ""
+        widget = StatusMessage(f"[{icon} {ts}] {content}")
+        await self._get_messages().mount(widget)
+        await self._scroll_to_bottom()
 
     # ── Message handling ────────────────────────────────────────────
 
     def _clear_input(self) -> None:
-        """Clear the input field value."""
         inp = self.query_one("#message-input", Input)
         inp.value = ""
 
@@ -385,13 +422,14 @@ class PawTuiApp(App):
                 await self._handle_stream_event(event, sidebar)
         except Exception as exc:
             log.error("tui_stream_error", error=str(exc))
-            await self._append_token(f"\n[Lỗi: {exc}]")
+            self._stream_buffer += f"\n[Lỗi: {exc}]"
+            await self._append_token("")
             sidebar.set_status("Lỗi")
         finally:
             self._streaming = False
             self.query_one("#message-input", Input).disabled = False
             self.query_one("#message-input", Input).focus()
-            await self._finish_streaming(self._thinking_buf if self._thinking_buf else None)
+            await self._finish_streaming()
             sidebar.set_status("Sẵn sàng")
 
     async def _handle_stream_event(
@@ -399,7 +437,7 @@ class PawTuiApp(App):
     ) -> None:
         """Process a single StreamEvent from the streaming pipeline."""
         if event.event_type == "thinking":
-            self._thinking_buf += event.content or ""
+            self._thinking += event.content or ""
         elif event.event_type == "model_selected":
             model = event.data.get("model", "unknown")
             sidebar.set_status(f"Model: {model}")
@@ -412,7 +450,8 @@ class PawTuiApp(App):
                 )
                 sidebar.increment_messages()
         elif event.event_type == "error":
-            await self._add_status(f"Lỗi: {event.content}", "error")
+            self._stream_buffer += f"\n[Lỗi: {event.content}]"
+            await self._append_token("")
             sidebar.set_status("Lỗi")
 
     # ── Command handling ────────────────────────────────────────────
@@ -423,8 +462,7 @@ class PawTuiApp(App):
 
         if command == "help":
             help_text = (
-                '<div style="padding: 4px 0;">'
-                "<strong>📋 Lệnh TUI</strong>\n"
+                "**📋 Lệnh TUI**\n\n"
                 "| Lệnh | Mô tả |\n"
                 "|------|-------|\n"
                 "| `/status` | Trạng thái phiên |\n"
@@ -437,13 +475,12 @@ class PawTuiApp(App):
                 "| `/artifacts` | Artifacts |\n"
                 "| `/clear` | Xóa màn hình |\n"
                 "| `/exit` | Thoát |\n"
-                "</div>"
             )
             await self._add_status(help_text, "info")
         elif command == "clear":
-            self._clear_conversation()
-            await self._render_conversation()
-            await self._add_status("Đã xóa cuộc trò chuyện.", "info")
+            messages = self._get_messages()
+            for child in list(messages.children):
+                child.remove()
         elif command in ("exit", "quit"):
             self.exit()
         else:
@@ -492,7 +529,6 @@ class PawTuiApp(App):
         if option is None:
             return
 
-        # The Option was added with (label, id=key) so option.id is the key
         key = option.id
         if key and key in dict(_INSPECT_COMMANDS):
             inp = self.query_one("#message-input", Input)
@@ -505,8 +541,9 @@ class PawTuiApp(App):
         self.query_one(Sidebar).set_status("Làm mới…")
 
     def action_clear(self) -> None:
-        self._clear_conversation()
-        self.query_one("#conversation", Markdown).update("")
+        messages = self._get_messages()
+        for child in list(messages.children):
+            child.remove()
 
     def action_toggle_sidebar(self) -> None:
         sidebar = self.query_one("#sidebar")
