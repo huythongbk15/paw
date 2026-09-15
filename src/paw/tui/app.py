@@ -379,7 +379,7 @@ class PawTuiApp(App):
         option = event.option
         if option is None:
             return
-        label = str(option.label or "")
+        label = str(option.prompt or "")
         # Extract the key from the option label (we stored /key:xxx)
         key = None
         for k, _ in _INSPECT_COMMANDS:
