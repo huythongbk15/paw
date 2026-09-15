@@ -1014,6 +1014,7 @@ Handoff spec: `_filter_for_availability` restore supported-role filtering + desc
 | Phase 0–22 + E0–E4 + E3 | PASS | Full suite green, ruff clean |
 | BETA (demos + chat REPL + log/thinking) | COMPLETE | 55 beta tests pass |
 | **TUI** | ✅ COMPLETE | `paw tui` command, 3-panel, token streaming. 80 regression tests pass. Commit `f1f9a35` pushed. |
+| **TUI Vietnamese input fix** | ✅ COMPLETE | Inline telex converter (`paw.tui.telex`) + IME timing fix (0.1s delay, live value read, async clear). `/telex on/off/status` commands + `--telex` CLI flag. 31 tests pass. Commit `46d8a2b` pushed. |
 | E1 | VERIFIED | 200+ E1 tests, min_recall=1.00 on `8d01d90` |
 | **Next** | await Đại ca | TUI runtime testing or next feature track
 
