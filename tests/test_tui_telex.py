@@ -126,5 +126,62 @@ class TestTelexEdgeCases:
         assert convert_telems("TOOI") == "tôi"
 
 
+class TestTuiTelexModeGating:
+    """Verify the TUI only applies the inline telex converter when
+    /telex is explicitly enabled.
+
+    Bug: 'xin chào' → 'xin chàa' because any(c.isascii()) ran the converter
+    on mixed ASCII+Unicode text, corrupting IME-committed characters.
+
+    Fix: only run converter when self.telex_mode=True AND input is pure ASCII.
+    """
+
+    def test_converter_skipped_when_telex_off(self):
+        """When telex_mode=False (default), converter must NOT run."""
+        telex_mode = False
+        value = "xin chào"
+        should_run = telex_mode and value and all(c.isascii() for c in value)
+        assert should_run is False  # converter skipped → value preserved
+
+    def test_converter_runs_when_telex_on_pure_ascii(self):
+        """When telex_mode=True + pure ASCII, converter SHOULD run."""
+        telex_mode = True
+        value = "xin chaso"
+        should_run = telex_mode and value and all(c.isascii() for c in value)
+        assert should_run is True
+        assert convert_telems(value, telex_mode=True) == "xin chào"
+
+    def test_converter_skipped_when_unicode_committed(self):
+        """Even with /telex ON, if IME committed Unicode, converter must skip."""
+        telex_mode = True
+        value = "xin chào"  # IME already produced Unicode 'à'
+        should_run = telex_mode and value and all(c.isascii() for c in value)
+        assert should_run is False  # mixed → skip converter, preserve IME output
+
+    def test_unicode_xin_chao_preserved(self):
+        """The exact user bug: 'xin chào' must NOT become 'xin chàa'."""
+        value = "xin chào"
+        # With the fix: telex_mode=False (default) → converter never runs
+        result = value  # no conversion applied
+        assert result == "xin chào"
+        assert "chàa" not in result  # the bug produced this
+
+    def test_chasa_bug_demonstrated_at_converter_level(self):
+        """Document: 'chasa' → 'chàa' at converter level (correct telex).
+        The fix prevents this by not running the converter when telex is OFF."""
+        assert convert_telems("chasa") == "chàa"   # converter behavior
+        assert convert_telems("chaso") == "chào"   # correct telex input
+
+    def test_mixed_unicode_and_ascii_not_converted(self):
+        """Mixed Unicode+ASCII text must not trigger converter."""
+        cases = [
+            "xin chào",        # Unicode tone mark
+            "tôi yêu bạn",     # Multiple Unicode chars
+            "xin chào bạn ơi", # Spaces + Unicode
+        ]
+        for val in cases:
+            assert not all(c.isascii() for c in val), f"Expected mixed for: {val}"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

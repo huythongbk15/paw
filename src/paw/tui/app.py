@@ -605,10 +605,17 @@ class PawTuiApp(App):
         await asyncio.sleep(0.1)
         inp = self.query_one("#message-input", Input)
         value = inp.value
-        # Apply inline telex conversion when terminal IME is unreliable.
+        # Apply inline telex conversion ONLY when /telex is explicitly enabled.
+        # When telex_mode=False (default), the system IME handles Vietnamese
+        # input and we must NOT run the converter — doing so on mixed
+        # ASCII+Unicode text corrupts already-committed characters
+        # (e.g., "chào" → "chàa" because 's' between two ASCII vowels
+        #  gets processed by the converter alongside the IME's Unicode).
+        # When telex_mode=True, the user is typing pure-ASCII telex, so we
+        # convert only when the entire value is ASCII (no Unicode committed).
         from paw.tui.telex import convert_telems
-        if value and any(c.isascii() for c in value):
-            converted = convert_telems(value, telex_mode=self.telex_mode)
+        if self.telex_mode and value and all(c.isascii() for c in value):
+            converted = convert_telems(value, telex_mode=True)
             if converted != value:
                 value = converted
         await self._on_message_submitted(value)
