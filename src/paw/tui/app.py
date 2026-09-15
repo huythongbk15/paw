@@ -565,8 +565,8 @@ class PawTuiApp(App):
             except Exception:
                 pass
         if self._current_worker is not None and getattr(
-            self._current_worker, "is_running", lambda: False
-        )():
+            self._current_worker, "is_running", False
+        ):
             self._current_worker.cancel()
 
     @on(Input.Submitted)
