@@ -621,6 +621,11 @@ def tui(
     ),
     quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress INFO logs (only show errors)."),
     debug: bool = typer.Option(False, "--debug", help="Show DEBUG-level logs."),
+    telex: bool = typer.Option(
+        False,
+        "--telex",
+        help="Enable inline telex-to-Vietnamese conversion (for broken IMEs).",
+    ),
 ) -> None:
     """Launch the interactive Textual TUI with 3-panel layout and token streaming."""
     from ..core.logging import configure_logging as _configure_logging
@@ -640,6 +645,7 @@ def tui(
             provider_mode=provider,
             workspace=workspace,
             session_id=session_id,
+            telex_mode=telex,
         )
     except ValueError as exc:
         console.print(f"[red]{exc}[/red]")

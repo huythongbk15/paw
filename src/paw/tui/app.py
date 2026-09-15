@@ -261,6 +261,7 @@ class PawTuiApp(App):
         self._stream_buffer: str = ""
         self._thinking: str = ""
         self._sidebar_visible: bool = True
+        self.telex_mode: bool = False
 
     # ── Composition ─────────────────────────────────────────────────
 
@@ -484,6 +485,23 @@ class PawTuiApp(App):
             messages = self._get_messages()
             for child in list(messages.children):
                 child.remove()
+        elif command == "telex":
+            arg = parts[1] if len(parts) > 1 else "status"
+            if arg == "on":
+                self.telex_mode = True
+                await self._add_status(
+                    "🔤 Chế độ telex BẬT — gõ telex sẽ tự động chuyển Unicode.",
+                    "success",
+                )
+            elif arg == "off":
+                self.telex_mode = False
+                await self._add_status(
+                    "🔤 Chế độ telex TẮT — để dùng IME hệ thống.",
+                    "info",
+                )
+            else:
+                status = "BẬT ✅" if self.telex_mode else "TẮT ❌"
+                await self._add_status(f"🔤 Telex mode: {status}", "info")
         elif command in ("exit", "quit"):
             self.exit()
         else:
@@ -579,10 +597,20 @@ class PawTuiApp(App):
         With Vietnamese IME (telex), the terminal may not have committed
         the final composed character when Enter fires. We add a tiny delay
         and read the live input value to ensure nothing is lost.
+
+        As a robust fallback we also apply our inline telex converter, so
+        users get correct Vietnamese output even when the terminal IME
+        is unreliable.
         """
         await asyncio.sleep(0.1)
         inp = self.query_one("#message-input", Input)
         value = inp.value
+        # Apply inline telex conversion when terminal IME is unreliable.
+        from paw.tui.telex import convert_telems
+        if value and any(c.isascii() for c in value):
+            converted = convert_telems(value, telex_mode=self.telex_mode)
+            if converted != value:
+                value = converted
         await self._on_message_submitted(value)
 
 
@@ -590,6 +618,7 @@ def run_tui(
     provider_mode: str = "auto",
     workspace: str = ".",
     session_id: str | None = None,
+    telex_mode: bool = False,
 ) -> None:
     """Launch the PAW TUI."""
     app = PawTuiApp(
@@ -597,6 +626,7 @@ def run_tui(
         workspace=workspace,
         session_id=session_id,
     )
+    app.telex_mode = telex_mode
     app.run()
 
 
