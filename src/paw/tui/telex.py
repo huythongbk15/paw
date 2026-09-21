@@ -11,7 +11,9 @@ Telex rules (simplified VTV layout):
   Heuristic: a tone key between two vowels is always a tone mark
   (e.g. ``chaso``->``chào``), except ``j`` which needs telex_mode
   (avoids mangling English words like ``project``).
-  A tone key at end-of-token requires has_doubles or telex_mode.
+  A tone key at end-of-token requires has_doubles or telex_mode;
+  when applied, the tone goes on the FIRST toneable vowel of the
+  diphthong (e.g. ``chaos``->``chào``, not ``chò``).
   A tone key followed by consonants (e.g. ``world``) is never a
   tone mark -- this pattern is common in English.
 
@@ -19,6 +21,8 @@ Example:
     >>> convert_telems("tooi")
     'tôi'
     >>> convert_telems("chaso")
+    'chào'
+    >>> convert_telems("chaos", telex_mode=True)
     'chào'
 """
 
@@ -58,6 +62,19 @@ _TONEABLE = frozenset(_VOWEL_TONES.keys())
 def _find_toneable(chars: list[str], start: int) -> int:
     """Nearest toneable vowel at or before *start*."""
     for i in range(start, -1, -1):
+        if chars[i].lower() in _TONEABLE:
+            return i
+    return -1
+
+
+def _find_first_toneable(chars: list[str]) -> int:
+    """First toneable (unaccented) vowel in *chars*.
+
+    Used for tone keys at end-of-token: Vietnamese tone-placement
+    rules put the mark on the *first* vowel of a diphthong
+    (e.g. ``chaos`` → ``chào`` with tone on ``a``), not the last.
+    """
+    for i in range(len(chars)):
         if chars[i].lower() in _TONEABLE:
             return i
     return -1
@@ -139,10 +156,16 @@ def _process_tones(
                     i -= 1
                     continue
             elif at_end and (has_doubles or telex_mode):
-                result[vidx] = _apply_tone(result[vidx], c)
-                result.pop(i)
-                i -= 1
-                continue
+                # Vietnamese tone-placement rule: the tone mark goes on
+                # the FIRST toneable vowel of the syllable (the "main"
+                # vowel of a diphthong), not the last.
+                # e.g. ``chaos`` → ``chào`` (tone on ``a``), not ``chò``
+                first_vidx = _find_first_toneable(result)
+                if first_vidx >= 0:
+                    result[first_vidx] = _apply_tone(result[first_vidx], c)
+                    result.pop(i)
+                    i -= 1
+                    continue
         i -= 1
     return result
 

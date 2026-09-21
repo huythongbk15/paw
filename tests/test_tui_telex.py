@@ -43,7 +43,11 @@ class TestTelexTonesBetweenVowels:
         assert convert_telems("chaxo") == "cháo"
 
     def test_tone_with_double(self):
-        assert convert_telems("gooix") == "gôí"
+        # 'oo' -> 'ô'; 'x' (sắc) at end goes on FIRST vowel 'ô'
+        # (correct Vietnamese: tone on first vowel of diphthong 'ôi')
+        from paw.tui.telex import _VOWEL_TONES
+        expected = "g" + _VOWEL_TONES["ô"][3] + "i"  # ố = ô + sắc
+        assert convert_telems("gooix", telex_mode=True) == expected
 
     def test_trailing_punctuation(self):
         assert convert_telems("chaso!") == "chào!"
@@ -79,6 +83,20 @@ class TestTelexModeToggle:
 
     def test_chax_with_toggle(self):
         assert convert_telems("chax", telex_mode=True) == "chá"
+
+    def test_chaos_with_toggle_produces_chao(self):
+        # Tone key 's' at end-of-token on 'ao' diphthong →
+        # tone goes on FIRST vowel 'a', not last vowel 'o'.
+        # Previously: 'chò' (wrong). Now: 'chào' (correct).
+        assert convert_telems("chaos", telex_mode=True) == "chào"
+
+    def test_xao_with_toggle_produces_xao(self):
+        # 'x' (sắc) at end of 'xao' → tone on 'a' (first vowel of 'ao')
+        assert convert_telems("xaox", telex_mode=True) == "xáo"
+
+    def test_hoa_with_toggle_produces_hoa(self):
+        # 's' (huyền) at end of 'hoa' → tone on 'o' (first vowel of 'oa')
+        assert convert_telems("hoas", telex_mode=True) == "hòa"
 
     def test_box_with_toggle(self):
         assert convert_telems("box", telex_mode=True) == "bó"
@@ -147,6 +165,15 @@ class TestTuiTelexModeGating:
         """When telex_mode=True + pure ASCII, converter SHOULD run."""
         telex_mode = True
         value = "xin chaso"
+        should_run = telex_mode and value and all(c.isascii() for c in value)
+        assert should_run is True
+        assert convert_telems(value, telex_mode=True) == "xin chào"
+
+    def test_chaos_at_end_produces_chao_with_toggle(self):
+        """The user's exact request: 'chaos' must also produce 'chào'.
+        Tone key at end-of-token on 'ao' diphthong goes on first vowel."""
+        telex_mode = True
+        value = "xin chaos"
         should_run = telex_mode and value and all(c.isascii() for c in value)
         assert should_run is True
         assert convert_telems(value, telex_mode=True) == "xin chào"
