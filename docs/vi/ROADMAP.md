@@ -43,7 +43,7 @@ readiness E2 đã có, không tự mở gate E2.
 | 2. Owner và contract bền vững E2 | E2-01..05, E2-25..28, E2-45..47 | ✅ RATIFIED | 119 E2 tests PASS. Cloud-baseline boundary resolved. |
 | 3. Research/readiness có giới hạn | E2-08, E2-29..44 | ✅ DONE | Recon deterministic đã wiring; research-depth gate (E2-38) + needs-research (E2-39) + negative matrix (E2-44) implement và test. |
 | 4. Tích hợp inference | E2-06..07, E2-09..20, E2-48..50 | ✅ DONE | `route()` consume `task_signals` (E2-06); `classify_inference` gate inference vs local compute (E2-09); re-evaluate routing after recon (E2-10); escalation/no-silent-downgrade (E2-11/12/13); ledger provenance (E2-07); no-route/denied/escalation (E2-50). 440 E2 tests pass. |
-| 5. Case engineering trọn luồng | E2-18, E2-21..24, E2-43..44, E2-50 | PENDING | Research → decision → plan → approved change → declared verification → inspect/restart; rejection paths, held-out routing; D3. |
+| 5. Case engineering trọn luồng | E2-18, E2-21..24, E2-43..44, E2-50 | PENDING | Research → decision → plan → approved change → declared verification → inspect/restart; rejection paths, held-out routing; D3. Các item thành phần đã đóng riêng lẻ trong checklist; **điều kiện còn lại** là D3 trên revision sạch, vốn không chạy được khi suite chưa collect (rà soát 2026-09-29). |
 
 Có thể thiết kế chung contract dùng ở nhiều hàng; không bật hành vi khi
 prerequisite chưa đạt. Code E2 hiện có cần audit, không viết lại hay tự rollback.

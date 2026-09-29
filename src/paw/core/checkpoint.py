@@ -36,6 +36,7 @@ class TaskCheckpoint:
     current_step: int = 0
     total_steps: int = 0
     progress_ratio: float = 0.0
+    operations_completed: int = 0
 
     # Context
     context: dict[str, Any] = field(default_factory=dict)
@@ -69,6 +70,7 @@ class TaskCheckpoint:
             "current_step": self.current_step,
             "total_steps": self.total_steps,
             "progress_ratio": self.progress_ratio,
+            "operations_completed": self.operations_completed,
             "context": self.context,
             "context_compiler_state": self.context_compiler_state,
             "autonomy_usage": self.autonomy_usage,
@@ -83,6 +85,11 @@ class TaskCheckpoint:
             "tags": self.tags,
             "metadata": self.metadata,
         }
+
+    @property
+    def status(self) -> str:
+        """Alias for task_status (backward compatibility)."""
+        return self.task_status
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> TaskCheckpoint:
@@ -523,6 +530,10 @@ class CheckpointManager:
         if persist:
             await CheckpointStore.save(checkpoint)
         return checkpoint
+
+    async def get_latest(self, task_id: str) -> TaskCheckpoint | None:
+        """Get the latest checkpoint for a task (delegates to CheckpointStore)."""
+        return await CheckpointStore.get_latest(task_id)
 
     async def prepare_checkpoint(
         self,

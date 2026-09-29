@@ -507,6 +507,12 @@ class RuntimeOutcome:
     stopped: bool
     reason: StopReason | str | None
     step_called: bool
+    # Durable identity of the task (or graph task) this outcome describes.
+    # Every ``PawRuntime`` path populates it; the default exists only so that
+    # direct library/test construction keeps working. Both halves are pinned in
+    # ``tests/test_outcome_task_identity.py`` (backward-compatible construction
+    # plus per-terminal-path population).
+    task_id: str = ""
     iterations: int = 0
     waiting_for_approval: bool = False
     approval_id: str | None = None
@@ -1031,6 +1037,7 @@ class PawRuntime:
                 )
                 return RuntimeOutcome(
                     stopped=True,
+                    task_id=task_id,
                     reason=StopReason.TASK_FAILED,
                     step_called=step_called,
                     iterations=idx,
@@ -1122,6 +1129,7 @@ class PawRuntime:
                 )
                 return RuntimeOutcome(
                     stopped=True,
+                    task_id=task_id,
                     reason=gate.reason,
                     step_called=step_called,
                     iterations=idx,
@@ -1164,6 +1172,7 @@ class PawRuntime:
                 )
                 return RuntimeOutcome(
                     stopped=True,
+                    task_id=task_id,
                     reason=StopReason.TASK_FAILED,
                     step_called=True,
                     iterations=idx + 1,
@@ -1185,10 +1194,11 @@ class PawRuntime:
             "graph_completed",
             task_status=TaskStatus.COMPLETED,
             terminal_summary=f"graph:{len(ordered)} nodes",
+            operations_completed=operations_completed,
         )
 
         return RuntimeOutcome(
-            stopped=True, reason=stop, step_called=step_called, iterations=len(ordered),
+            stopped=True, task_id=task_id, reason=stop, step_called=step_called, iterations=len(ordered),
             decision=decision, last_observation=last_observation,
             checkpoint_id=checkpoint.checkpoint_id if checkpoint else None,
             operations_completed=operations_completed, model_selections=model_selections,
@@ -1421,6 +1431,7 @@ class PawRuntime:
                 waiting = verdict.stop_reason == StopReason.POLICY_ASK_REQUIRED
                 return RuntimeOutcome(
                     stopped=True,
+                    task_id=task_id,
                     reason=verdict.stop_reason or StopReason.POLICY_DENIED,
                     step_called=False,
                     iterations=i,
@@ -1447,6 +1458,7 @@ class PawRuntime:
         if decision == AutonomyDecision.STOP:
             return RuntimeOutcome(
                 stopped=True,
+                task_id=task_id,
                 reason=stop_reason or StopReason.UNKNOWN,
                 step_called=False,
                 iterations=i,
@@ -1454,6 +1466,7 @@ class PawRuntime:
         if decision == AutonomyDecision.ASK:
             return RuntimeOutcome(
                 stopped=True,
+                task_id=task_id,
                 reason=StopReason.POLICY_ASK_REQUIRED,
                 step_called=False,
                 iterations=i,
@@ -1467,6 +1480,7 @@ class PawRuntime:
         ):
             return RuntimeOutcome(
                 stopped=True,
+                task_id=task_id,
                 reason=stop_reason or decision.value,
                 step_called=False,
                 iterations=i,
@@ -1482,6 +1496,7 @@ class PawRuntime:
                 )
                 return RuntimeOutcome(
                     stopped=True,
+                    task_id=task_id,
                     reason=StopReason.POLICY_DENIED,
                     step_called=False,
                     iterations=i,
@@ -1612,9 +1627,17 @@ class PawRuntime:
             # E2-49: build the canonical proposal after cached model routing
             # but BEFORE policy/autonomy gates. This is the "exact proposal"
             # that flows through the single authority.
+            #
+            # A deterministic operation is the exception: it carries no
+            # ``MODEL_INFERENCE`` capability (a structured adapter sets
+            # ``model_required=False``), so there is no model to name in an exact
+            # proposal. Routing one anyway would report a model that is never
+            # invoked and would let model routing stand in for capability
+            # routing. Such a proposal passes the *same* gates as a plain
+            # ``ProposedAction``.
             if isinstance(proposed, CanonicalProposal):
-                canonical = proposed
-            else:
+                gated_proposal: ProposedAction | CanonicalProposal = proposed
+            elif Capability.MODEL_INFERENCE in proposed.capabilities:
                 selection, recon, inference_class = (
                     await self._select_model_for_proposal(task_id, proposed)
                 )
@@ -1639,7 +1662,7 @@ class PawRuntime:
                     evidence_refs = tuple(str(p) for p in recon.recent_changed_files[:3])
                 if not evidence_refs:
                     evidence_refs = (f"task:{task_id}",)
-                canonical = CanonicalProposal(
+                gated_proposal = CanonicalProposal(
                     proposed_action=proposed,
                     selected_model=selection.model_name or "",
                     inference_classification=inference_class.value,
@@ -1648,11 +1671,13 @@ class PawRuntime:
                     budget=self.execution_profile,
                     evidence_refs=evidence_refs,
                 )
+            else:
+                gated_proposal = proposed
 
             iterations += 1
             unit = await self._execute_unit(
                 task_id,
-                canonical,
+                gated_proposal,
                 iteration_index=iterations - 1,
                 step_fn=step_fn,
                 operation_type="step",
@@ -1710,6 +1735,7 @@ class PawRuntime:
                 )
                 return RuntimeOutcome(
                     stopped=True,
+                    task_id=task_id,
                     reason=StopReason.TASK_FAILED,
                     step_called=True,
                     iterations=iterations,
@@ -1735,10 +1761,12 @@ class PawRuntime:
                     "completed",
                     task_status=TaskStatus.COMPLETED,
                     terminal_summary=_summary(observation),
+                    operations_completed=operations_completed,
                 )
 
                 return RuntimeOutcome(
                     stopped=True,
+                    task_id=task_id,
                     reason=stop,
                     step_called=True,
                     iterations=iterations,
@@ -1786,6 +1814,7 @@ class PawRuntime:
 
         return RuntimeOutcome(
             stopped=True,
+            task_id=task_id,
             reason=StopReason.MAX_ITERATIONS_REACHED,
             step_called=step_called,
             iterations=iterations,
@@ -2600,6 +2629,7 @@ class PawRuntime:
         task_status: TaskStatus | None = None,
         error: str | None = None,
         terminal_summary: str | None = None,
+        operations_completed: int = 0,
     ):
         """Create and atomically commit a forced checkpoint transition."""
         checkpoint = await self.checkpoint_mgr.prepare_checkpoint(
@@ -2612,6 +2642,7 @@ class PawRuntime:
             current_step=iteration,
             total_steps=self._max_iterations or self.autonomy.budget.max_iterations,
             progress_ratio=progress,
+            operations_completed=operations_completed,
             context=context,
             autonomy_usage=self.autonomy.usage,
             autonomy_profile=self.autonomy.profile.value,

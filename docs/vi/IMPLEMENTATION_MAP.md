@@ -4,6 +4,64 @@ Tài liệu này ghi lại thực tế mã nguồn hiện tại, không trao tr�
 dựa trên ghi chú phase lịch sử. Mỗi thay đổi ownership hoặc wiring runtime phải
 cập nhật tài liệu này.
 
+## Sửa hao mòn và chuẩn bị D3 — 2026-09-29 (working tree trên `957b588`)
+
+Kết quả: **PARTIAL**. Rà soát toàn cây ở `957b588` cho thấy cả working tree lẫn
+HEAD đều không đủ điều kiện cho một D3 release check. Ba sửa chữa đã landed;
+bản thân D3 trên revision sạch **chưa chạy** và không gate nào được nâng ở đây.
+
+Quyết định: hai decision record `STANDARD` (sửa hao mòn; sửa routing cho
+proposal tất định), mỗi cái có readiness `READY` chỉ trong phạm vi của nó.
+
+### Điều gì sai (đã tái hiện, không phải suy đoán)
+
+1. **Working tree đỏ.** `RuntimeOutcome.task_id` được thêm như field bắt buộc;
+   12/19 call site không truyền nó
+   (`TypeError: missing 1 required positional argument: 'task_id'`). Phân định
+   gốc rễ bằng cách stash thay đổi rồi chạy lại trên HEAD sạch: trong 42 fail
+   của full suite, **41 đến từ thay đổi này**, 1 đã có sẵn ở HEAD.
+2. **Suite không collect được.** `tests/test_phase_d_recovery.py` import
+   `cookiecutter`/`jinja2` ở module level trong khi file vốn đã có skip guard.
+   Guard chạy sau import, nên máy thiếu các benchmark dep đó làm hỏng cả lần
+   chạy: `2063 tests collected, 1 error`.
+3. **Vi phạm invariant routing ở HEAD.** Một action `filesystem.write` có cấu
+   trúc tất định (`model_required=False`, capabilities `[filesystem.write]`) vẫn
+   bị route tới `local-fast` và phát ra ledger event `MODEL_SELECTED` cho một
+   model không bao giờ được gọi — model routing đứng thay capability routing.
+
+### Gốc rễ của (3)
+
+E2-49 dựng `CanonicalProposal` chỉ định model cụ thể *trước* các gate để Policy
+đánh giá đúng proposal. Việc route trước gate đó chạy vô điều kiện, nên cả các
+operation tất định cũng bị route. `CanonicalProposal.__post_init__` từ chối
+`selected_model` rỗng, nên cách sửa **không phải** "route rồi truyền tên rỗng":
+proposal tất định nay bỏ qua bước bọc canonical và đi qua **cùng** các gate như
+một `ProposedAction` thuần. `_execute_unit` vốn đã nhận cả hai kiểu, và nhánh sửa
+dùng lại đúng predicate của bước gọi (`Capability.MODEL_INFERENCE in
+action.capabilities`) thay vì tạo thêm một định nghĩa "cần model" thứ hai.
+
+### Các sửa chữa
+
+| Sửa | File | Bằng chứng |
+|---|---|---|
+| `task_id` có default, mọi terminal path của runtime đều điền | `core/runtime.py` | `tests/test_outcome_task_identity.py` (9 pass); AST audit 12/12 call site trong `src/` truyền `task_id`; negative control: gỡ `task_id` của một path thì test fail |
+| guard benchmark dep trước khi import | `tests/test_phase_d_recovery.py` | collection sạch: `2074 items, 0 error`; module skip gọn khi thiếu dep |
+| proposal tất định không bị route | `core/runtime.py` | `tests/test_deterministic_proposal_no_model.py` (2 pass) kèm control khẳng định proposal có model vẫn được route; negative control trả về hành vi trước fix → test tất định fail, control vẫn pass |
+| test E4 live thành opt-in | `tests/test_e4_provider_scaffolds.py` | mặc định skip kèm lý do rõ; chạy chủ động bằng `PAW_E4_LIVE_TESTS=1` |
+| `ruff check .` xanh | `pyproject.toml`, `benchmarks/d1/tasks/run_d1.py` | bỏ import chết, sort import, `timezone.utc`→`UTC`, ASCII dash, `contextlib.suppress`/`Path.unlink`; `py_compile` OK |
+
+### Khoảng trống còn lại — cố ý để, không giấu
+
+- `benchmarks/d1/tasks/run_d1.py` thu thập trạng thái D5/D13 (`yaml_content`,
+  `step1_done`, …) mà không assert. F841 bị suppress cho path đó và lý do được
+  ghi trong `pyproject.toml`; xóa các biến thu thập là xóa bằng chứng, còn thêm
+  assertion thì đổi bản chất benchmark D1.
+- `TestE4LiveProvider.test_cloud_teacher_baseline_live` assert
+  `0.0 <= result.accuracy <= 1.0` — không thể fail. Siết theo "accuracy > 0" của
+  docstring cần một lần chạy live để xác nhận, nên chỉ báo cáo, không sửa mù.
+- `benchmarks/e1/fixtures_paw/*.py` là fixture tổng hợp có marker từ khoá; chúng là
+  dữ liệu, cố ý không lint như production code.
+
 ## Rà soát tài liệu phase — 2026-09-09
 
 Quyết định **STANDARD / READY**, chỉ sửa tài liệu. Checklist/ratification nâng

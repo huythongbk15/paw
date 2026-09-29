@@ -52,6 +52,12 @@ unfixable = []
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["E501", "N", "W292", "T201", "W291", "W293", "I001", "F401", "F811", "F841", "RUF012", "SIM102", "SIM110", "SIM116", "B007", "E402", "PTH118", "UP017", "UP015", "RUF001", "RUF002", "RUF059", "B904"]
 "demos/*" = ["T201", "E501"]
+# D1 benchmark harness. print is its output channel (like demos/) and E501
+# trips on embedded fixture data. F841 is suppressed because this script
+# captures D5/D13 state as evidence; a captured-but-unasserted value is a
+# finding about the harness, not dead code to be auto-deleted. Every other
+# rule stays enforced here.
+"benchmarks/d1/tasks/*" = ["T201", "E501", "F841"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

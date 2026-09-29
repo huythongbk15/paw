@@ -18,7 +18,7 @@ D10 — Scenario 3: Already-completed effect
 D11 — Scenario 4: Ambiguous state
 D12 — Idempotency test
 D13 — Final-state verification
-D14 — Recovery scoring (0–5 rubric)
+D14 — Recovery scoring (0-5 rubric)
 
 Run:
     cd benchmarks/d1 && PYTHONPATH=. python tasks/run_d1.py
@@ -27,34 +27,30 @@ Run:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
-import json
-import os
 import shutil
 import subprocess
 import tempfile
-from dataclasses import dataclass, asdict
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
-from paw.core.runtime import PawRuntime, RuntimeOutcome
-from paw.core.models import (
-    ProposedAction,
-    ExecutionObservation,
-    ResourceUsage,
-    Capability,
-)
-from paw.core.autonomy import AutonomyController, AutonomyBudget
+from paw.core.autonomy import AutonomyBudget, AutonomyController
 from paw.core.checkpoint import (
-    CheckpointManager,
     OperationRecord,
     OperationRecordStore,
-    ResumeManager,
 )
-from paw.core.ledger import TaskLedger, TaskEventType
+from paw.core.models import (
+    ExecutionObservation,
+    ProposedAction,
+    ResourceUsage,
+)
+from paw.core.runtime import PawRuntime
 from paw.core.storage import db, set_db_path
+
 # =====================================================================
-# D1 — SCENARIO REPO FACTORY
+# D1 - SCENARIO REPO FACTORY
 # =====================================================================
 
 def create_scenario_repo() -> Path:
@@ -449,7 +445,7 @@ async def create_task(task_id: str, goal: str) -> None:
         """INSERT OR IGNORE INTO tasks (id, session_id, goal, status, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?)""",
         (task_id, "bench_session", goal, "pending",
-         datetime.now(timezone.utc).isoformat(), datetime.now(timezone.utc).isoformat()),
+         datetime.now(UTC).isoformat(), datetime.now(UTC).isoformat()),
     )
 
 
@@ -961,7 +957,7 @@ async def run_all_scenarios() -> dict:
     print("[D1] Creating disposable scenario repository...")
     print("[D2] Recording STATE_BEFORE fingerprints...")
     print("[D3] Canonical proposal (PROPOSAL_V1) defined")
-    print("[D4–D14] Executing scenarios...")
+    print("[D4-D14] Executing scenarios...")
 
     results["D8"] = await run_scenario_d8(db_path)
     results["D9"] = await run_scenario_d9(db_path)
@@ -981,10 +977,8 @@ async def run_all_scenarios() -> dict:
 
     # Remove the database file AND its WAL/SHM sidecar files
     for suffix in ("", "-wal", "-shm", "-journal"):
-        try:
-            os.unlink(f"{db_path}{suffix}")
-        except FileNotFoundError:
-            pass
+        with contextlib.suppress(FileNotFoundError):
+            Path(f"{db_path}{suffix}").unlink()
 
     return results
 
@@ -1074,7 +1068,7 @@ def print_report(results: dict):
 
     # D14 — Scoring
     print("\n" + "=" * 70)
-    print("D14 — RECOVERY SCORING (0–5 per criterion)")
+    print("D14 - RECOVERY SCORING (0-5 per criterion)")
     print("=" * 70)
 
     d8 = results.get("D8", {})
@@ -1147,7 +1141,7 @@ def print_report(results: dict):
     print(f"  D: Restart/recovery actually executed? {d_c}")
     print(f"  D: Duplicate-side-effect prevention tested? {d_d}")
     print(f"  D: Ambiguous state tested? {d_e}")
-    print(f"\n  → All YES → recovery claims valid.")
+    print("\n  → All YES → recovery claims valid.")
 
 
 if __name__ == "__main__":

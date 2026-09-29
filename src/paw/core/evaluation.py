@@ -169,7 +169,7 @@ class EvaluationResult:
     """Result of evaluating a case against expected evidence."""
     case_id: str
     status: str  # PASS / FAIL / SKIP
-    scores: dict[str, float]  # rubric_name -> weighted score
+    scores: dict[str, float]  # evidence_kind -> weighted score
     qualities: dict[str, EvidenceQuality]  # evidence_kind -> quality
     calibrated_confidence: float
     raw_score: float
@@ -226,7 +226,7 @@ def evaluate_case(
         obs_or_missing = obs if obs is not None else missing
         quality = rubric.assess_evidence(obs_or_missing)
         qualities[rubric.evidence_kind] = quality
-        scores[rubric.name] = rubric.score(obs_or_missing)
+        scores[rubric.evidence_kind] = rubric.score(obs_or_missing)
 
     raw_score = sum(scores.values()) / len(scores) if scores else 0.0
 

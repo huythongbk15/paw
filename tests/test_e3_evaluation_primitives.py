@@ -238,8 +238,30 @@ class TestEvaluateCase:
             rubrics=[rubric],
         )
         # Missing "reasoning" field → not strong
-        assert "strict" in result.scores
+        assert "policy_decision" in result.scores
 
+
+
+    def test_duplicate_rubric_names_do_not_collide(self):
+        """Two rubrics with same name but different evidence_kind must not overwrite each other in scores."""
+        rubric1 = EvaluationRubric(
+            name="shared", evidence_kind="kind_a",
+            min_quality=QualityLevel.SUFFICIENT,
+            required_fields=("value",),
+        )
+        rubric2 = EvaluationRubric(
+            name="shared", evidence_kind="kind_b",
+            min_quality=QualityLevel.SUFFICIENT,
+            required_fields=("value",),
+        )
+        observed = [
+            {"kind": "kind_a", "value": 1},
+            {"kind": "kind_b", "value": 2},
+        ]
+        result = evaluate_case("test", [], observed, rubrics=[rubric1, rubric2])
+        assert len(result.scores) == 2  # not 1
+        assert "kind_a" in result.scores
+        assert "kind_b" in result.scores
 
 class TestEvaluationResult:
     def test_to_dict_serialization(self):

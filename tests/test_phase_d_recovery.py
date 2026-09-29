@@ -14,6 +14,7 @@ Scenarios:
 """
 
 import asyncio
+import importlib.util
 import json
 import os
 import shutil
@@ -23,9 +24,26 @@ from unittest.mock import MagicMock
 
 import pytest
 
+# The D8-D13 recovery benchmark drives cookiecutter's project generator as the
+# multi-step external effect under test. `cookiecutter`/`jinja2` are *benchmark*
+# dependencies, not PAW runtime dependencies, so they are deliberately absent
+# from pyproject's runtime and dev extras — installing PAW must never require
+# them. Skip the module BEFORE importing so a clean machine can still collect
+# and run the rest of the suite; importing first turns a missing optional
+# benchmark dep into a collection error that aborts the whole run.
+if not all(
+    importlib.util.find_spec(name) is not None for name in ("cookiecutter", "jinja2")
+):
+    pytest.skip(
+        "cookiecutter/jinja2 benchmark dependency not installed "
+        "(install with: pip install cookiecutter jinja2)",
+        allow_module_level=True,
+    )
+
 from cookiecutter.environment import StrictEnvironment
 from cookiecutter.generate import generate_file
 from cookiecutter.utils import work_in
+from jinja2 import FileSystemLoader
 from jinja2.exceptions import UndefinedError
 
 from paw.core.models import (
@@ -34,23 +52,33 @@ from paw.core.models import (
     ExecutionObservation,
     ProposedAction,
     ResourceUsage,
-    RuntimeOutcome,
     StopReason,
 )
-from paw.core.runtime import ActionProposer, StepFn, PawRuntime
-from paw.core.autonomy import AutonomyController
+from paw.core.runtime import ActionProposer, StepFn, PawRuntime, RuntimeOutcome
+from paw.core.autonomy import AutonomyController, AutonomyBudget
 from paw.core.policy import PolicyGuard
 from paw.core.checkpoint import CheckpointManager
 from paw.core.ledger import TaskLedger
-from paw.core.checkpoint import OperationRecordStore, RuntimePersistence
-from paw.core.storage import get_db
+from paw.core.runtime_persistence import RuntimePersistence
+from paw.core.checkpoint import OperationRecordStore
+from paw.core.storage import get_db, set_db_path
 
 
 # ── Fixtures ───────────────────────────────────────────────────────────
 
+# These D8-D13 runtime recovery benchmark tests use cookiecutter's test
+# template repos at /tmp/benchmark_repos/cookiecutter/tests/.  They require
+# the 'test-generate-multi-step' and 'test-generate-broken' fixtures that ship
+# with a specific cookiecutter development checkout.  When the fixtures or
+# the cookiecutter repo itself is absent, skip the entire module gracefully.
 COOKIECUTTER_DIR = Path("/tmp/benchmark_repos/cookiecutter")
 TEMPLATE_DIR = COOKIECUTTER_DIR / "tests/test-generate-multi-step"
 BROKEN_TEMPLATE_DIR = COOKIECUTTER_DIR / "tests/test-generate-broken"
+
+pytestmark = pytest.mark.skipif(
+    not COOKIECUTTER_DIR.is_dir() or not TEMPLATE_DIR.is_dir() or not BROKEN_TEMPLATE_DIR.is_dir(),
+    reason="cookiecutter test fixtures (test-generate-multi-step / test-generate-broken) not available",
+)
 
 
 def _list_template_files(template_dir: Path) -> list[Path]:
@@ -151,41 +179,37 @@ class FileGenerationStepFn:
                 success=True,
             )
 
-        template_file = self._template_files[file_index]
-        infile = str(template_file)
-        context = self._context
-
-        # Create the project directory if it doesn't exist
-        self.project_dir.mkdir(parents=True, exist_ok=True)
-
-        # Render the output filename
-        with work_in(self._template_dir):
-            env = StrictEnvironment(
-                context=context,
-                keep_project_on_failure=True,
-            )
-            outfile_tmpl = env.from_string(infile)
-            outfile = os.path.join(str(self.project_dir), outfile_tmpl.render(**context))
-
-        # Check if file already exists (skip_if_file_exists pattern)
-        if os.path.exists(outfile):
+        # Simulate early termination: if _num_limit is set, fail at that point
+        if getattr(self, "_num_limit", None) is not None and file_index >= self._num_limit:
             return ExecutionObservation(
                 step_id=f"step_{file_index}",
                 action_id=proposed_action.operation_id,
-                result={"done": file_index == num_files - 1, "progress": (file_index + 1) / num_files, "skipped": True},
+                result={"done": False, "progress": file_index / num_files, "error": "simulated_termination"},
                 resources_used=ResourceUsage(),
-                success=True,
+                success=False,
+                error="simulated_termination",
             )
+
+        template_file = self._template_files[file_index]
+        infile = str(template_file)
+        context = self._context
 
         # Generate the file
         try:
             with work_in(self._template_dir):
                 env = StrictEnvironment(
                     context=context,
-                    keep_project_on_failure=True,
+                    loader=FileSystemLoader(str(self._template_dir)),
                 )
+                # Pre-create the rendered output path's parent directory.
+                # generate_file() does not mkdir parents itself.
+                outfile_tmpl = env.from_string(infile)
+                rendered_rel = outfile_tmpl.render(**context)
+                parent = Path(self._output_dir) / Path(*Path(rendered_rel).parts[:-1])
+                if rendered_rel != Path(rendered_rel).name:
+                    parent.mkdir(parents=True, exist_ok=True)
                 generate_file(
-                    str(self.project_dir),
+                    str(self._output_dir),
                     infile,
                     context,
                     env,
@@ -241,24 +265,36 @@ def _file_content(path: Path) -> str | None:
 
 # ── Runtime factory ────────────────────────────────────────────────────
 
-def _make_runtime(db_path: str, proposer, step_fn):
+async def _make_runtime(db_path: str, proposer, step_fn, task_id: str = "test-task", task_goal: str = "test"):
     """Create a PawRuntime wired with policy + autonomy for the test."""
-    db = get_db(db_path)
-    from paw.core.policy import PolicyGuard
-    policy_guard = PolicyGuard()
-    autonomy = AutonomyController(
-        budget=ResourceUsage.max_for_testing() if hasattr(ResourceUsage, 'max_for_testing') else ResourceUsage(),
+    await set_db_path(Path(db_path))
+    db = await get_db()
+    await db.initialize()
+    # The runtime's _loop only UPDATEs task status — it does not CREATE
+    # the task record.  We must pre-insert session + task so that checkpoint
+    # / ledger / operation_records FK constraints are satisfiable.
+    now = "2024-01-01T00:00:00"
+    session_id = f"session-{task_id}"
+    await db.execute(
+        "INSERT OR IGNORE INTO sessions (id, project_id, metadata, created_at, updated_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (session_id, None, "{}", now, now),
     )
-    ckpt_mgr = CheckpointManager(db)
-    ledger = TaskLedger()
+    await db.execute(
+        "INSERT OR IGNORE INTO tasks (id, parent_id, session_id, project_id, goal, status, "
+        "requested_capabilities, selected_skills, selected_executor, selected_model, result, "
+        "error, created_at, updated_at, completed_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (task_id, None, session_id, None, task_goal, "running",
+         "[]", "[]", None, None, None, None, now, now, None),
+    )
+    autonomy = AutonomyController(budget=AutonomyBudget(max_iterations=100))
+    ckpt_mgr = CheckpointManager()
     runtime = PawRuntime(
-        db=db,
-        policy_guard=policy_guard,
         autonomy=autonomy,
-        checkpoint_mgr=ckpt_mgr,
-        ledger=ledger,
         proposer=proposer,
-        step_fn=step_fn,
+        checkpoint_mgr=ckpt_mgr,
+        auto_checkpoint=True,
     )
     return runtime
 
@@ -284,13 +320,12 @@ class TestD8PartialFailure:
             step_fn = FileGenerationStepFn(BROKEN_TEMPLATE_DIR, output_dir, context)
             proposer = FileGenerationProposer(template_files, context["cookiecutter"]["project_name"])
 
-            runtime = _make_runtime(db_path, proposer, step_fn)
+            runtime = await _make_runtime(db_path, proposer, step_fn, task_id="d8_partial_failure", task_goal='Generate project files from broken template')
 
             result1 = await runtime.run(
                 task_id="d8_partial_failure",
                 task_goal="Generate project files from broken template",
                 step_fn=step_fn,
-                max_iterations=20,
             )
 
             # Verify failure
@@ -319,7 +354,7 @@ class TestD8PartialFailure:
                 f"File {expected_core_py} should NOT exist after failure"
 
             # State reconciliation classification
-            all_expected = expected_files_0_to_5 + [expected_core_py]
+            all_expected = [*expected_files_0_to_5, expected_core_py]
             actual_set = set(actual_files)
             check_completed = [f for f in expected_files_0_to_5 if f in actual_set]
             check_not_completed = [f for f in [expected_core_py] if f not in actual_set]
@@ -335,21 +370,20 @@ class TestD8PartialFailure:
                 _list_template_files(TEMPLATE_DIR),
                 context["cookiecutter"]["project_name"],
             )
-            fixed_runtime = _make_runtime(db_path, fixed_proposer, fixed_step_fn)
+            fixed_runtime = await _make_runtime(db_path, fixed_proposer, fixed_step_fn, task_id="d8_partial_failure", task_goal='Generate project files from fixed template')
 
             result2 = await fixed_runtime.run(
                 task_id="d8_partial_failure",
                 task_goal="Generate project files from fixed template",
                 step_fn=fixed_step_fn,
-                max_iterations=30,
                 resume_from_checkpoint=result1.checkpoint_id,
             )
 
             # Verify recovery success
             assert result2.stopped, "Recovery runtime should have stopped"
             assert result2.last_observation is not None, "Should have final observation"
-            if result2.reason != StopReason.STOP_SUCCESS:
-                assert result2.last_observation.result.get("done") == True, \
+            if result2.reason != StopReason.TASK_COMPLETED:
+                assert result2.last_observation.result.get("done"), \
                     "All files should be generated after recovery"
 
             # Verify all 7 files exist
@@ -375,13 +409,12 @@ class TestD8PartialFailure:
             step_fn = FileGenerationStepFn(BROKEN_TEMPLATE_DIR, output_dir, context)
             proposer = FileGenerationProposer(template_files, context["cookiecutter"]["project_name"])
 
-            runtime = _make_runtime(db_path, proposer, step_fn)
+            runtime = await _make_runtime(db_path, proposer, step_fn, task_id="d8_state_inspection", task_goal='Generate project files from broken template')
 
             result = await runtime.run(
                 task_id="d8_state_inspection",
                 task_goal="Generate project files from broken template",
                 step_fn=step_fn,
-                max_iterations=20,
             )
 
             # Inspect actual filesystem state
@@ -417,13 +450,12 @@ class TestD8PartialFailure:
             # Phase 1: Run with broken template
             step_fn = FileGenerationStepFn(BROKEN_TEMPLATE_DIR, output_dir, context)
             proposer = FileGenerationProposer(template_files, context["cookiecutter"]["project_name"])
-            runtime = _make_runtime(db_path, proposer, step_fn)
+            runtime = await _make_runtime(db_path, proposer, step_fn, task_id="d8_skip_completed", task_goal='Generate project files (broken)')
 
             result1 = await runtime.run(
                 task_id="d8_skip_completed",
                 task_goal="Generate project files (broken)",
                 step_fn=step_fn,
-                max_iterations=20,
             )
 
             # Verify 6 files exist, file #6 failed
@@ -441,13 +473,12 @@ class TestD8PartialFailure:
                 _list_template_files(TEMPLATE_DIR),
                 context["cookiecutter"]["project_name"],
             )
-            fixed_runtime = _make_runtime(db_path, fixed_proposer, fixed_step_fn)
+            fixed_runtime = await _make_runtime(db_path, fixed_proposer, fixed_step_fn, task_id="d8_skip_completed", task_goal='Generate project files (fixed)')
 
             result2 = await fixed_runtime.run(
                 task_id="d8_skip_completed",
                 task_goal="Generate project files (fixed)",
                 step_fn=fixed_step_fn,
-                max_iterations=30,
                 resume_from_checkpoint=result1.checkpoint_id,
             )
 
@@ -479,26 +510,24 @@ class TestD8PartialFailure:
             template_files_broken = _list_template_files(BROKEN_TEMPLATE_DIR)
             step_fn = FileGenerationStepFn(BROKEN_TEMPLATE_DIR, output_dir, context)
             proposer = FileGenerationProposer(template_files_broken, context["cookiecutter"]["project_name"])
-            runtime = _make_runtime(db_path, proposer, step_fn)
+            runtime = await _make_runtime(db_path, proposer, step_fn, task_id="d8_content_check", task_goal='Generate project files')
 
             result1 = await runtime.run(
                 task_id="d8_content_check",
                 task_goal="Generate project files",
                 step_fn=step_fn,
-                max_iterations=20,
             )
 
             # Fix and resume
             template_files_fixed = _list_template_files(TEMPLATE_DIR)
             fixed_step_fn = FileGenerationStepFn(TEMPLATE_DIR, output_dir, context)
             fixed_proposer = FileGenerationProposer(template_files_fixed, context["cookiecutter"]["project_name"])
-            fixed_runtime = _make_runtime(db_path, fixed_proposer, fixed_step_fn)
+            fixed_runtime = await _make_runtime(db_path, fixed_proposer, fixed_step_fn, task_id="d8_content_check", task_goal='Generate project files (continued)')
 
             result2 = await fixed_runtime.run(
                 task_id="d8_content_check",
                 task_goal="Generate project files (continued)",
                 step_fn=fixed_step_fn,
-                max_iterations=30,
                 resume_from_checkpoint=result1.checkpoint_id,
             )
 
@@ -540,13 +569,12 @@ class TestD9RestartAfterCheckpoint:
 
             # Phase 1: Run, but only process 3 files before "killing"
             step_fn._num_limit = 3  # Stop after 3 files
-            runtime = _make_runtime(db_path, proposer, step_fn)
+            runtime = await _make_runtime(db_path, proposer, step_fn, task_id="d9_restart", task_goal='Generate project files (partial)')
 
             result1 = await runtime.run(
                 task_id="d9_restart",
                 task_goal="Generate project files (partial)",
                 step_fn=step_fn,
-                max_iterations=5,  # Enough for 3 files
             )
 
             # After 5 iterations max, 3 files should be created
@@ -567,13 +595,12 @@ class TestD9RestartAfterCheckpoint:
                 _list_template_files(TEMPLATE_DIR),
                 context["cookiecutter"]["project_name"],
             )
-            runtime2 = _make_runtime(db_path, proposer2, step_fn2)
+            runtime2 = await _make_runtime(db_path, proposer2, step_fn2, task_id="d9_restart", task_goal='Generate project files (resume)')
 
             result2 = await runtime2.run(
                 task_id="d9_restart",
                 task_goal="Generate project files (resume)",
                 step_fn=step_fn2,
-                max_iterations=15,
                 resume_from_checkpoint=checkpoint.checkpoint_id,
             )
 
@@ -615,13 +642,12 @@ class TestD9RestartAfterCheckpoint:
 
             step_fn = PartialStepFn(TEMPLATE_DIR, output_dir, context)
             proposer = FileGenerationProposer(template_files, context["cookiecutter"]["project_name"])
-            runtime = _make_runtime(db_path, proposer, step_fn)
+            runtime = await _make_runtime(db_path, proposer, step_fn, task_id="d9_persist", task_goal='Generate files with early termination')
 
             result = await runtime.run(
                 task_id="d9_persist",
                 task_goal="Generate files with early termination",
                 step_fn=step_fn,
-                max_iterations=5,
             )
 
             # Checkpoint should exist
@@ -662,13 +688,12 @@ class TestD10AlreadyCompleted:
             template_files_broken = _list_template_files(BROKEN_TEMPLATE_DIR)
             step_fn = FileGenerationStepFn(BROKEN_TEMPLATE_DIR, output_dir, context)
             proposer = FileGenerationProposer(template_files_broken, context["cookiecutter"]["project_name"])
-            runtime = _make_runtime(db_path, proposer, step_fn)
+            runtime = await _make_runtime(db_path, proposer, step_fn, task_id="d10_external", task_goal='Generate project files (broken)')
 
             result1 = await runtime.run(
                 task_id="d10_external",
                 task_goal="Generate project files (broken)",
                 step_fn=step_fn,
-                max_iterations=20,
             )
 
             project_dir = output_dir / context["cookiecutter"]["project_name"]
@@ -691,13 +716,12 @@ class TestD10AlreadyCompleted:
                 template_files_fixed,
                 context["cookiecutter"]["project_name"],
             )
-            runtime_fixed = _make_runtime(db_path, proposer_fixed, step_fn_fixed)
+            runtime_fixed = await _make_runtime(db_path, proposer_fixed, step_fn_fixed, task_id="d10_external", task_goal='Generate project files (resume)')
 
             result2 = await runtime_fixed.run(
                 task_id="d10_external",
                 task_goal="Generate project files (resume)",
                 step_fn=step_fn_fixed,
-                max_iterations=30,
                 resume_from_checkpoint=result1.checkpoint_id,
             )
 
@@ -729,13 +753,12 @@ class TestD10AlreadyCompleted:
             # Run normally for 4 files, then check operation records
             step_fn = FileGenerationStepFn(TEMPLATE_DIR, output_dir, context)
             proposer = FileGenerationProposer(template_files, context["cookiecutter"]["project_name"])
-            runtime = _make_runtime(db_path, proposer, step_fn)
+            runtime = await _make_runtime(db_path, proposer, step_fn, task_id="d10_skip", task_goal='Generate 4 files')
 
             result = await runtime.run(
                 task_id="d10_skip",
                 task_goal="Generate 4 files",
                 step_fn=step_fn,
-                max_iterations=5,
             )
 
             # Check operation records
@@ -776,13 +799,12 @@ class TestD11AmbiguousState:
             template_files_broken = _list_template_files(BROKEN_TEMPLATE_DIR)
             step_fn = FileGenerationStepFn(BROKEN_TEMPLATE_DIR, output_dir, context)
             proposer = FileGenerationProposer(template_files_broken, context["cookiecutter"]["project_name"])
-            runtime = _make_runtime(db_path, proposer, step_fn)
+            runtime = await _make_runtime(db_path, proposer, step_fn, task_id="d11_ambiguous", task_goal='Generate project files (broken)')
 
             result1 = await runtime.run(
                 task_id="d11_ambiguous",
                 task_goal="Generate project files (broken)",
                 step_fn=step_fn,
-                max_iterations=20,
             )
 
             project_dir = output_dir / context["cookiecutter"]["project_name"]
@@ -822,13 +844,12 @@ class TestD11AmbiguousState:
                 template_files_fixed,
                 context["cookiecutter"]["project_name"],
             )
-            runtime_fixed = _make_runtime(db_path, proposer_fixed, ambiguous_step_fn)
+            runtime_fixed = await _make_runtime(db_path, proposer_fixed, ambiguous_step_fn, task_id="d11_ambiguous", task_goal='Generate project files (resume)')
 
             result2 = await runtime_fixed.run(
                 task_id="d11_ambiguous",
                 task_goal="Generate project files (resume)",
                 step_fn=ambiguous_step_fn,
-                max_iterations=30,
                 resume_from_checkpoint=result1.checkpoint_id,
             )
 
@@ -837,7 +858,7 @@ class TestD11AmbiguousState:
             assert result2.last_observation is not None
             assert not result2.last_observation.success or \
                 result2.last_observation.result.get("ambiguous") or \
-                result2.reason == StopReason.STOP_SUCCESS, \
+                result2.reason == StopReason.TASK_COMPLETED, \
                 f"Recovery should be blocked, not silently completed. Reason: {result2.reason}"
 
             return True
@@ -903,13 +924,12 @@ class TestD12Idempotency:
             template_files_broken = _list_template_files(BROKEN_TEMPLATE_DIR)
             step_fn = FileGenerationStepFn(BROKEN_TEMPLATE_DIR, output_dir1, context)
             proposer = FileGenerationProposer(template_files_broken, context["cookiecutter"]["project_name"])
-            runtime = _make_runtime(db_path, proposer, step_fn)
+            runtime = await _make_runtime(db_path, proposer, step_fn, task_id="d12_idempotent", task_goal='Generate project files (broken)')
 
             result1 = await runtime.run(
                 task_id="d12_idempotent",
                 task_goal="Generate project files (broken)",
                 step_fn=step_fn,
-                max_iterations=20,
             )
 
             checkpoint_id = result1.checkpoint_id
@@ -922,13 +942,12 @@ class TestD12Idempotency:
                 template_files_fixed,
                 context["cookiecutter"]["project_name"],
             )
-            runtime_fixed = _make_runtime(db_path, proposer_fixed, step_fn_fixed)
+            runtime_fixed = await _make_runtime(db_path, proposer_fixed, step_fn_fixed, task_id="d12_idempotent", task_goal='Generate project files (resume 1)')
 
             await runtime_fixed.run(
                 task_id="d12_idempotent",
                 task_goal="Generate project files (resume 1)",
                 step_fn=step_fn_fixed,
-                max_iterations=30,
                 resume_from_checkpoint=checkpoint_id,
             )
 
@@ -942,13 +961,12 @@ class TestD12Idempotency:
                 template_files_fixed,
                 context["cookiecutter"]["project_name"],
             )
-            runtime_fixed2 = _make_runtime(db_path, proposer_fixed2, step_fn_fixed2)
+            runtime_fixed2 = await _make_runtime(db_path, proposer_fixed2, step_fn_fixed2, task_id="d12_idempotent", task_goal='Generate project files (resume 2)')
 
             result3 = await runtime_fixed2.run(
                 task_id="d12_idempotent",
                 task_goal="Generate project files (resume 2)",
                 step_fn=step_fn_fixed2,
-                max_iterations=30,
                 resume_from_checkpoint=checkpoint_id,
             )
 
@@ -992,13 +1010,12 @@ class TestD13FinalState:
             template_files_broken = _list_template_files(BROKEN_TEMPLATE_DIR)
             step_fn = FileGenerationStepFn(BROKEN_TEMPLATE_DIR, output_dir, context)
             proposer = FileGenerationProposer(template_files_broken, context["cookiecutter"]["project_name"])
-            runtime = _make_runtime(db_path, proposer, step_fn)
+            runtime = await _make_runtime(db_path, proposer, step_fn, task_id="d13_final", task_goal='Generate project files')
 
             result1 = await runtime.run(
                 task_id="d13_final",
                 task_goal="Generate project files",
                 step_fn=step_fn,
-                max_iterations=20,
             )
 
             # Resume with fixed template
@@ -1008,13 +1025,12 @@ class TestD13FinalState:
                 template_files_fixed,
                 context["cookiecutter"]["project_name"],
             )
-            runtime_fixed = _make_runtime(db_path, proposer_fixed, step_fn_fixed)
+            runtime_fixed = await _make_runtime(db_path, proposer_fixed, step_fn_fixed, task_id="d13_final", task_goal='Generate project files (recovery)')
 
             result2 = await runtime_fixed.run(
                 task_id="d13_final",
                 task_goal="Generate project files (recovery)",
                 step_fn=step_fn_fixed,
-                max_iterations=30,
                 resume_from_checkpoint=result1.checkpoint_id,
             )
 

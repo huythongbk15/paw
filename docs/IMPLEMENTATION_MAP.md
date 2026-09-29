@@ -4,6 +4,66 @@ This document records current source reality. It does not award completion
 based on historical phase notes. Update it whenever ownership or runtime wiring
 changes.
 
+## Attrition repair and D3 readiness — 2026-09-29 (working tree on `957b588`)
+
+Result: **PARTIAL**. A full-tree review at `957b588` found the working tree and
+HEAD both ineligible for a D3 release check. Three repairs landed; the
+clean-revision D3 itself has **not** run and no gate is promoted here.
+
+Decisions: two `STANDARD`/records (attrition repair; deterministic-proposal
+routing repair), each with a readiness result of `READY` for its own scope only.
+
+### What was wrong (reproduced, not inferred)
+
+1. **Working tree red.** `RuntimeOutcome.task_id` had been added as a required
+   field; 12 of 19 construction sites did not pass it
+   (`TypeError: missing 1 required positional argument: 'task_id'`). Attribution
+   by stashing the change and re-running on clean HEAD: of 42 full-suite
+   failures, **41 came from this change** and 1 pre-existed at HEAD.
+2. **Suite uncollectable.** `tests/test_phase_d_recovery.py` imported
+   `cookiecutter`/`jinja2` at module level while the module already carried a
+   skip guard. The guard runs after the import, so a machine without those
+   benchmark deps aborted the whole run: `2063 tests collected, 1 error`.
+3. **Routing invariant violated at HEAD.** A structured `filesystem.write` action
+   (`model_required=False`, capabilities `[filesystem.write]`) was still routed to
+   `local-fast` and emitted a `MODEL_SELECTED` ledger event for a model that was
+   never invoked — model routing standing in for capability routing.
+
+### Root cause of (3)
+
+E2-49 builds a `CanonicalProposal` naming a concrete model *before* the gates so
+Policy evaluates the exact proposal. That pre-gate routing was unconditional, so
+it also ran for deterministic operations. `CanonicalProposal.__post_init__`
+rejects an empty `selected_model`, so the fix is **not** "route and pass an empty
+name": the deterministic proposal now skips canonical wrapping and flows through
+the same gates as a plain `ProposedAction`. `_execute_unit` already accepted both
+types, and the branch reuses the existing invocation predicate
+(`Capability.MODEL_INFERENCE in action.capabilities`, `runtime.py`) rather than
+adding a second definition of "needs a model".
+
+### Repairs
+
+| Repair | Files | Proof |
+|---|---|---|
+| `task_id` defaulted and every runtime terminal path populated | `core/runtime.py` | `tests/test_outcome_task_identity.py` (9 pass); AST audit 12/12 `src/` call sites pass `task_id`; negative control: removing one path's `task_id` fails the test |
+| benchmark deps guarded before import | `tests/test_phase_d_recovery.py` | full collection clean: `2074 items, 0 error`; module skips cleanly when deps are absent |
+| deterministic proposal is not routed | `core/runtime.py` | `tests/test_deterministic_proposal_no_model.py` (2 pass) incl. a control asserting a model-backed proposal *is* still routed; negative control restores pre-fix behaviour → deterministic test fails, control still passes |
+| E4 live test made opt-in | `tests/test_e4_provider_scaffolds.py` | skips by default with an explicit reason; run deliberately with `PAW_E4_LIVE_TESTS=1` |
+| `ruff check .` green | `pyproject.toml`, `benchmarks/d1/tasks/run_d1.py` | dead imports removed, imports sorted, `timezone.utc`→`UTC`, ASCII dashes, `contextlib.suppress`/`Path.unlink`; `py_compile` OK |
+
+### Known gaps left deliberately (not hidden)
+
+- `benchmarks/d1/tasks/run_d1.py` captures D5/D13 state (`yaml_content`,
+  `step1_done`, …) that it never asserts. F841 is suppressed for that path with
+  the reason recorded in `pyproject.toml`; deleting the captures would delete the
+  evidence, and adding assertions would change what the D1 benchmark measures.
+- `TestE4LiveProvider.test_cloud_teacher_baseline_live` asserts
+  `0.0 <= result.accuracy <= 1.0`, which cannot fail. Tightening it to the
+  docstring's "accuracy > 0" needs a live run to confirm, so it is reported, not
+  changed blind.
+- `benchmarks/e1/fixtures_paw/*.py` are synthetic fixtures with keyword markers;
+  they are data, and are intentionally not linted as production code.
+
 ## Verification follow-up — 2026-09-11 (`8d01d90` clean)
 
 Result: **RATIFIED**. E1 gate is VERIFIED on clean revision `8d01d90`:

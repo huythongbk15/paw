@@ -247,17 +247,36 @@ class TestE4GracefulDegradation:
 
 
 # === Conditional live provider tests ===
+#
+# This test performs a real, billable cloud call. It must not run merely because
+# a developer happens to have OPENAI_API_KEY exported: a verification run must be
+# reproducible and must not spend money or fail on a transient provider 429.
+# The documented E4 status is "1 live skipped, rate-limited", so live coverage is
+# explicit opt-in. Run it deliberately with:
+#
+#     PAW_E4_LIVE_TESTS=1 OPENAI_API_KEY=... python -m pytest \
+#         tests/test_e4_provider_scaffolds.py -k live
+#
+# E4-10 (cloud teacher baseline) remains BLOCKED/out of scope per AGENTS.md.
 
-skip_no_openai_key = pytest.mark.skipif(
-    not os.environ.get("OPENAI_API_KEY"),
-    reason="OPENAI_API_KEY required for live E4-11 provider tests",
+skip_live_e4 = pytest.mark.skipif(
+    os.environ.get("PAW_E4_LIVE_TESTS") != "1",
+    reason=(
+        "live provider test is opt-in: set PAW_E4_LIVE_TESTS=1 (makes a real "
+        "billable cloud call) and OPENAI_API_KEY"
+    ),
 )
 
 
 class TestE4LiveProvider:
-    """When OPENAI_API_KEY is set, E4-11 provider functions work against real API."""
+    """Opt-in: E4-11 provider functions against a real API (see ``skip_live_e4``).
 
-    @skip_no_openai_key
+    Known gap: ``assert 0.0 <= result.accuracy <= 1.0`` is a tautology — it
+    cannot fail. The docstring claims "accuracy > 0". Tightening it needs a live
+    run to confirm the threshold, so it is reported rather than changed blind.
+    """
+
+    @skip_live_e4
     @pytest.mark.asyncio
     async def test_cloud_teacher_baseline_live(self):
         """E4-11: Real provider measures baseline with accuracy > 0."""
