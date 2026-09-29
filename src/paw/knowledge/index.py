@@ -422,11 +422,23 @@ class KnowledgeIndex:
         if not text:
             return []
         tokens: list[str] = []
-        for raw in re.findall(r"[A-Za-z_][A-Za-z0-9_]*|\d+", text):
+        # The hyphenated alternative is matched first and greedily so a compound
+        # such as ``n-gram`` yields its joined form (``ngram``) in addition to
+        # its parts. Without the joined form a prose query and a code identifier
+        # never meet: the query tokenises to ``n``/``gram`` while
+        # ``find_ngrams`` tokenises to ``ngrams``.
+        for raw in re.findall(
+            r"[A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)+|[A-Za-z_][A-Za-z0-9_]*|\d+",
+            text,
+        ):
             normalized = raw.strip("_").lower()
             if not normalized:
                 continue
             tokens.extend(self._word_forms(normalized))
+            if "-" in normalized:
+                joined = normalized.replace("-", "")
+                if joined != normalized:
+                    tokens.extend(self._word_forms(joined))
             for snake_part in raw.strip("_").split("_"):
                 camel_parts = re.findall(
                     r"[A-Z]+(?=[A-Z][a-z]|$)|[A-Z]?[a-z]+|\d+", snake_part,
@@ -447,6 +459,14 @@ class KnowledgeIndex:
             forms.append(token[:-3].rstrip("n"))
         elif len(token) > 5 and token.endswith("ed"):
             forms.append(token[:-2])
+        elif len(token) > 3 and token.endswith("s") and not token.endswith(
+            ("ss", "us", "is"),
+        ):
+            # Plural only. ``ss``/``us``/``is`` endings are not plurals
+            # (``class``, ``status``, ``analysis``) and are left alone. This is
+            # what lets a query naming a concept match a code identifier that
+            # spells it in the singular, and vice versa.
+            forms.append(token[:-1])
         return forms
 
     def _score_chunk(self, chunk: KnowledgeChunk, query_tokens: list[str]) -> float:
