@@ -245,6 +245,59 @@ the rehearsal refactor in `textdistance` is uncommitted, so `base.py` and
 `token_based.py` differ from `d6a68d6`. That is the provenance check working,
 not a defect.
 
+### Decision: budget is the only binding constraint (2026-09-29, `DEEP`/`READY`)
+
+Selected over three alternatives: raise the constant default only (keeps a
+constant that silently contradicts the budget contract); do nothing and declare
+E1 single-corpus (leaves the measured gap unaddressed); narrow the chunker so
+ten chunks suffice (re-scopes the benchmark instead of the system). The chosen
+option derives the pool from `ContextBudget.max_fragments` with headroom for the
+post-retrieval dedup and per-source ceiling, floored and ceilinged.
+
+Cost evidence, checked before widening: `search_chunks` already scans and scores
+up to `_MAX_LEXICAL_CANDIDATES` (5000) rows and embeds up to
+`_MAX_HYBRID_CANDIDATES` (100) chunks **regardless of `limit`** — `limit` only
+slices the final result. So a wider pool adds candidate construction and two
+indexed lookups per candidate, not provider calls. `ContextPlan.max_knowledge_chunks`
+became `None` (derive) and stays an explicit-int override for a caller that
+deliberately wants a narrow pool.
+
+### Result: real, partial, and the gate is still FAIL
+
+| Case (cold) | pool=10 | derived pool |
+|---|---|---|
+| counter_helpers | 0.00 | **1.00** |
+| token_based | 0.50 | **0.75** |
+| edit_family | 1.00 | 1.00 |
+| algorithm_families | 0.25 | 0.25 |
+| public_api | 0.25 | 0.25 |
+| ngram_utils | 0.00 | 0.00 |
+| negative control | 0.00 | 0.00 |
+| `median_warm_reduction` | 0.930 | 0.808 |
+
+`min_recall` is still **0.00** and the measurement gate is still **FAIL**. The
+fix delivered what the root-cause analysis predicted for the case it was derived
+from, and did not clear the gate. Nothing was reworded or re-thresholded to make
+it pass; the reduction drop from 0.930 to 0.808 is the honest cost of admitting
+more candidates, and it stays far above the 0.30 target.
+
+**A second, independent defect is now visible.** `ngram_utils` is no longer a
+pool problem: `textdistance/utils.py` is admitted as a candidate at score 0.163
+and dropped with `reason=max_fragments_exceeded`, ranked below roughly forty
+algorithm chunks scoring 0.5-0.6. A 28-line file that is exactly the answer
+loses to larger files whose chunks happen to share generic query words. That is
+relevance-ranking precision, not pool depth, and it is a different decision
+(touching ranking would re-open E1-27's own tuning).
+
+**Caveat that bounds all of the above.** This run used `--embedding local`, the
+deterministic hashed-bag-of-words provider, because no Ollama server is running
+in this environment. E1-27's `min_recall=1.00` on `src/paw` was measured with
+real `nomic-embed-text` embeddings. The two numbers are therefore **not
+comparable on the ranking axis**: a large part of the residual ranking gap may be
+an artifact of the weaker local provider, and that hypothesis cannot be tested
+here without a local Ollama. Stating it otherwise would overstate what was
+measured.
+
 ## Verification follow-up — 2026-09-11 (`8d01d90` clean)
 
 Result: **RATIFIED**. E1 gate is VERIFIED on clean revision `8d01d90`:

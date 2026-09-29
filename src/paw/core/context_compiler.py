@@ -31,6 +31,42 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+# --- Knowledge candidate-pool sizing ---
+#
+# ``ContextBudget`` is meant to be the only binding constraint on how much
+# context is assembled. That cannot hold while the retrieval pool is smaller
+# than what the budget could hold: a chunk that was never a candidate cannot be
+# selected by any budget. Headroom above ``max_fragments`` absorbs the two
+# things that drop candidates *after* retrieval -- near-duplicate collapsing
+# (Phase 13) and the per-source ceiling.
+#
+# Widening the pool is cheap. ``KnowledgeIndex.search_chunks`` already scans and
+# scores up to ``_MAX_LEXICAL_CANDIDATES`` (5000) rows and embeds up to
+# ``_MAX_HYBRID_CANDIDATES`` (100) chunks regardless of ``limit``; ``limit``
+# only slices the final result. A larger pool therefore costs candidate
+# construction plus two indexed lookups per candidate, not provider calls. The
+# ceiling bounds that per-candidate cost, and semantic coverage saturates at 100
+# regardless, because 100 is the hybrid re-rank width.
+KNOWLEDGE_POOL_HEADROOM = 4
+KNOWLEDGE_POOL_FLOOR = 50
+KNOWLEDGE_POOL_CEILING = 400
+
+
+def knowledge_pool_size(plan: ContextPlan, budget: ContextBudget) -> int:
+    """Resolve how many knowledge chunks may compete for the context budget.
+
+    An explicit ``plan.max_knowledge_chunks`` is honoured verbatim so a caller
+    can still deliberately ask for a narrow pool. Otherwise the pool is derived
+    from the budget, so the budget rather than a constant decides the outcome.
+    """
+    if plan.max_knowledge_chunks is not None:
+        return max(0, plan.max_knowledge_chunks)
+    return min(
+        KNOWLEDGE_POOL_CEILING,
+        max(KNOWLEDGE_POOL_FLOOR, budget.max_fragments * KNOWLEDGE_POOL_HEADROOM),
+    )
+
+
 # --- ContextPlan ---
 
 @dataclass
@@ -68,7 +104,14 @@ class ContextPlan:
 
     # Knowledge filtering
     knowledge_query: str = ""
-    max_knowledge_chunks: int = 10
+    # ``None`` (the default) derives the candidate pool from the context budget,
+    # so the budget stays the only binding constraint. An explicit integer is
+    # honoured verbatim and is how a caller asks for a narrower pool on purpose.
+    # This used to default to 10, which capped retrieval below anything the
+    # budget could hold: on a foreign repository that pushed required evidence
+    # out of the pool entirely (2026-09-29 foreign-corpus measurement,
+    # min_recall 0.00 on 312 chunks while the correct file was still retrieved).
+    max_knowledge_chunks: int | None = None
 
     # Repository filtering
     repo_paths: list[str] = field(default_factory=list)
@@ -443,7 +486,7 @@ class ContextCompiler:
             # Search for relevant chunks
             results = await idx.search_chunks(
                 plan.knowledge_query,
-                limit=plan.max_knowledge_chunks,
+                limit=knowledge_pool_size(plan, self.budget),
                 embedding_provider=self.embedding_provider,
             )
 
