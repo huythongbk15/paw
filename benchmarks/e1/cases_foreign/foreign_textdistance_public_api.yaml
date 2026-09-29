@@ -1,0 +1,46 @@
+schema_version: "1.0.0"
+case_id: foreign_textdistance_public_api
+decision_artifact_version: "1.0.0"
+project_revision: "d6a68d6"
+category: repo_understanding
+privacy_class: internal
+goal: |
+  Establish how the foreign textdistance library assembles its public surface.
+  It is built entirely from star re-exports rather than an explicit __all__,
+  so the families that make up the public API are visible from the two package
+  __init__ modules rather than from a name list.
+fixtures:
+  - path: textdistance/__init__.py
+    revision: d6a68d6
+    purpose: |
+      Reviewed foreign package root. Re-exports the algorithms and utils
+      packages wholesale.
+  - path: textdistance/algorithms/__init__.py
+    revision: d6a68d6
+    purpose: |
+      Reviewed foreign module. Six algorithm families are re-exported with
+      star imports: compression_based, edit_based, phonetic, sequence_based,
+      simple and token_based. vector_based is deliberately not re-exported here.
+expected_evidence:
+  - kind: file_contains
+    target: textdistance/__init__.py
+    value: "from .algorithms import *"
+    reviewer: huythong@local
+  - kind: file_contains
+    target: textdistance/algorithms/__init__.py
+    value: "from .token_based import *"
+    reviewer: huythong@local
+  - kind: file_contains
+    target: textdistance/algorithms/__init__.py
+    value: "from .edit_based import *"
+    reviewer: huythong@local
+  - kind: file_contains
+    target: textdistance/algorithms/__init__.py
+    value: "from .sequence_based import *"
+    reviewer: huythong@local
+timeout_seconds: 120
+max_iterations: 10
+tags:
+  - production-corpus
+  - foreign-corpus
+  - textdistance

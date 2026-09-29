@@ -1,0 +1,34 @@
+schema_version: "1.0.0"
+case_id: foreign_textdistance_edit_family
+decision_artifact_version: "1.0.0"
+project_revision: "d6a68d6"
+category: repo_understanding
+privacy_class: internal
+goal: |
+  The edit-distance family of the foreign textdistance library, including the
+  Jaro/Jaro-Winkler inheritance pair.
+fixtures:
+  - path: textdistance/algorithms/edit_based.py
+    revision: d6a68d6
+    purpose: |
+      Reviewed foreign module. edit_based owns Hamming, Levenshtein,
+      DamerauLevenshtein, NeedlemanWunsch and the Jaro family.
+expected_evidence:
+  - kind: file_contains
+    target: textdistance/algorithms/edit_based.py
+    value: "class Levenshtein(_Base):"
+    reviewer: huythong@local
+  - kind: file_contains
+    target: textdistance/algorithms/edit_based.py
+    value: "class DamerauLevenshtein(_Base):"
+    reviewer: huythong@local
+  - kind: file_contains
+    target: textdistance/algorithms/edit_based.py
+    value: "class Jaro(JaroWinkler):"
+    reviewer: huythong@local
+timeout_seconds: 120
+max_iterations: 10
+tags:
+  - production-corpus
+  - foreign-corpus
+  - textdistance

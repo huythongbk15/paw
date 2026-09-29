@@ -64,6 +64,187 @@ adding a second definition of "needs a model".
 - `benchmarks/e1/fixtures_paw/*.py` are synthetic fixtures with keyword markers;
   they are data, and are intentionally not linted as production code.
 
+## Real-world evaluation — 2026-09-29: the rehearsal exists, PAW did not produce it
+
+Decision class: **DEEP**. Readiness: **READY for one bounded slice only**
+(foreign-corpus context measurement). This does not authorize a second
+benchmark tier, a new runner, or the row-5 end-to-end chain.
+
+### Problem
+
+Option 1 ("run PAW on real external codebases") appears to have prior work:
+`/tmp/benchmark_repos/textdistance` (git `d6a68d6`, 54 py files) contains
+`baseline_characterization.json`, `C4_ALTERNATIVES.md` (three options scored on
+scope/risk/compat/rollback), `C_PROPOSAL_V1.md` (exact files, non-goals,
+invariants, rollback), `C_REFACTOR_PROOF.md`, `BEHAVIORAL_INVARIANTS.md` and
+`C_OBSERVATION.md` (`C_REFACTOR_VERDICT = PASS`, 187/187 characterization cases
+identical, 400 tests pass). If that work was PAW-driven, Option 1 is already
+partly done. The evidence says otherwise.
+
+### Evidence that PAW did not produce it
+
+- `~/.paw/paw.db`: 138 tasks, 139 with ledger events, and **zero** tasks whose
+  goal mentions textdistance, refactor, token or cookiecutter. The recent tasks
+  are chat smoke tests ("xin chào", "ok") and two arithmetic questions.
+- `knowledge_sources` contains **only** PAW's own tree (`paw-source-repo` /
+  `src/paw/**`). No external repository has ever been ingested.
+- The artifacts are markdown plus JSON inside the *target* repository, together
+  with a hand-written `characterize.py` that lives in that repo, not in
+  `src/paw/bench/`.
+- `textdistance` appears in the QwenPaw session `history.db` and nowhere in the
+  PAW runtime database.
+
+### What this means
+
+The **methodology** is validated: that rehearsal is exactly the
+research → options → decision → bounded change → proof loop the Charter
+mandates, and it is a good model. What is **not** validated is PAW itself. PAW
+has never run that loop, so the evaluation so far measured the method and not
+the runtime. Option 1's real objective is therefore narrower than "more
+benchmarks": make PAW produce the trace for a foreign repository, which is what
+`ROADMAP.md` dependency row 5 (`PENDING`) already describes.
+
+### Options considered
+
+- **A — Make the D8–D13 recovery harness reproducible.** It is currently dead
+  evidence: `cookiecutter`/`jinja2` are undeclared and the fixtures live in
+  `/tmp`, so the module always skips. Restoring it needs a dependency decision
+  and an in-repo fixture move. `NEEDS_RESEARCH`: cookiecutter is incidental to
+  what is under test (PAW's recovery semantics, not a template engine), so the
+  honest fix may be a stdlib harness rather than a new dependency, and that
+  choice changes the dependency lock and therefore the D3 triggers.
+- **B — Measure context/retrieval on a foreign corpus (selected).**
+  `paw.bench.e1_production` already accepts arbitrary `--roots` and `--case-dir`,
+  so the E1 claim ("≥95% required-evidence recall, ≥30% warm reduction") can be
+  measured on a repository PAW has never seen, using reviewed cases. It reuses
+  tracked machinery, adds no runner and no second result model, and is
+  falsifiable against E1's own published thresholds.
+- **C — Run row 5 end-to-end (research → decision → gated change → declared
+  verification → inspect/restart) on a foreign repo, and compare PAW's trace to
+  the textdistance rehearsal.** This is the real objective but it is the largest
+  slice, it depends on the readiness gate being trustworthy, and B may invalidate
+  its premise. Explicitly not authorized here.
+
+### Contrary evidence and cost
+
+E1 is already `VERIFIED` on `src/paw`, so a foreign corpus may legitimately
+expose a retrieval gap — that is the measurement's value, not a reason to defer
+it. A small case set is a weak proxy for real projects and must be reported as
+such. Ollama is not running in this environment, so semantic re-ranking degrades
+to the deterministic local provider; the report must state which embedding mode
+produced the numbers rather than implying the E1 Ollama result. Slice B writes
+reviewed cases, so it is authoring work, not just execution.
+
+### Affected invariants
+
+Evidence before implementation; one canonical `Task`; observation is not
+verification; minimum cloud disclosure (this slice is local-only and sends
+nothing remote); a changed project revision invalidates a decision.
+
+### Acceptance for the authorized slice
+
+Cases name the foreign repository and a fixed revision; the run reports
+`min_recall` and `median_warm_reduction` with the embedding mode; the result is
+compared against E1's own thresholds without lowering them; the report states
+that fixture-level E0 evidence and this foreign-corpus measurement are different
+tiers; and a failing case stays failing and visible rather than being reworded.
+
+### Blocker found while preparing the slice (2026-09-29)
+
+Seven reviewed cases were authored under `benchmarks/e1/cases_foreign/` for
+`textdistance` at `d6a68d6`, and all 21 evidence strings were verified against
+the corpus (including one deliberate negative control). The measurement itself
+cannot run, because `paw.bench.e1_production` is a single-repository tool:
+
+- `_resolve_under` rejects any root or case path outside `--repo-root`
+  (`ValueError: path outside repository`), so a foreign corpus cannot be read
+  in place;
+- `_measurement_inputs` requires `<repo-root>/uv.lock` and `<repo-root>/src/paw`
+  to exist; those only exist for PAW itself;
+- `_review_fixtures` binds each fixture to a Git blob in the measured
+  repository, so foreign fixtures cannot be reviewed against the foreign
+  repository's own history.
+
+Hashing `uv.lock` and `src/paw` is correct and must stay: those are the
+compiler under measurement, and detecting mid-run changes to them is the point.
+The two Git assumptions are what do not generalize.
+
+Rejected workarounds, and why:
+
+- **Vendor the corpus into PAW** (1.5 MB, 54 files). It would make the fixtures
+  PAW blobs, so `project_revision: d6a68d6` could no longer be verified against
+  the library's real history. It also adds third-party code PAW does not own.
+- **Symlink `src/paw` into the foreign repo** so it can act as its own
+  measurement host. It satisfies the tool's assumption while making the
+  provenance claim untrue, which is exactly the false-evidence pattern the
+  Charter forbids.
+
+The honest fix is one parameter on the existing runner: an optional
+`--corpus-root` that defaults to `--repo-root`, used for corpus discovery,
+fixture resolution and fixture Git-blob binding, while `uv.lock` and `src/paw`
+keep coming from the measurement host. That is not a second runner and not a
+second result model. It is a change to verification machinery, so it is a
+separate decision from the measurement itself and is not authorized by the slice
+above.
+
+### Result of the slice (2026-09-29): `min_recall = 0.0` on a foreign corpus
+
+`--corpus-root` was added (authorized separately) and the measurement ran.
+Against `textdistance` at `d6a68d6`, seven reviewed cases, local embedding:
+
+| Metric | Foreign corpus | PAW's own source (E1-27) |
+|---|---|---|
+| `min_recall` | **0.00** | 1.00 |
+| `median_warm_reduction` | 0.93 | 0.99 |
+| `metric_gate` / `measurement_gate` | **FAIL** | PASS |
+| corpus files / chunks | 14 files / 312 chunks | 71 files / 300+ chunks |
+
+Per-case cold recall: token_based 0.50, edit_family 1.00, algorithm_families
+0.25, public_api 0.25, counter_helpers 0.00, ngram_utils 0.00, and the negative
+control 0.00 as designed. Compression is not the problem: warm reduction is
+0.93, far above the 30% target. Required-evidence recall is.
+
+**Root cause, and it is not a scoring defect.** `ContextPlan.max_knowledge_chunks`
+defaults to `10` (`core/context_compiler.py:71`) and is passed straight through
+as `idx.search_chunks(..., limit=plan.max_knowledge_chunks)`
+(`core/context_compiler.py:446`). That is a hard cap on the candidate pool which
+is **independent of `ContextBudget`**. Raising `max_fragments` from 30 to 400 and
+`max_tokens` from 5000 to 60000 changed nothing: fragments included stayed at
+~12 and `min_recall` stayed 0.00. The budget was never the binding constraint.
+
+The failure is fragment-level, not file-level. For `counter_helpers` (recall
+0.00) the compiler did include `textdistance/algorithms/base.py` at score 0.774,
+rank 2 of 12 — the right file was retrieved, but the specific chunk holding
+`def _get_counters(...)` was never a candidate. With 312 chunks and a 10-deep
+pool, a query about n-gram utilities is unlikely to surface a particular private
+helper.
+
+### What this says about the E1 gate
+
+E1 was ratified `VERIFIED` on `8d01d90` with `min_recall=1.00` measured on
+`src/paw`. This measurement does not contradict that number, but it does
+contradict the portability of the claim. On PAW's own corpus the answers
+happened to fall inside a 10-chunk pool; the gate never varied
+`max_knowledge_chunks`, so it never exercised the regime a foreign repository
+creates. **"≥95% required-evidence recall" is currently demonstrated for one
+corpus shape, not for foreign repositories.** E1's numeric threshold is not
+weakened and the failing cases stay failing.
+
+### Not authorized, and deliberately not done
+
+`max_knowledge_chunks` was **not** raised to make the numbers pass. The roadmap
+states the gate rule directly: "do not lower expected evidence to make the
+current runtime pass", and the same applies symmetrically to raising a cap until
+a benchmark clears. Changing the retrieval contract is a new decision with its
+own options (widen the pool, raise the default, make the cap budget-derived, or
+record that E1 is single-corpus and add a foreign-corpus gate with its own
+threshold). It is recorded here as the next decision, not taken here.
+
+The tool also reported `corpus_dirty=true` and `fixtures_fresh=false` on its own:
+the rehearsal refactor in `textdistance` is uncommitted, so `base.py` and
+`token_based.py` differ from `d6a68d6`. That is the provenance check working,
+not a defect.
+
 ## Verification follow-up — 2026-09-11 (`8d01d90` clean)
 
 Result: **RATIFIED**. E1 gate is VERIFIED on clean revision `8d01d90`:

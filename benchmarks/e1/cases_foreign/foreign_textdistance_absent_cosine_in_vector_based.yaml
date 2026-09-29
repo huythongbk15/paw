@@ -1,0 +1,34 @@
+schema_version: "1.0.0"
+case_id: foreign_textdistance_absent_cosine_in_vector_based
+decision_artifact_version: "1.0.0"
+project_revision: "d6a68d6"
+category: repo_understanding
+privacy_class: internal
+goal: |
+  NEGATIVE CONTROL. A retrieval system that conflates the two Cosine classes in
+  this library would report a Cosine implementation in vector_based. There is
+  none: Cosine is token-based. This case must FAIL and stay failing. A
+  measurement that reports this case as recalled has produced a false green.
+fixtures:
+  - path: textdistance/algorithms/token_based.py
+    revision: d6a68d6
+    purpose: |
+      Reviewed foreign module. The real Cosine class lives here, which is why
+      asserting it against vector_based is a valid negative control.
+  - path: textdistance/algorithms/vector_based.py
+    revision: d6a68d6
+    purpose: |
+      Reviewed foreign module. Defines Euclidean, Manhattan, Chebyshev,
+      Mahalanobis, Minkowski and Correlation -- and no Cosine.
+expected_evidence:
+  - kind: file_contains
+    target: textdistance/algorithms/vector_based.py
+    value: "class Cosine"
+    reviewer: huythong@local
+timeout_seconds: 120
+max_iterations: 10
+tags:
+  - production-corpus
+  - foreign-corpus
+  - textdistance
+  - negative-control

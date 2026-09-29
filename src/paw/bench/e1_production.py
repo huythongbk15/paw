@@ -114,14 +114,36 @@ def _discover_cases(repo_root: Path, case_dir: str) -> list[Path]:
     return sorted(_resolve_under(repo_root, case_dir).glob("*.yaml"))
 
 
-def _snapshot(paths: Sequence[Path], repo_root: Path) -> dict[str, str]:
-    return {str(path.relative_to(repo_root)): _digest(path) for path in paths}
+def _snapshot(paths: Sequence[Path], repo_root: Path, corpus_root: Path) -> dict[str, str]:
+    """Hash every measured input under a stable key.
+
+    A file inside the measurement host keeps its plain relative path, so
+    single-repository reports stay byte-comparable with earlier ones. A corpus
+    file that lives outside the host is keyed under ``corpus:`` instead, which
+    is what stops a host file and a foreign file sharing a relative path from
+    silently shadowing each other in the before/after comparison.
+    """
+    snapshots: dict[str, str] = {}
+    for path in paths:
+        if path.is_relative_to(repo_root.resolve()):
+            snapshots[path.relative_to(repo_root).as_posix()] = _digest(path)
+        else:
+            snapshots[f"corpus:{path.relative_to(corpus_root).as_posix()}"] = _digest(path)
+    return snapshots
 
 
 def _measurement_inputs(
-    repo_root: Path, roots: Sequence[str], case_dir: str,
+    repo_root: Path, corpus_root: Path, roots: Sequence[str], case_dir: str,
 ) -> tuple[list[Path], list[Path], list[Path]]:
-    corpus = _discover_python(repo_root, roots)
+    """Resolve the measured corpus, the reviewed cases and the pinned inputs.
+
+    ``repo_root`` is the measurement host and owns the compiler under test
+    (``uv.lock`` + ``src/paw``) plus the reviewed case files. ``corpus_root``
+    owns the source being measured and the fixtures those cases reference, so a
+    foreign repository can be read in place and its fixtures verified against
+    its own Git history.
+    """
+    corpus = _discover_python(corpus_root, roots)
     cases = _discover_cases(repo_root, case_dir)
     implementation = sorted((repo_root / "src" / "paw").rglob("*.py"))
     inputs = sorted({repo_root / "uv.lock", *implementation, *corpus, *cases})
@@ -131,17 +153,22 @@ def _measurement_inputs(
 
 
 def _review_fixtures(
-    repo_root: Path, case_rows: Sequence[tuple[Path, dict[str, Any], Any]],
+    repo_root: Path, corpus_root: Path, case_rows: Sequence[tuple[Path, dict[str, Any], Any]],
 ) -> list[dict[str, Any]]:
-    """Bind every reviewed fixture to an existing Git blob and current bytes."""
+    """Bind every reviewed fixture to an existing Git blob and current bytes.
+
+    Fixtures are resolved and reviewed against ``corpus_root`` (the repository
+    that actually contains them), while the case files are labelled relative to
+    ``repo_root`` (the measurement host that owns the reviewed cases).
+    """
     reviews = []
     for case_path, raw, case in case_rows:
         project_revision = raw.get("project_revision")
         for fixture in case.fixtures:
-            current = _resolve_under(repo_root, fixture.path)
+            current = _resolve_under(corpus_root, fixture.path)
             current_hash = _digest(current) if current.is_file() else None
             reviewed_hash = _git_blob_digest(
-                repo_root, fixture.revision, fixture.path,
+                corpus_root, fixture.revision, fixture.path,
             )
             reasons = []
             if project_revision != fixture.revision:
@@ -165,15 +192,21 @@ def _review_fixtures(
 def _measurement_decision(
     *, metric_gate: str, dirty: bool, revision_unchanged: bool,
     inputs_unchanged: bool, tree_state_unchanged: bool, fixtures_fresh: bool,
+    corpus_dirty: bool = False, corpus_revision_unchanged: bool = True,
 ) -> tuple[str, list[str]]:
     reasons = []
-    if not revision_unchanged or not inputs_unchanged or not tree_state_unchanged:
+    if (
+        not revision_unchanged
+        or not inputs_unchanged
+        or not tree_state_unchanged
+        or not corpus_revision_unchanged
+    ):
         return "BLOCKED", ["revision, measured input or tree state changed during the run"]
     if metric_gate == "FAIL":
         return "FAIL", ["at least one recall sample is below 0.50"]
     if metric_gate == "PARTIAL":
         return "PARTIAL", ["recall or median warm reduction missed its threshold"]
-    if dirty:
+    if dirty or corpus_dirty:
         reasons.append("metrics passed on a dirty tree; clean-revision evidence is required")
         if not fixtures_fresh:
             reasons.append("at least one fixture differs from its reviewed revision")
@@ -191,11 +224,21 @@ def _skill_overhead() -> int:
 async def measure(
     *, repo_root: Path, roots: Sequence[str], case_dir: str,
     budget: ContextBudget,
+    corpus_root: Path | None = None,
     embedding: str = "disabled",
     output: Path | None = None,
 ) -> dict:
-    """Measure one immutable input snapshot; changed inputs block the result."""
+    """Measure one immutable input snapshot; changed inputs block the result.
+
+    ``repo_root`` is the measurement host: it owns the compiler under test and
+    the reviewed cases. ``corpus_root`` (default: the host) owns the source being
+    measured, so a foreign repository can be measured in place with its fixtures
+    verified against its own Git history. The two are reported separately, and
+    a foreign corpus carries its own revision and dirty state into the report.
+    """
     repo_root = repo_root.resolve()
+    corpus_root = (corpus_root or repo_root).resolve()
+    foreign_corpus = corpus_root != repo_root
     revision = _git(repo_root, "rev-parse", "HEAD")
     tree_state_before = _git(repo_root, "status", "--porcelain=v1")
     # The measurement writes its own report file (``--output``). That file
@@ -213,21 +256,31 @@ async def measure(
         if _output_rel is None or not line.strip().endswith(_output_rel)
     ]
     dirty = bool(_non_output)
-    corpus, cases, owned_inputs = _measurement_inputs(repo_root, roots, case_dir)
+    corpus_revision = _git(corpus_root, "rev-parse", "HEAD") if foreign_corpus else revision
+    corpus_dirty = (
+        bool(_git(corpus_root, "status", "--porcelain=v1")) if foreign_corpus else dirty
+    )
+    corpus, cases, owned_inputs = _measurement_inputs(
+        repo_root, corpus_root, roots, case_dir,
+    )
     if not corpus:
         raise ValueError("production corpus contains no Python files")
     if not cases:
         raise ValueError("production case directory contains no YAML cases")
-    before = _snapshot(owned_inputs, repo_root)
+    before = _snapshot(owned_inputs, repo_root, corpus_root)
     case_rows = []
     for case_path in cases:
         raw = yaml.safe_load(case_path.read_text(encoding="utf-8"))
         case_rows.append((case_path, raw, case_manifest_from_dict(raw)))
-    fixture_reviews = _review_fixtures(repo_root, case_rows)
+    fixture_reviews = _review_fixtures(repo_root, corpus_root, case_rows)
     result = {
         "scope": "E1 measurement gate; overall E1 qualification is separate",
         "revision": revision,
         "dirty": dirty,
+        "corpus_root": str(corpus_root),
+        "corpus_revision": corpus_revision,
+        "corpus_dirty": corpus_dirty,
+        "foreign_corpus": foreign_corpus,
         "created_at": datetime.now(UTC).isoformat(),
         "corpus_roots": list(roots),
         "case_dir": case_dir,
@@ -248,7 +301,7 @@ async def measure(
     prepared: list[tuple[Path, str, list[tuple[int, int, str]]]] = []
     for path in corpus:
         content = path.read_text(encoding="utf-8")
-        chunks = _chunk_python_file(str(path.relative_to(repo_root)), content)
+        chunks = _chunk_python_file(str(path.relative_to(corpus_root)), content)
         baseline += sum(estimator.estimate(chunk[2]) for chunk in chunks) \
             if chunks else estimator.estimate(content)
         prepared.append((path, content, chunks))
@@ -279,7 +332,7 @@ async def measure(
             sources = KnowledgeSourceManager()
             chunks = KnowledgeChunkStore()
             for path, content, file_chunks in prepared:
-                rel = str(path.relative_to(repo_root))
+                rel = str(path.relative_to(corpus_root))
                 source = await sources.create(
                     name=rel, path=rel, external_id=rel, revision=revision,
                 )
@@ -301,11 +354,11 @@ async def measure(
                         task_id=case.case_id, query=case.goal, session_id=None,
                     )
                     recall = await measure_recall(
-                        case, compiler=compiler, repo_root=repo_root,
+                        case, compiler=compiler, repo_root=corpus_root,
                         mode=mode, manifest=manifest,
                     )
                     tokens = await measure_tokens(
-                        case, compiler=compiler, repo_root=repo_root,
+                        case, compiler=compiler, repo_root=corpus_root,
                         mode=mode, manifest=manifest, baseline_tokens=baseline,
                     )
                     result["samples"].append({
@@ -335,13 +388,17 @@ async def measure(
             await db.close()
 
     _after_corpus, _after_cases, after_inputs = _measurement_inputs(
-        repo_root, roots, case_dir,
+        repo_root, corpus_root, roots, case_dir,
     )
-    after = _snapshot(after_inputs, repo_root)
+    after = _snapshot(after_inputs, repo_root, corpus_root)
     result["revision_unchanged"] = _git(repo_root, "rev-parse", "HEAD") == revision
     result["inputs_unchanged"] = before == after
     result["tree_state_unchanged"] = (
         _git(repo_root, "status", "--porcelain=v1") == tree_state_before
+    )
+    result["corpus_revision_unchanged"] = (
+        _git(corpus_root, "rev-parse", "HEAD") == corpus_revision if foreign_corpus
+        else result["revision_unchanged"]
     )
     result["fixtures_fresh"] = all(row["fresh"] for row in fixture_reviews)
     recalls = [sample["recall"]["recall"] for sample in result["samples"]]
@@ -361,6 +418,8 @@ async def measure(
         inputs_unchanged=result["inputs_unchanged"],
         tree_state_unchanged=result["tree_state_unchanged"],
         fixtures_fresh=result["fixtures_fresh"],
+        corpus_dirty=corpus_dirty,
+        corpus_revision_unchanged=result["corpus_revision_unchanged"],
     )
     result["metric_gate"] = metric_gate
     result["metric_reasons"] = list(metric_reasons)
@@ -373,7 +432,18 @@ async def measure(
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--repo-root", type=Path, default=DEFAULT_ROOT)
+    parser.add_argument(
+        "--repo-root", type=Path, default=DEFAULT_ROOT,
+        help="Measurement host: owns the compiler under test (uv.lock, src/paw) "
+             "and the reviewed case directory.",
+    )
+    parser.add_argument(
+        "--corpus-root", type=Path, default=None,
+        help="Repository holding the source being measured. Defaults to "
+             "--repo-root. Set it to measure a foreign repository in place; its "
+             "fixtures are then verified against that repository's own Git "
+             "history, and its revision and dirty state are reported separately.",
+    )
     parser.add_argument("--roots", nargs="+", default=["src/paw"])
     parser.add_argument("--case-dir", default="benchmarks/e1/cases")
     parser.add_argument("--max-tokens", type=int, default=5000)
@@ -396,6 +466,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             report = asyncio.run(measure(
                 repo_root=args.repo_root, roots=args.roots,
                 case_dir=args.case_dir, budget=budget,
+                corpus_root=args.corpus_root,
                 embedding=args.embedding, output=args.output,
             ))
         except Exception as exc:

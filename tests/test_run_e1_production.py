@@ -124,10 +124,10 @@ async def test_changed_input_during_run_is_blocked(monkeypatch: pytest.MonkeyPat
     original = production._snapshot
     calls = 0
 
-    def changed_snapshot(paths, repo_root):
+    def changed_snapshot(paths, repo_root, corpus_root):
         nonlocal calls
         calls += 1
-        snapshot = original(paths, repo_root)
+        snapshot = original(paths, repo_root, corpus_root)
         if calls == 2:
             first = next(iter(snapshot))
             snapshot[first] = "changed-during-run"

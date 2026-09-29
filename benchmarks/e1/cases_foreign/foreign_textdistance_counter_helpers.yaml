@@ -1,0 +1,36 @@
+schema_version: "1.0.0"
+case_id: foreign_textdistance_counter_helpers
+decision_artifact_version: "1.0.0"
+project_revision: "d6a68d6"
+category: repo_understanding
+privacy_class: internal
+goal: |
+  The token-based metrics in the foreign textdistance library all delegate
+  their Counter preparation to helpers on the shared Base class. Find those
+  helpers and their exact signatures.
+fixtures:
+  - path: textdistance/algorithms/base.py
+    revision: d6a68d6
+    purpose: |
+      Reviewed foreign module. Base owns _get_counters, _intersect_counters,
+      _union_counters and _count_counters, which the token-based classes
+      compose rather than reimplement.
+expected_evidence:
+  - kind: file_contains
+    target: textdistance/algorithms/base.py
+    value: "def _get_counters(self, *sequences: Sequence[object]) -> list[Counter]:"
+    reviewer: huythong@local
+  - kind: file_contains
+    target: textdistance/algorithms/base.py
+    value: "def _intersect_counters(self, *sequences: Counter[T]) -> Counter[T]:"
+    reviewer: huythong@local
+  - kind: file_contains
+    target: textdistance/algorithms/base.py
+    value: "def _union_counters(self, *sequences: Counter[T]) -> Counter[T]:"
+    reviewer: huythong@local
+timeout_seconds: 120
+max_iterations: 10
+tags:
+  - production-corpus
+  - foreign-corpus
+  - textdistance

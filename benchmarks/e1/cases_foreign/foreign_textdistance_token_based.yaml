@@ -1,0 +1,40 @@
+schema_version: "1.0.0"
+case_id: foreign_textdistance_token_based
+decision_artifact_version: "1.0.0"
+project_revision: "d6a68d6"
+category: repo_understanding
+privacy_class: internal
+goal: |
+  PAW has never been pointed at a repository it was not written against.
+  Locate the token-based similarity algorithms in the foreign
+  textdistance library: the six classes that build Counters and their
+  intersection, plus the Tanimoto subclass.
+fixtures:
+  - path: textdistance/algorithms/token_based.py
+    revision: d6a68d6
+    purpose: |
+      Reviewed foreign module. Jaccard, Sorensen, Tversky, Overlap, Cosine
+      and Bag are the token-based metrics; Tanimoto extends Jaccard.
+expected_evidence:
+  - kind: file_contains
+    target: textdistance/algorithms/token_based.py
+    value: "class Jaccard(_BaseSimilarity):"
+    reviewer: huythong@local
+  - kind: file_contains
+    target: textdistance/algorithms/token_based.py
+    value: "class Sorensen(_BaseSimilarity):"
+    reviewer: huythong@local
+  - kind: file_contains
+    target: textdistance/algorithms/token_based.py
+    value: "class Tanimoto(Jaccard):"
+    reviewer: huythong@local
+  - kind: file_contains
+    target: textdistance/algorithms/token_based.py
+    value: "class Bag(_Base):"
+    reviewer: huythong@local
+timeout_seconds: 120
+max_iterations: 10
+tags:
+  - production-corpus
+  - foreign-corpus
+  - textdistance

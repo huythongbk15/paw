@@ -1,0 +1,45 @@
+schema_version: "1.0.0"
+case_id: foreign_textdistance_algorithm_families
+decision_artifact_version: "1.0.0"
+project_revision: "d6a68d6"
+category: repo_understanding
+privacy_class: internal
+goal: |
+  Map how the foreign textdistance library is organised internally: the
+  algorithm-family modules its package root re-exports, and which metric
+  family each one actually owns.
+fixtures:
+  - path: textdistance/algorithms/vector_based.py
+    revision: d6a68d6
+    purpose: |
+      Reviewed foreign module. vector_based owns the Minkowski family
+      (Euclidean, Manhattan, Chebyshev, Mahalanobis) plus Correlation.
+      Note: it does NOT define a Cosine class -- Cosine is token-based.
+  - path: textdistance/algorithms/sequence_based.py
+    revision: d6a68d6
+    purpose: |
+      Reviewed foreign module. sequence_based owns the LCS and
+      Ratcliff/Obershelp metrics, not Levenshtein (that is edit_based).
+expected_evidence:
+  - kind: file_contains
+    target: textdistance/algorithms/vector_based.py
+    value: "class Euclidean(_Base):"
+    reviewer: huythong@local
+  - kind: file_contains
+    target: textdistance/algorithms/vector_based.py
+    value: "class Mahalanobis(_Base):"
+    reviewer: huythong@local
+  - kind: file_contains
+    target: textdistance/algorithms/sequence_based.py
+    value: "class LCSSeq(_BaseSimilarity):"
+    reviewer: huythong@local
+  - kind: file_contains
+    target: textdistance/algorithms/sequence_based.py
+    value: "class RatcliffObershelp(_BaseSimilarity):"
+    reviewer: huythong@local
+timeout_seconds: 120
+max_iterations: 10
+tags:
+  - production-corpus
+  - foreign-corpus
+  - textdistance
