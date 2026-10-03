@@ -193,6 +193,7 @@ def _measurement_decision(
     *, metric_gate: str, dirty: bool, revision_unchanged: bool,
     inputs_unchanged: bool, tree_state_unchanged: bool, fixtures_fresh: bool,
     corpus_dirty: bool = False, corpus_revision_unchanged: bool = True,
+    recalled_controls: Sequence[dict[str, Any]] = (),
 ) -> tuple[str, list[str]]:
     reasons = []
     if (
@@ -206,6 +207,11 @@ def _measurement_decision(
         return "FAIL", ["at least one recall sample is below 0.50"]
     if metric_gate == "PARTIAL":
         return "PARTIAL", ["recall or median warm reduction missed its threshold"]
+    if recalled_controls:
+        return "FAIL", [
+            "a negative-control case was recalled, which is a false green: "
+            + ", ".join(row["case"] for row in recalled_controls)
+        ]
     if dirty or corpus_dirty:
         reasons.append("metrics passed on a dirty tree; clean-revision evidence is required")
         if not fixtures_fresh:
@@ -401,9 +407,39 @@ async def measure(
         else result["revision_unchanged"]
     )
     result["fixtures_fresh"] = all(row["fresh"] for row in fixture_reviews)
-    recalls = [sample["recall"]["recall"] for sample in result["samples"]]
+    # A case tagged ``negative-control`` is expected to FAIL. Folding it into
+    # ``min_recall`` would pin the metric at 0.00 forever and make the gate
+    # structurally unpassable, while moving it out of the run would hide it.
+    # So it is reported separately and gated in the opposite direction: a
+    # negative control that is recalled is a false green and fails the run.
+    negative_case_paths = {
+        str(case_path.relative_to(repo_root))
+        for case_path, raw, _case in case_rows
+        if "negative-control" in (raw.get("tags") or [])
+    }
+    negative_controls = []
+    gated_samples = []
+    for sample in result["samples"]:
+        is_negative = sample["case"] in negative_case_paths
+        sample["negative_control"] = is_negative
+        (negative_controls if is_negative else gated_samples).append(sample)
+    result["negative_controls"] = [
+        {
+            "case": sample["case"],
+            "mode": sample["recall"]["mode"],
+            "recall": sample["recall"]["recall"],
+            "expected": "fail",
+            "outcome": "false_green" if sample["recall"]["recall"] > 0 else "correctly_absent",
+        }
+        for sample in negative_controls
+    ]
+    recalled_controls = [
+        row for row in result["negative_controls"] if row["outcome"] == "false_green"
+    ]
+
+    recalls = [sample["recall"]["recall"] for sample in gated_samples]
     warm = sorted(
-        sample["tokens"]["reduction"] for sample in result["samples"]
+        sample["tokens"]["reduction"] for sample in gated_samples
         if sample["tokens"]["mode"] == "warm"
     )
     midpoint = len(warm) // 2
@@ -420,6 +456,7 @@ async def measure(
         fixtures_fresh=result["fixtures_fresh"],
         corpus_dirty=corpus_dirty,
         corpus_revision_unchanged=result["corpus_revision_unchanged"],
+        recalled_controls=recalled_controls,
     )
     result["metric_gate"] = metric_gate
     result["metric_reasons"] = list(metric_reasons)

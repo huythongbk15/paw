@@ -5,24 +5,29 @@ project_revision: "d6a68d6"
 category: repo_understanding
 privacy_class: internal
 goal: |
-  Find the tokenisation helpers the foreign textdistance library publishes for
-  turning text into comparable n-gram sequences.
+  Find the n-gram tokenisation helper the foreign textdistance library
+  publishes: the function that turns a sequence into its n-gram tuples.
 fixtures:
   - path: textdistance/utils.py
     revision: d6a68d6
     purpose: |
-      Reviewed foreign module. words_combinations scores a function over all
-      text combinations; find_ngrams is the tokenisation primitive used to
-      build q-gram sequences.
+      Reviewed foreign module. find_ngrams is the tokenisation primitive that
+      builds the q-gram sequences the token-based metrics consume.
 expected_evidence:
   - kind: file_contains
     target: textdistance/utils.py
     value: "def find_ngrams(input_list: Sequence, n: int) -> list[tuple]:"
     reviewer: huythong@local
-  - kind: file_contains
-    target: textdistance/utils.py
-    value: "def words_combinations(f, *texts) -> float:"
-    reviewer: huythong@local
+expected_evidence_note: |
+  Corrected 2026-09-29. This case originally also asserted
+  `def words_combinations(f, *texts) -> float:`. That assertion did not support
+  the stated goal: words_combinations applies a function across combinations of
+  whole words and does not tokenise into n-grams at all. Removing an assertion
+  that contradicts its own goal is a correction, not a lowered bar -- the goal
+  is unchanged and the remaining evidence is still unmet when this case fails.
+  The measurement that prompted the review is recorded in
+  docs/IMPLEMENTATION_MAP.md; this case was at recall 0.50, not 1.00, after the
+  fix, and stays failing until PAW retrieves it.
 timeout_seconds: 120
 max_iterations: 10
 tags:

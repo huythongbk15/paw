@@ -37,6 +37,13 @@ expected_evidence:
     target: textdistance/algorithms/sequence_based.py
     value: "class RatcliffObershelp(_BaseSimilarity):"
     reviewer: huythong@local
+expected_evidence_note: |
+  Kept deliberately unchanged on 2026-09-29 after review. This is a multi-target
+  layout question -- four distinct symbols across two modules in one context --
+  which is a realistic engineering ask, not an artificial stress case. It sits at
+  recall 0.25 and is the sharpest available measurement of how much of a
+  multi-symbol question PAW can satisfy at once. Splitting it into one-symbol
+  cases would raise the number while hiding the limit, so it was left as is.
 timeout_seconds: 120
 max_iterations: 10
 tags:

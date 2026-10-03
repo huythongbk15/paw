@@ -274,6 +274,11 @@ class ChatService:
 
     async def open(self, session_id: str | None = None) -> ChatSessionRecord:
         await db.initialize()
+        # Probe providers up front. A provider's ``available`` is ``None`` until
+        # it has been initialized, and ``bool(None)`` is False -- so without this
+        # every mode that consults availability before routing (see
+        # ``_preferred_provider``) would conclude no real local model exists.
+        await self._providers.initialize_all()
         if session_id:
             self.session = await ChatStateStore.get_session(session_id)
             if self.session is None:
@@ -420,6 +425,27 @@ class ChatService:
         await ChatStateStore.save_session(session)
         return await self._run_action(task, action)
 
+    def _preferred_provider(self) -> str | None:
+        """Which provider the runtime should prefer, given the requested mode.
+
+        The provider *name* ``local`` is the offline echo stand-in, not a local
+        model: it is the only entry in the default registry and it cannot
+        reason. A real local model arrives through the Ollama adapter under the
+        name ``ollama``.
+
+        ``auto`` therefore means "use the real local model when one is actually
+        reachable, otherwise fall back to the stand-in". Passing ``None`` for
+        ``auto`` left the choice to scoring, which selects ``local-fast`` (the
+        echo) even when Ollama is serving seven usable models -- so the default
+        CLI and TUI path never reached a real model.
+        """
+        if self.provider_mode in {"local", "ollama"}:
+            return self.provider_mode
+        if self.provider_mode == "auto":
+            ollama = self._providers._providers.get("ollama")
+            return "ollama" if ollama is not None and ollama.available else None
+        return None
+
     async def _build_runtime(self) -> PawRuntime:
         if self._model_executor is None:
             raise RuntimeError("ChatService is closed")
@@ -439,9 +465,7 @@ class ChatService:
             max_iterations=1,
             checkpoint_interval=1,
             default_role="fast",
-            preferred_provider=(
-                self.provider_mode if self.provider_mode in {"local", "ollama"} else None
-            ),
+            preferred_provider=self._preferred_provider(),
         )
 
     async def _run_action(
