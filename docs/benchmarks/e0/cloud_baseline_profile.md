@@ -52,20 +52,62 @@ observed. The ceiling is enforced on observed tokens, not on the estimate.
 - No training spend. `E4-10` (cloud teacher baseline) is unblocked but still
   unchecked, and fine-tuning is priced separately and separately approved.
 
-## Execution status (2026-10-03): E0-21 BLOCKED on account credit
+## Execution status (2026-10-03): E0-21 RUN on a free routed provider
 
-Both configured cloud accounts authenticate but have no balance:
+The direct cloud accounts are empty (`credit_balance_exhausted` on OpenAI,
+`Insufficient Balance` on DeepSeek), so the baseline is routed through
+**OpenRouter** onto its **free tier**. Cost is genuinely zero rather than
+deferred, and OpenRouter returns a real `cost` field, so usage and cost are both
+**observed** rather than estimated.
 
-| Provider | `GET /models` | `POST /chat/completions` |
+| Field | Value |
+|---|---|
+| Router | `https://openrouter.ai/api/v1` |
+| Model | `nvidia/nemotron-3.5-lightning:free` (free tier) |
+| Fallbacks | `qwen/qwen3.8-27b:free`, `google/gemma-4-31b-it:free` |
+| Observed cost | **$0.000000** across 6 cases |
+| Observed tokens | 30,442 |
+
+Free-tier models are rate limited; `qwen/qwen3.8-27b:free` returned HTTP 429 on
+probe. The runner therefore declares a fallback list and records which model
+actually answered each case. On this run Nemotron answered all six and no retry
+was needed.
+
+### Result — two runs, and they disagree
+
+| Case | run 1 | run 2 |
 |---|---|---|
-| OpenAI (`sk-proj-...`) | HTTP 200, 127 models | `credit_balance_exhausted` (HTTP 429) |
-| DeepSeek (`sk-879...`) | HTTP 200, 2 models | `Insufficient Balance` (HTTP 402) |
+| edit_family | 1.00 | 0.33 |
+| ngram_utils | 1.00 | 1.00 |
+| counter_helpers | 0.67 | 1.00 |
+| token_based | 0.25 | 0.00 |
+| algorithm_families | 0.00 | 0.00 |
+| public_api | 0.00 | 0.00 |
+| **mean** | **0.4861** | **0.3889** |
+| observed cost | $0.000000 | $0.000000 |
+| observed tokens | 30,442 | 30,269 |
 
-The keys are valid; the accounts are empty. E0-21 therefore measured nothing
-and must not be reported as run. Re-run once a balance exists — the profile
-above is otherwise ready.
+**This is the most important finding of the run.** Both used `temperature: 0`
+and the same model, and the mean moved by ~0.10 with individual cases swinging
+from 1.00 to 0.00. A routed free-tier model is therefore **not a stable
+baseline**: a single run cannot be quoted as the number. E0-21 needs repeated
+runs (the E0-06 spec's `pass_rate` / `flakiness_score` machinery is the right
+instrument) before any claim about cloud-vs-local headroom is defensible.
 
-Note on the provider choice: OpenAI was the first choice and was replaced only
-because its account is exhausted. That is an account fact, not a property of the
-platform. If OpenAI credit returns, re-evaluate rather than assuming DeepSeek
-is the permanent baseline.
+Reporting only the better run would have been the easy and dishonest choice.
+
+Two things this does and does not show.
+
+It **does** show a cloud model is not automatically better at this task when it
+is given PAW's retrieved context: two cases score 0.00. For `public_api` the
+cause is upstream of the model — the import-only `__init__.py` is not in the
+manifest at all, so a stronger model would fail the same way. That is evidence
+for fixing retrieval rather than for escalating the model.
+
+It **does not** compare against local. PAW's own local figure measures whether
+retrieval put the evidence in the manifest; this one measures whether the model
+reproduced it. The two numbers are different quantities and must not be compared
+directly.
+
+Harness: `benchmarks/e0/run_cloud_baseline.py`. Manual and opt-in; it makes
+network calls and never runs in the default suite.

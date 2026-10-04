@@ -61,6 +61,9 @@ unfixable = []
 # Runtime end-to-end harness: print is its output channel, E501 trips on
 # embedded evidence strings. Every other rule stays enforced.
 "benchmarks/runtime/*" = ["T201", "E501"]
+# Cloud baseline harness: print is its output channel; BLE001 is deliberate,
+# a provider failure must be recorded and retried, never swallowed silently.
+"benchmarks/e0/run_cloud_baseline.py" = ["T201", "E501", "BLE001"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
