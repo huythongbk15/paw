@@ -25,7 +25,7 @@ E0–E2 đều VERIFIED; E2 RATIFIED; E3/BETA chờ integration E2.
 | E1 | `VERIFIED` | `8d01d90`: min_recall=1.0, 12/12 samples, real Ollama embeddings. Cloud-baseline = offline qualification, cloud token → E2-21/24. |
 | E2 | `RATIFIED` | Prereq E2-25..28 + E2-45..47 DONE (119 tests PASS). Cloud-baseline boundary resolved. |
 | E2-E3 và BETA | `E3/BETA BLOCKED` | Chờ E2 integration (rows 3-4). |
-| E4 controlled adaptation | `BLOCKED`, tùy chon | Cần E0-E3 và dataset verified; không bắt buộc cho BETA. |
+| E4 controlled adaptation | `COMPLETE` | E4-01..22 đã hiện thực. E4-10 (cloud teacher baseline) **đã gỡ chặn 2026-10-03**: nhãn `BLOCKED` từng hiểu sai charter — charter giao cho cloud một vai trò suy luận và bắt buộc benchmark phải đo cloud token/chi phí/độ trễ. **Chưa chạy**. |
 
 Hướng engineering intelligence ngày 2026-09-01 đã được ghi trong Product
 Charter và Architecture. Đây là ràng buộc thiết kế, không phải bằng chứng rằng
