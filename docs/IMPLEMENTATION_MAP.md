@@ -298,6 +298,52 @@ an artifact of the weaker local provider, and that hypothesis cannot be tested
 here without a local Ollama. Stating it otherwise would overstate what was
 measured.
 
+## Unblocked the cloud baseline — 2026-10-03
+
+Decision class: `DEEP` (product authority). Readiness: `READY` for removing the
+block only. This authorizes **no** spend, no new provider, and no new runtime
+capability; it corrects documentation that was wrong.
+
+### What the block actually said
+
+Four places carried a charter-based block on cloud work:
+
+- `ROADMAP.md` E0 row: "The cloud baseline remains deferred per the project charter."
+- `ROADMAP.md` E4 row: "E4-10 cloud teacher baseline BLOCKED (out of scope per AGENTS.md)."
+- `EXECUTION_CHECKLIST.md`: "E0-20/21 cloud baseline BLOCKED-BY-CHARTER", with
+  E0-20 and E0-21 deferred "only if the charter is amended".
+
+### Why the block was wrong
+
+Read against `PRODUCT_CHARTER.md`, the charter does not forbid cloud:
+
+- it assigns cloud an explicit reasoning role -- "cloud reasoning: architecture
+  analysis, novel debugging, cross-module planning";
+- it requires the user to be able to see "what project evidence was sent to a
+  cloud model and what remained local";
+- the benchmark **must** measure "cloud input/output tokens, cost and latency";
+- the scope lock that bans "additional cloud/model providers" is explicitly
+  bounded by "Until the exit gate in `ROADMAP.md` passes" -- it passed on
+  `f3ad4ef`.
+
+So the deferral was a misreading of "local-first, free-tier, zero vendor
+lock-in" as a prohibition, when those are defaults and ownership constraints,
+not a ban. Removing the block is a correction, not a charter amendment.
+
+### What did not change
+
+Local-first and zero vendor lock-in remain the defaults; a cloud response is
+evidence, never approval; every remote call still passes Policy and the
+disclosure gate; live provider calls stay opt-in and out of the default suite.
+What is now permitted is *measuring* the cloud baseline (E0-20/21) and the cloud
+teacher baseline (E4-10) -- the work the charter's own benchmark requirement
+already implied.
+
+### Still open
+
+E0-20, E0-21 and E4-10 remain **unchecked**: unblocked is not done. Nothing here
+has been run against a cloud provider.
+
 ## Verification follow-up — 2026-09-11 (`8d01d90` clean)
 
 Result: **RATIFIED**. E1 gate is VERIFIED on clean revision `8d01d90`:
