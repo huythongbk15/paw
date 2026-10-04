@@ -58,6 +58,9 @@ unfixable = []
 # finding about the harness, not dead code to be auto-deleted. Every other
 # rule stays enforced here.
 "benchmarks/d1/tasks/*" = ["T201", "E501", "F841"]
+# Runtime end-to-end harness: print is its output channel, E501 trips on
+# embedded evidence strings. Every other rule stays enforced.
+"benchmarks/runtime/*" = ["T201", "E501"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
