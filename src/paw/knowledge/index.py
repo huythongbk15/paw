@@ -25,6 +25,14 @@ _DEFAULT_EMBEDDING_PROVIDER = object()
 _MAX_LEXICAL_CANDIDATES = 5_000
 _MAX_HYBRID_CANDIDATES = 100
 
+# Admission floor for lexical retrieval. The lexical score is a ratio over
+# the query's tokens, so a long query compresses every score; an absolute
+# floor alone would then reject short exact files purely because the
+# question was long. The floor is therefore also considered relative to the
+# best match for this query, with a hard junk floor underneath.
+FLOOR_RELATIVE_TO_BEST = 0.10
+FLOOR_JUNK = 0.02
+
 
 @dataclass
 class KnowledgeSearchResult:
@@ -58,6 +66,8 @@ class KnowledgeIndex:
         # computes embeddings for the query + candidate chunks and
         # re-ranks by a blended lexical + semantic score.
         self.embedding_provider = embedding_provider
+        # Admission diagnostics from the most recent search_chunks call.
+        self.last_admission: dict[str, Any] = {}
 
     async def search_chunks(
         self,
@@ -66,6 +76,7 @@ class KnowledgeIndex:
         min_score: float = 0.1,
         limit: int = 20,
         embedding_provider: Any = _DEFAULT_EMBEDDING_PROVIDER,
+        relative_floor_enabled: bool = False,
     ) -> list[KnowledgeSearchResult]:
         """Search bounded fresh chunks and optionally re-rank lexical matches."""
         query_tokens = self._tokenize(query)
@@ -95,10 +106,41 @@ class KnowledgeIndex:
 
         results: list[KnowledgeSearchResult] = []
         content_by_id: dict[str, str] = {}
+        scored: list[tuple[KnowledgeChunk, float]] = []
         for row in rows:
             chunk = KnowledgeChunk.from_row(dict(row))
             score = self._score_chunk(chunk, query_tokens)
-            if score >= min_score:
+            scored.append((chunk, score))
+
+        # The lexical score is a ratio over the query's tokens, so a long prose
+        # query drives every score down. A fixed floor therefore quietly means
+        # "long questions retrieve less": a short, sparse chunk that is exactly
+        # the answer was measured at 0.0682 and discarded before ranking ever saw
+        # it, while the query's best match was 0.6273 -- the answer sat at ~11%
+        # of the top score and was thrown away.
+        #
+        # So the floor is relative to this query's best match, with an absolute
+        # ceiling that still rejects genuine junk. When something matches
+        # strongly the absolute value dominates and nothing loosens; when nothing
+        # matches strongly the floor drops and short exact files stop being
+        # starved. The floor-out is recorded because a silent drop is what made
+        # this take a stage-by-stage trace to find.
+        top_score = max((s for _c, s in scored), default=0.0)
+        relative_floor = top_score * FLOOR_RELATIVE_TO_BEST
+        # Opt-in. The relative floor was tried and reverted: it widened the pool
+        # from 41 to 101 admitted candidates and moved no measured recall at all
+        # (foreign min_recall 0.25 -> 0.25, every case identical), so it only cost
+        # per-candidate work. The diagnostics stay because they are what made the
+        # loss point visible in the first place.
+        effective_floor = (
+            max(FLOOR_JUNK, min(min_score, relative_floor))
+            if relative_floor_enabled
+            else min_score
+        )
+
+        floor_out: list[dict[str, Any]] = []
+        for chunk, score in scored:
+            if score >= effective_floor:
                 results.append(KnowledgeSearchResult(
                     chunk_id=chunk.id,
                     content=chunk.content[:200],
@@ -107,6 +149,31 @@ class KnowledgeIndex:
                     metadata=chunk.metadata,
                 ))
                 content_by_id[chunk.id] = chunk.content
+            elif score > 0:
+                floor_out.append({
+                    "chunk_id": chunk.id,
+                    "file": chunk.metadata.get("file"),
+                    "score": round(score, 6),
+                })
+        self.last_admission = {
+            "top_score": round(top_score, 6),
+            "effective_floor": round(effective_floor, 6),
+            "absolute_floor": min_score,
+            "relative_floor": round(relative_floor, 6),
+            "floor_binding": ("absolute" if min_score <= relative_floor else "relative"),
+            "scanned": len(scored),
+            "admitted": len(results),
+            "floor_out_count": len(floor_out),
+            "floor_out": sorted(floor_out, key=lambda r: -r["score"])[:20],
+        }
+        if floor_out:
+            logger.info(
+                "knowledge_chunks_floored_out",
+                top_score=round(top_score, 6),
+                effective_floor=round(effective_floor, 6),
+                binding=self.last_admission["floor_binding"],
+                dropped=len(floor_out),
+            )
 
         results.sort(key=lambda r: r.score, reverse=True)
 

@@ -99,6 +99,39 @@ Options, none taken yet:
 This needs a decision record and a benchmark that can tell a real improvement
 from a constant lowered until the numbers move.
 
+### Loop iteration 1 — relative floor: TRIED AND REVERTED
+
+Implemented `effective_floor = max(junk, min(absolute, top × 0.10))` and measured
+it. The loop's own rule then applied.
+
+| | before | with relative floor |
+|---|---|---|
+| foreign `min_recall` | 0.25 | **0.25** |
+| per-case recall | — | **identical, all six** |
+| warm reduction | 0.808 | 0.808 |
+| admitted candidates | 41 | 101 |
+
+The change did exactly what it was designed to do at admission time — the
+floor moved from 0.1 to 0.0536, the pool widened from 41 to 101, and the target
+chunk's own score of 0.0682 did clear the new floor — and **none of it reached
+the output**. Recall did not move by one case.
+
+So it is reverted. What it bought was 60 extra candidates per query competing
+for the same 30 fragment slots, which is cost with no measured return. The
+diagnosis was right and the remedy was not: the floor was not the binding
+constraint on this case, because a wider pool still lost the fragment.
+
+What survives is the **diagnostics**: `KnowledgeIndex.last_admission` now records
+the top score, the absolute and relative floors, which one was binding, how many
+chunks were scanned, admitted, and dropped by the floor, with the dropped ones
+listed. That visibility is what located the loss point at all, and it is
+behaviour-neutral. The relative floor remains available behind an explicit
+`relative_floor_enabled=True` for whoever wants to test it again.
+
+The next iteration should not widen admission. It should ask why a 217-byte
+chunk that scores above the floor still fails to reach the final manifest — the
+budget or the ranking, not the floor.
+
 ## The decision that is not mine to make
 
 "Training local" can mean two different things, and the evidence points away
