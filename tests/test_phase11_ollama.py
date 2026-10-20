@@ -16,7 +16,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 
-from paw.core.model_executor import LocalModelExecutor, ModelExecutor
+from paw.core.model_executor import LocalModelExecutor, ModelDispatchError, ModelExecutor
 from paw.core.model_router import ModelRegistry, ModelRouter
 from paw.core.models import ModelCapability, ModelManifest
 from paw.providers.ollama.provider import (
@@ -257,10 +257,10 @@ async def test_model_executor_ollama_dispatch(mock_ollama):
 
 
 @pytest.mark.asyncio
-async def test_model_executor_unknown_provider_falls_back():
+async def test_model_executor_unknown_provider_is_refused():
     executor = ModelExecutor()
     await executor.initialize_all()
-    # provider "openrouter" is not registered -> falls back to local
+    # Missing selected providers cannot silently become local success.
     manifest = ModelManifest(name="gpt-x", provider="openrouter", roles=["fast"])
     selection = type("_S", (), {})()
     selection.model_name = "gpt-x"
@@ -269,8 +269,8 @@ async def test_model_executor_unknown_provider_falls_back():
     selection.reason = ""
     selection.fallback_chain = []
     selection.score = 0.0
-    result = await executor.complete(selection, [{"role": "user", "content": "hi"}])
-    assert "local-standin" in result["response"]
+    with pytest.raises(ModelDispatchError, match="provider_unavailable"):
+        await executor.complete(selection, [{"role": "user", "content": "hi"}])
 
 
 @pytest.mark.asyncio

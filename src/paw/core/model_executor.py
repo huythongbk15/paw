@@ -28,6 +28,14 @@ from .models import ModelSelection
 logger = get_logger(__name__)
 
 
+class ModelDispatchError(RuntimeError):
+    """Selected route cannot be invoked; it is not permission to reroute."""
+
+    def __init__(self, reason: str):
+        self.reason = reason
+        super().__init__(f"model_dispatch:{reason}")
+
+
 class LocalModelExecutor:
     """Offline stand-in for ``provider="local"`` models.
 
@@ -35,7 +43,7 @@ class LocalModelExecutor:
     offline placeholder so the runtime loop can complete without an external
     model server. It is deliberately NOT a ``ModelProvider`` (it performs no
     model discovery) and is kept OUTSIDE the shared ``ProviderRegistry`` — it
-    is the executor's fallback backend only.
+    is used only when the selected manifest explicitly names ``local``.
     """
 
     name = "local"
@@ -79,7 +87,7 @@ class ModelExecutor:
 
     The executor holds a reference to a ``ProviderRegistry`` (the same one the
     ``ModelRouter`` uses) so the provider instance that was routed is exactly
-    the one that gets executed. ``provider="local"`` selections fall back to an
+    the one that gets executed. Explicit ``provider="local"`` selections use an
     in-process ``LocalModelExecutor`` that is NOT part of the registry.
     """
 
@@ -134,17 +142,17 @@ class ModelExecutor:
             logger.warning("local_fallback_shutdown_failed", error=str(exc))
 
     def _resolve_provider(self, selection: ModelSelection) -> Any:
-        provider_name = ""
-        if selection.model_manifest is not None:
-            provider_name = selection.model_manifest.provider
+        if not selection.model_name:
+            raise ModelDispatchError("no_route")
+        manifest = selection.model_manifest
+        if manifest is None or manifest.name != selection.model_name or not manifest.provider:
+            raise ModelDispatchError("invalid_selection")
+        provider_name = manifest.provider
         provider = self._provider_registry.get(provider_name)
-        if provider is None:
-            logger.warning(
-                "provider_not_registered",
-                requested=provider_name,
-                fallback="local",
-            )
+        if provider is None and provider_name == "local":
             provider = self._local_fallback
+        if provider is None or getattr(provider, "available", True) is False:
+            raise ModelDispatchError("provider_unavailable")
         return provider
 
     async def complete(
@@ -157,7 +165,10 @@ class ModelExecutor:
         """
         provider = self._resolve_provider(selection)
         request = {"model": selection.model_name, "messages": messages, **kwargs}
-        return await provider.complete(request)
+        result = await provider.complete(request)
+        if not isinstance(result, dict) or result.get("error"):
+            raise ModelDispatchError("provider_failed")
+        return result
 
     async def stream(
         self, selection: ModelSelection, messages: list[dict[str, Any]], **kwargs: Any
@@ -169,4 +180,6 @@ class ModelExecutor:
         provider = self._resolve_provider(selection)
         request = {"model": selection.model_name, "messages": messages, **kwargs}
         async for chunk in provider.stream(request):
+            if not isinstance(chunk, dict) or chunk.get("error"):
+                raise ModelDispatchError("provider_failed")
             yield chunk

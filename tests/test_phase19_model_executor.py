@@ -5,7 +5,7 @@ Proves:
   * ModelExecutor and ModelRouter share the SAME ProviderRegistry instance.
   * The executor dispatches to the provider the router selected, and the
     full ``messages`` list reaches that provider's ``complete``/``stream``.
-  * Unknown providers fall back to the in-process LocalModelExecutor.
+  * Unknown providers fail; only explicit local selections use the stand-in.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 
-from paw.core.model_executor import LocalModelExecutor, ModelExecutor
+from paw.core.model_executor import LocalModelExecutor, ModelDispatchError, ModelExecutor
 from paw.core.model_router import ModelRegistry, ModelRouter, ProviderRegistry
 from paw.core.models import ModelManifest, ModelSelection
 from paw.providers import ModelProvider
@@ -119,14 +119,14 @@ async def test_executor_stream_dispatches_to_selected_provider():
 
 
 @pytest.mark.asyncio
-async def test_executor_falls_back_to_local_when_provider_absent():
+async def test_executor_refuses_missing_selected_provider():
     # Empty registry: provider "openrouter" is not registered.
     executor = ModelExecutor(provider_registry=ProviderRegistry())
-    result = await executor.complete(
-        _selection(provider="openrouter", name="gpt-x"),
-        [{"role": "user", "content": "hi"}],
-    )
-    assert "local-standin" in result["response"]
+    with pytest.raises(ModelDispatchError, match="provider_unavailable"):
+        await executor.complete(
+            _selection(provider="openrouter", name="gpt-x"),
+            [{"role": "user", "content": "hi"}],
+        )
 
 
 @pytest.mark.asyncio
