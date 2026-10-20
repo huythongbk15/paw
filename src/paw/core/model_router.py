@@ -601,27 +601,65 @@ class ModelRouter:
         )
 
     async def ensure_providers_ready(self) -> None:
-        """Initialize providers once so availability is known."""
+        """Initialize providers once so availability is known.
+
+        This performs provider I/O. It is an **explicit** operation: the
+        router no longer calls it while selecting, because selecting a
+        model must not reach the network.
+        """
         if self._provider_registry is not None and not self._providers_ready:
             await self._provider_registry.initialize_all()
             self._providers_ready = True
 
+    async def discover_providers(self) -> int:
+        """Admit provider models into the cache. Returns the count added.
+
+        This is the **explicit** discovery operation. It performs provider
+        I/O (initialize + model discovery), so the caller must have been
+        authorized to do it. The router never calls it while selecting a
+        model; selection uses the admitted cache only.
+        """
+        if self._provider_registry is None:
+            return 0
+        # The cache must always hold the local stand-ins: they are the
+        # fallback when nothing else is reachable, and ``register_defaults``
+        # is a no-op once the registry is non-empty. Registering them here
+        # keeps that invariant whatever order admission happens in.
+        if not self._custom_registry:
+            self.registry.register_defaults()
+        await self.ensure_providers_ready()
+        count = await self._provider_registry.discover_models(self.registry)
+        self._providers_discovered = True
+        return count
+
     async def _available_provider_names(self) -> set[str] | None:
-        """Names of providers currently available, or ``None`` if the router
-        is not provider-aware (no filtering applied). ``local`` is always
-        considered available."""
+        """Names of providers whose cached models may be selected.
+
+        Returns ``None`` if the router is not provider-aware (no filtering
+        applied). ``local`` is always considered available.
+
+        This does **not** initialize or probe providers. A provider that has
+        not been initialized yet reports ``available is None``; its cached
+        manifests are still usable, because admission into the cache was
+        already a decision. A provider that was initialized and reports
+        ``available == False`` is filtered out.
+        """
         if self._provider_registry is None:
             return None
-        await self.ensure_providers_ready()
-        names: set[str] = {"local"}
+        names = {"local"}
         for provider in self._provider_registry.list():
             try:
-                if provider.available:
-                    names.add(provider.name)
+                available = provider.available
             except Exception:
                 logger.warning(
                     "provider_availability_check_failed", name=getattr(provider, "name", "?")
                 )
+                continue
+            if available is None:
+                # Not probed yet: the cached manifest stands on its own.
+                names.add(provider.name)
+            elif available:
+                names.add(provider.name)
         return names
 
     async def _filter_for_availability(
@@ -693,19 +731,15 @@ class ModelRouter:
         escalated to a more capable tier (e.g. ``fast`` → ``reasoning``) so a
         stronger model is selected.
         """
-        # Phase 15: initialize providers (so availability is known) BEFORE
-        # discovering their models. Without this, discover_models sees
-        # provider.available == False (not yet initialized) and silently skips
-        # every real provider, leaving only the local stand-in echo model.
-        if self._provider_registry is not None:
-            await self.ensure_providers_ready()
+        # B-19/F04: selection is **cache-only**. The router used to
+        # initialize and discover providers here, so choosing a model did
+        # provider I/O with no operation authorized. The AGENTS.md contract
+        # is "Model Router selects only from admitted cached manifests":
+        # discovery is now an explicit operation the caller must be
+        # authorized to perform (see ``discover_providers``).
         # Only register defaults if using default registry
         if not self._custom_registry:
             self.registry.register_defaults()
-            # Phase 15: discover models from providers into the registry once
-            if self._provider_registry is not None and not self._providers_discovered:
-                await self._provider_registry.discover_models(self.registry)
-                self._providers_discovered = True
 
         # Provider availability snapshot (used by both preferred + scored paths)
         available = await self._available_provider_names()

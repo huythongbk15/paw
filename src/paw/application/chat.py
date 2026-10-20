@@ -257,6 +257,7 @@ class ChatService:
         self,
         provider_mode: str = "local",
         workspace_root: str | Path | None = None,
+        providers: ProviderRegistry | None = None,
     ):
         if provider_mode not in {"local", "auto", "ollama"}:
             raise ValueError("provider_mode must be one of: local, auto, ollama")
@@ -265,8 +266,10 @@ class ChatService:
         if not self.workspace_root.is_dir():
             raise ValueError(f"workspace root is not a directory: {self.workspace_root}")
         self.session: ChatSessionRecord | None = None
-        self._providers = ProviderRegistry()
-        if self.provider_mode in {"auto", "ollama"}:
+        # An injected registry lets a caller supply its own providers (and
+        # lets a test observe that opening a session reaches none of them).
+        self._providers = providers if providers is not None else ProviderRegistry()
+        if providers is None and self.provider_mode in {"auto", "ollama"}:
             from paw.providers.ollama import OllamaProvider
 
             self._providers.register(OllamaProvider())
@@ -291,11 +294,12 @@ class ChatService:
 
     async def open(self, session_id: str | None = None) -> ChatSessionRecord:
         await db.initialize()
-        # Probe providers up front. A provider's ``available`` is ``None`` until
-        # it has been initialized, and ``bool(None)`` is False -- so without this
-        # every mode that consults availability before routing (see
-        # ``_preferred_provider``) would conclude no real local model exists.
-        await self._providers.initialize_all()
+        # B-19/F04: opening a session must not reach a provider. This used
+        # to call ``initialize_all()`` here, so merely starting a chat did
+        # provider I/O with no operation authorized. Provider initialization
+        # and model discovery are now explicit operations: the runtime
+        # asks Policy to admit them (see ``PawRuntime._admit_provider_discovery``)
+        # at the point where a model is actually needed.
         if session_id:
             self.session = await ChatStateStore.get_session(session_id)
             if self.session is None:

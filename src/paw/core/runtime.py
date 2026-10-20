@@ -2112,6 +2112,43 @@ class PawRuntime:
             evidence_confidence=evidence_confidence,
         )
 
+    async def _admit_provider_discovery(self, task_id: str) -> bool:
+        """Ask Policy whether provider discovery may run, then run it.
+
+        B-19/F04: provider discovery does network I/O. It used to happen
+        implicitly while *selecting* a model, so choosing a model reached
+        the network with no operation authorized. It is now an explicit
+        operation behind the same single-authority policy gate: the
+        runtime asks for ``network.http`` and only performs discovery when
+        the verdict allows it.
+
+        Returns True when discovery was performed.
+        """
+        router = self.model_router
+        if router is None:
+            return False
+        discover = getattr(router, "discover_providers", None)
+        if discover is None:
+            return False
+        guard = self.autonomy.policy_guard
+        if guard is not None:
+            verdict = await guard.evaluate_request(
+                [Capability.NETWORK_HTTP], {}, task_id=task_id,
+            )
+            if not getattr(verdict, "allowed", False):
+                logger.info(
+                    "provider_discovery_refused",
+                    task_id=task_id,
+                    reason=getattr(verdict, "reason", "") or "",
+                )
+                return False
+        try:
+            await discover()
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("provider_discovery_failed", task_id=task_id, error=str(exc))
+            return False
+        return True
+
     async def _select_model_for_proposal(
         self,
         task_id: str,
@@ -2124,6 +2161,9 @@ class PawRuntime:
         """
         token_count = _token_count_from_context(proposed.context)
         recon = await self._gather_reconnaissance(task_id, proposed.goal)
+        # B-19/F04: the cache may not hold a model for the role yet. Ask
+        # Policy to admit discovery before reaching the network for one.
+        await self._admit_provider_discovery(task_id)
         try:
             selection = await self.model_router.route(
                 task_id,

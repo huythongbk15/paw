@@ -48,6 +48,9 @@ class _MockProvider:
         self._available = available
         self._models = models or []
         self.initialized = False
+        # B-19/F04: count discovery so a test can prove that selecting a
+        # model does not reach the provider.
+        self.discover_calls = 0
 
     @property
     def available(self) -> bool:
@@ -69,6 +72,7 @@ class _MockProvider:
         return None
 
     async def discover_manifests(self) -> list[ModelManifest]:
+        self.discover_calls += 1
         return list(self._models)
 
     async def complete(self, request: dict[str, Any]) -> dict[str, Any]:
@@ -166,11 +170,13 @@ async def test_router_excludes_unavailable_provider():
 
 
 async def test_router_selects_available_provider_model():
-    # No explicit registry -> router registers defaults AND discovers the
-    # provider's models automatically.
+    # B-19/F04: the router selects from the admitted cache. Discovery is an
+    # explicit operation, so the caller admits the provider's models first.
     mock = _MockProvider("mockp", available=True, models=[_mock_llama_manifest()])
     router = ModelRouter(providers=[mock])
     router.persist_selection = _noop_persist
+
+    await router.discover_providers()
 
     sel = await router.route("t2", "goal", role="fast")
     # mock-llama scores above local-fast and its provider is available
@@ -178,6 +184,27 @@ async def test_router_selects_available_provider_model():
     assert "mock-llama" in sel.fallback_chain
     # local fallback still present in chain
     assert "local-fast" in sel.fallback_chain
+
+
+async def test_router_selection_does_not_discover_implicitly():
+    """B-19/F04: choosing a model must not reach a provider.
+
+    The router used to initialize and discover providers while selecting,
+    so picking a model did provider I/O with no operation authorized. The
+    AGENTS.md contract is "Model Router selects only from admitted cached
+    manifests".
+    """
+    mock = _MockProvider("mockp", available=True, models=[_mock_llama_manifest()])
+    router = ModelRouter(providers=[mock])
+    router.persist_selection = _noop_persist
+
+    sel = await router.route("t-no-discovery", "goal", role="fast")
+
+    assert mock.discover_calls == 0, "routing performed provider discovery"
+    assert mock.initialized is False, "routing initialized a provider"
+    # The provider's model was never admitted, so it cannot be selected.
+    assert sel.model_name == "local-fast"
+    assert "mock-llama" not in sel.fallback_chain
 
 
 async def test_router_falls_back_to_local_when_only_provider_down():

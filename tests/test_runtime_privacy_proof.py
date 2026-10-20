@@ -238,7 +238,7 @@ async def _make_task(tmp_path) -> tuple[str, str, str]:
     return task.id, session.id, getattr(session, "project_id", "default")
 
 
-def _make_runtime_with_remote(
+async def _make_runtime_with_remote(
     tmp_path,
     manifest: ContextManifest,
     *,
@@ -262,6 +262,11 @@ def _make_runtime_with_remote(
     real_pr.register(provider)
     model_router = ModelRouter(providers=real_pr)
     model_router.registry.register_defaults()
+    # B-19/F04: the router selects from the admitted cache, so the remote
+    # model must be admitted by the explicit discovery operation before the
+    # routing can select it. This is the operation the runtime performs only
+    # after Policy admits network.http.
+    await model_router.discover_providers()
 
     counting_executor = executor or _CountingExecutor(
         "counting", capabilities=[Capability.FILESYSTEM_READ]
@@ -324,7 +329,7 @@ class TestSecretPlusRemoteBlocksProviderAndExecutor:
             excluded=(),
             final_tokens=10,
         )
-        runtime, provider, executor = _make_runtime_with_remote(tmp_path, manifest)
+        runtime, provider, executor = await _make_runtime_with_remote(tmp_path, manifest)
         proposed = _proposed_action()
 
         result = await runtime._execute_unit(
@@ -378,7 +383,7 @@ class TestResumeDoesNotRetryPrivacyFailure:
             excluded=(),
             final_tokens=10,
         )
-        runtime, provider, _executor = _make_runtime_with_remote(tmp_path, manifest)
+        runtime, provider, _executor = await _make_runtime_with_remote(tmp_path, manifest)
         proposed = _proposed_action(operation_id="op-fail-resume-1")
 
         await runtime._execute_unit(
@@ -413,7 +418,7 @@ class TestResumeDoesNotRetryPrivacyFailure:
             excluded=(),
             final_tokens=10,
         )
-        runtime, provider, _executor = _make_runtime_with_remote(tmp_path, manifest)
+        runtime, provider, _executor = await _make_runtime_with_remote(tmp_path, manifest)
         proposed = _proposed_action(operation_id="op-resume-no-retry")
 
         # First attempt: privacy refusal
@@ -459,7 +464,7 @@ class TestPrivacyRequiredBlocksLocalProvider:
             excluded=(),
             final_tokens=10,
         )
-        runtime, provider, executor = _make_runtime_with_remote(tmp_path, manifest)
+        runtime, provider, executor = await _make_runtime_with_remote(tmp_path, manifest)
         proposed = _proposed_action()
 
         result = await runtime._execute_unit(
@@ -497,12 +502,18 @@ class TestPrivacyRequiredBlocksLocalProvider:
         # Patch the provider name on the manifest selection later; for
         # now we just assert the INTERNAL class is allowed against the
         # default (local) provider, which the runtime will pick.
-        runtime, provider, _executor = _make_runtime_with_remote(tmp_path, manifest)
+        runtime, provider, _executor = await _make_runtime_with_remote(tmp_path, manifest)
         # Replace the remote model with a local one so the gate accepts
         local_manifest = _remote_manifest()
         local_manifest.provider = "local"
         local_manifest.name = "local-echo"
         provider._models = [local_manifest]
+        # B-19/F04: the router selects from the admitted cache, so the
+        # swapped model has to be admitted again for the selection to see
+        # it. The cache is cleared first so the remote manifest admitted
+        # earlier does not stay selectable.
+        runtime.model_router.registry.clear()
+        await runtime.model_router.discover_providers()
         proposed = _proposed_action()
 
         result = await runtime._execute_unit(
@@ -545,7 +556,7 @@ class TestStaleManifestBlocksRemote:
             excluded=(),
             final_tokens=10,
         )
-        runtime, provider, executor = _make_runtime_with_remote(tmp_path, manifest)
+        runtime, provider, executor = await _make_runtime_with_remote(tmp_path, manifest)
         proposed = _proposed_action()
 
         result = await runtime._execute_unit(
@@ -590,11 +601,17 @@ class TestAllowedLocalControl:
             final_tokens=10,
         )
         # Use local model so the gate is not triggered
-        runtime, provider, _ = _make_runtime_with_remote(tmp_path, manifest)
+        runtime, provider, _ = await _make_runtime_with_remote(tmp_path, manifest)
         local_manifest = _remote_manifest()
         local_manifest.provider = "local"
         local_manifest.name = "local-echo"
         provider._models = [local_manifest]
+        # B-19/F04: the router selects from the admitted cache, so the
+        # swapped model has to be admitted again for the selection to see
+        # it. The cache is cleared first so the remote manifest admitted
+        # earlier does not stay selectable.
+        runtime.model_router.registry.clear()
+        await runtime.model_router.discover_providers()
         proposed = _proposed_action()
         proposed.metadata["disclosure_override"] = "local"
 

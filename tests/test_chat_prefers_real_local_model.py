@@ -77,8 +77,16 @@ class TestPreferredProvider:
 
 class TestAvailabilityIsProbedNotGuessed:
     @pytest.mark.asyncio
-    async def test_open_probes_providers(self, tmp_path, monkeypatch):
-        """``available`` must be known before anything consults it."""
+    async def test_open_does_not_probe_providers(self, tmp_path, monkeypatch):
+        """B-19/F04: opening a session must not reach a provider.
+
+        This used to assert the opposite: ``open()`` called
+        ``initialize_all()`` so that ``available`` was known before anything
+        consulted it. That made *starting a chat* do provider I/O with no
+        operation authorized. Availability is now resolved by the explicit
+        admission path, which the runtime performs only after Policy admits
+        ``network.http``.
+        """
         from paw.core.model_router import ProviderRegistry
 
         calls: list[str] = []
@@ -91,9 +99,9 @@ class TestAvailabilityIsProbedNotGuessed:
         monkeypatch.setattr(ProviderRegistry, "initialize_all", _spy)
         svc = ChatService(provider_mode="auto", workspace_root=tmp_path)
         await svc.open()
-        assert calls == ["initialize_all"], (
-            "open() must initialize providers so availability is known before "
-            "any mode consults it"
+        assert calls == [], (
+            "open() must not initialize providers: provider I/O has to be an "
+            "explicitly authorized operation"
         )
         await svc.close()
 
