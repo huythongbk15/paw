@@ -19,7 +19,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from .logging import get_logger
-from .models import SkillState
+from .models import SkillReplayEvidence, SkillState
 from .skills import SkillFabric, SkillManifest
 from .storage import db
 
@@ -602,12 +602,20 @@ class SkillGovernance:
 
     async def promote_to_active(
         self, name: str, approver: str, notes: str = "",
+        *, version: str = "", replay: SkillReplayEvidence | None = None,
     ) -> bool:
-        """Promote a REVIEWED skill to ACTIVE with explicit approval (E3-18)."""
-        manifest = self.fabric.get_manifest(name)
+        """Promote a REVIEWED skill to ACTIVE with explicit approval (E3-18).
+
+        The approval is bound to the exact version and requires replay
+        evidence. A changed body invalidates the approval that covered it.
+        """
+        manifest = self.fabric.get_manifest_version(name, version) if version \
+            else self.fabric.get_manifest(name)
         if manifest is None or manifest.state != SkillState.REVIEWED:
             return False
-        return await self.fabric.approve_skill(name, approver, notes)
+        return await self.fabric.approve_skill(
+            name, approver, notes, version=manifest.skill_version, replay=replay,
+        )
 
     async def reject_and_suppress(self, name: str, rejector: str, reason: str) -> bool:
         """Reject a skill and suppress re-proposal of the same version (E3-13)."""

@@ -25,6 +25,7 @@ from .models import (
     Capability,
     Metadata,
     ReviewRecord,
+    SkillReplayEvidence,
     SkillRisk,
     SkillState,
     SkillVersionMetrics,
@@ -307,7 +308,13 @@ class SkillFabric:
     def __init__(self, skills_dir: Path):
         self.skills_dir = skills_dir
         self._skills: dict[str, Skill] = {}
+        # The *current* version of each skill, keyed by name. This is what
+        # the runtime resolves.
         self._manifest_index: dict[str, SkillManifest] = {}
+        # Every known version, keyed by (name, version). The index above
+        # can only hold one manifest per name, so a prior version was
+        # unreachable: rolling back to it was structurally impossible.
+        self._manifest_versions: dict[tuple[str, str], SkillManifest] = {}
         self._initialized = False
 
     async def initialize(self) -> None:
@@ -320,7 +327,7 @@ class SkillFabric:
         # Register builtin skills first
         for manifest in BUILTIN_SKILLS:
             if manifest.name not in self._manifest_index:
-                self._manifest_index[manifest.name] = manifest
+                self._register_version(manifest)
 
         # Load from database first
         await self._load_from_db()
@@ -332,7 +339,11 @@ class SkillFabric:
         logger.info("skill_fabric_initialized", count=len(self._skills))
 
     async def _load_from_db(self) -> None:
-        rows = await db.fetchall("SELECT * FROM skills WHERE enabled = 1")
+        # Ordered so the most recently updated version is registered last
+        # and therefore becomes the current one.
+        rows = await db.fetchall(
+            "SELECT * FROM skills WHERE enabled = 1 ORDER BY updated_at, version"
+        )
         for row in rows:
             row_dict = dict(row)
             # Handle migration: 'manifest' column -> 'body' column
@@ -368,7 +379,51 @@ class SkillFabric:
                 "parent_version": row_dict.get("parent_version"),
                 "rollback_to": row_dict.get("rollback_to"),
             })
-            self._manifest_index[manifest.name] = manifest
+            self._register_version(manifest)
+
+    # --- version history -------------------------------------------------
+
+    @staticmethod
+    def content_hash(manifest: SkillManifest) -> str:
+        """A stable hash of the content a review and an approval bind to.
+
+        The body, the trigger and the capabilities are what a reviewer
+        reads and what an executor runs. A change to any of them
+        invalidates the approval that covered the old ones.
+        """
+        import hashlib
+
+        payload = "\n".join([
+            manifest.trigger or "",
+            manifest.body or "",
+            ",".join(sorted(c.value for c in manifest.capabilities)),
+        ])
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    def _register_version(self, manifest: SkillManifest) -> SkillManifest:
+        """Record a manifest in the version history and make it current."""
+        version = manifest.skill_version or manifest.version or "1.0.0"
+        manifest.skill_version = version
+        self._manifest_versions[(manifest.name, version)] = manifest
+        self._manifest_index[manifest.name] = manifest
+        return manifest
+
+    def _resolve_version(
+        self, name: str, version: str = "",
+    ) -> SkillManifest | None:
+        """Resolve a skill by name and *exact* version.
+
+        With no version, the current one is returned. With a version, only
+        that exact version matches - a near-miss is not a match.
+        """
+        if not version:
+            return self._manifest_index.get(name)
+        return self._manifest_versions.get((name, version))
+
+    def list_versions(self, name: str) -> list[SkillManifest]:
+        """Every known version of a skill, oldest first."""
+        versions = [m for (n, _v), m in self._manifest_versions.items() if n == name]
+        return sorted(versions, key=lambda m: m.skill_version)
 
     async def _discover_filesystem(self) -> None:
         """Discover .md skill files in skills directory."""
@@ -376,7 +431,7 @@ class SkillFabric:
             try:
                 manifest = self._parse_skill_file(skill_file)
                 if manifest.name not in self._manifest_index:
-                    self._manifest_index[manifest.name] = manifest
+                    self._register_version(manifest)
                     await self._save_to_db(manifest)
             except Exception as e:
                 logger.warning("skill_parse_failed", file=str(skill_file), error=str(e))
@@ -623,6 +678,12 @@ class SkillFabric:
 
     # --- E3: Lifecycle methods ---
 
+    def get_manifest_version(
+        self, name: str, version: str,
+    ) -> SkillManifest | None:
+        """The manifest for one exact version of a skill."""
+        return self._manifest_versions.get((name, version))
+
     def get_manifest(self, name: str) -> SkillManifest | None:
         """Get manifest by name regardless of state (for governance)."""
         return self._manifest_index.get(name)
@@ -689,7 +750,7 @@ class SkillFabric:
                           version=manifest.skill_version)
             return False
         manifest.state = SkillState.CANDIDATE
-        self._manifest_index[manifest.name] = manifest
+        self._register_version(manifest)
         await self._save_to_db(manifest)
         logger.info("skill_candidate_submitted", name=manifest.name, version=manifest.skill_version)
         return True
@@ -727,16 +788,23 @@ class SkillFabric:
                 f"version '{manifest.skill_version}'"
             )
         await self._save_to_db(manifest)
-        self._manifest_index[manifest.name] = manifest
+        self._register_version(manifest)
         logger.info("skill_candidate_from_trace", name=manifest.name, trace_id=trace.task_id)
         return candidate
 
     async def review_skill(
         self, name: str, reviewer: str, diff_summary: str,
         safety_assessment: str, expected_effect: str,
+        *, version: str = "", replay: SkillReplayEvidence | None = None,
     ) -> bool:
-        """Review a CANDIDATE skill -> REVIEWED (E3-03)."""
-        manifest = self._manifest_index.get(name)
+        """Review a CANDIDATE skill -> REVIEWED (E3-03).
+
+        The review is bound to the **exact** version and the **exact**
+        content hash, and it requires a **replay**: a failed, missing or
+        negative replay cannot be reviewed, because a skill is executable
+        text and reading it is not running it.
+        """
+        manifest = self._resolve_version(name, version)
         if manifest is None:
             return False
         valid, _required = validate_skill_transition(manifest.state, SkillState.REVIEWED)
@@ -744,6 +812,20 @@ class SkillFabric:
             logger.warning("illegal_transition", name=name, from_state=manifest.state, to_state="reviewed")
             return False
         if manifest.state != SkillState.CANDIDATE:
+            return False
+        if replay is None or not replay.ok:
+            logger.warning(
+                "skill_review_requires_replay",
+                name=name, version=manifest.skill_version,
+                detail=(replay.detail if replay else "no replay evidence"),
+            )
+            return False
+        content_hash = self.content_hash(manifest)
+        if replay.content_hash and replay.content_hash != content_hash:
+            logger.warning(
+                "skill_replay_content_mismatch",
+                name=name, version=manifest.skill_version,
+            )
             return False
         now = datetime.now(UTC).isoformat()
         manifest.state = SkillState.REVIEWED
@@ -753,14 +835,27 @@ class SkillFabric:
             diff_summary=diff_summary,
             safety_assessment=safety_assessment,
             expected_effect=expected_effect,
+            skill_version=manifest.skill_version,
+            content_hash=content_hash,
+            replay_ok=True,
+            replay_detail=replay.detail,
         )
         await self._save_to_db(manifest)
-        logger.info("skill_reviewed", name=name, reviewer=reviewer)
+        logger.info("skill_reviewed", name=name, reviewer=reviewer,
+                    version=manifest.skill_version)
         return True
 
-    async def approve_skill(self, name: str, approver: str, notes: str = "") -> bool:
-        """Approve a REVIEWED skill -> ACTIVE (E3-18). Requires exact version match."""
-        manifest = self._manifest_index.get(name)
+    async def approve_skill(
+        self, name: str, approver: str, notes: str = "",
+        *, version: str = "", replay: SkillReplayEvidence | None = None,
+    ) -> bool:
+        """Approve a REVIEWED skill -> ACTIVE (E3-18).
+
+        The approval is bound to the exact version, and it requires that
+        the content has not changed since the review and that a replay
+        still succeeds. A changed body invalidates the approval.
+        """
+        manifest = self._resolve_version(name, version)
         if manifest is None:
             return False
         valid, _required = validate_skill_transition(manifest.state, SkillState.ACTIVE)
@@ -769,22 +864,45 @@ class SkillFabric:
             return False
         if manifest.state != SkillState.REVIEWED:
             return False
+        review = manifest.review_record
+        if review is None or not review.replay_ok:
+            logger.warning("skill_approval_requires_reviewed_replay", name=name,
+                           version=manifest.skill_version)
+            return False
+        content_hash = self.content_hash(manifest)
+        if review.content_hash != content_hash:
+            logger.warning("skill_content_changed_after_review", name=name,
+                           version=manifest.skill_version)
+            return False
+        if replay is None or not replay.ok:
+            logger.warning("skill_approval_requires_replay", name=name,
+                           version=manifest.skill_version,
+                           detail=(replay.detail if replay else "no replay evidence"))
+            return False
         now = datetime.now(UTC).isoformat()
-        # If there's already an ACTIVE skill with the same name, supersede it
-        existing = self._manifest_index.get(name)
-        if existing and existing.state == SkillState.ACTIVE and existing.skill_version != manifest.skill_version:
-            existing.state = SkillState.SUPERSEDED
-            existing.rollback_to = manifest.skill_version
-            await self._save_to_db(existing)
+        # Supersede the previously ACTIVE version. It lives in the version
+        # history, not in the index - the index only ever holds the
+        # version being approved.
+        for other in self.list_versions(name):
+            if other is manifest:
+                continue
+            if other.state == SkillState.ACTIVE:
+                other.state = SkillState.SUPERSEDED
+                other.rollback_to = manifest.skill_version
+                await self._save_to_db(other)
         manifest.state = SkillState.ACTIVE
         manifest.approval_record = ApprovalRecord(
             approver=approver,
             approved_at=now,
             skill_version=manifest.skill_version,
             notes=notes,
+            content_hash=content_hash,
+            replay_ok=True,
+            replay_detail=replay.detail,
         )
         await self._save_to_db(manifest)
-        logger.info("skill_approved", name=name, approver=approver)
+        logger.info("skill_approved", name=name, approver=approver,
+                    version=manifest.skill_version)
         return True
 
     async def reject_skill(self, name: str, rejector: str, reason: str) -> bool:
@@ -842,22 +960,44 @@ class SkillFabric:
         return True
 
     async def rollback_skill(self, name: str, to_version: str | None = None) -> bool:
-        """Rollback a DEPRECATED or SUPERSEDED skill to a prior ACTIVE version (E3-19)."""
-        manifests = [m for m in self._manifest_index.values() if m.name == name]
+        """Rollback a DEPRECATED or SUPERSEDED skill to a prior ACTIVE version (E3-19).
+
+        The prior version is found in the **version history**. The index
+        only ever held one manifest per name, so this could never find a
+        different version: rolling back to a prior version was structurally
+        impossible, not merely untested.
+        """
+        current = self._manifest_index.get(name)
+        if current is None:
+            return False
+        versions = self.list_versions(name)
         target = None
         if to_version:
-            target = next((m for m in manifests if m.skill_version == to_version), None)
+            target = next(
+                (m for m in versions if m.skill_version == to_version and m is not current),
+                None,
+            )
         else:
-            # Find the most recent prior ACTIVE version
-            active_versions = sorted(
-                [m for m in manifests if m.state in (SkillState.DEPRECATED, SkillState.SUPERSEDED) and m.rollback_to],
+            # The most recent prior version that was ACTIVE before.
+            candidates = sorted(
+                [
+                    m for m in versions
+                    if m is not current
+                    and m.state in (SkillState.DEPRECATED, SkillState.SUPERSEDED)
+                ],
                 key=lambda m: m.skill_version,
                 reverse=True,
             )
-            if active_versions:
-                target = active_versions[0]
+            if candidates:
+                target = candidates[0]
         if target is None:
             return False
+        # The version being rolled away from is superseded, and points at
+        # the version it rolled back to.
+        if current.state in (SkillState.ACTIVE, SkillState.DEPRECATED):
+            current.state = SkillState.SUPERSEDED
+            current.rollback_to = target.skill_version
+            await self._save_to_db(current)
         target.state = SkillState.ACTIVE
         target.approval_record = ApprovalRecord(
             approver="rollback",
@@ -867,6 +1007,8 @@ class SkillFabric:
         )
         target.rollback_to = None
         await self._save_to_db(target)
+        # The rolled-back version becomes the current one again.
+        self._manifest_index[name] = target
         logger.info("skill_rolled_back", name=name, version=target.skill_version)
         return True
 
@@ -995,7 +1137,11 @@ class SkillFabric:
                           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    manifest.name,  # Use name as ID
+                    # The row id is the (name, version) pair. It used to be
+                    # the name alone, so INSERT OR REPLACE destroyed every
+                    # prior version of a skill: a rollback had nothing left
+                    # to roll back to.
+                    f"{manifest.name}@{manifest.skill_version or manifest.version}",
                     manifest.name,
                     manifest.version,
                     manifest.description,
