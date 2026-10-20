@@ -142,3 +142,53 @@ await service.close()
 approval, selected model/executor, artifacts and whether context was compiled.
 The session persists its workspace binding; reopening it with another workspace
 is rejected.
+
+## The engineering workflow
+
+`paw.application.workflow.EngineeringWorkflow` composes the primitives above into
+research -> choose -> change -> declared verification. It adds no new
+orchestration authority: every phase is a normal runtime task with its own gate,
+ledger trail and checkpoint.
+
+```python
+from paw.application.workflow import (
+    EngineeringWorkflow, VerificationOutcome, VerificationRequest, WorkflowRequest,
+)
+
+workflow = EngineeringWorkflow(runtime, verification_port=my_port, declared_by="me")
+outcome = await workflow.run(
+    WorkflowRequest(
+        goal=task.goal,
+        target="module.py",
+        content=new_content,
+        decision_version_id=final_version_id,
+        method="test_suite",
+    ),
+    task=task,
+    plan=implementation_plan,
+    approver=my_human_approver,
+)
+outcome.completed  # True only when the change happened AND its verification passed
+```
+
+The rule the workflow exists to enforce: **a change without a passing declared
+verification is not a completed change.** The executor's success observation says
+the write happened; a `VerificationRecord` says a named check was performed
+against a named target and produced a stated result. They are recorded under
+different ledger events, and neither is a gate verdict.
+
+The verification is performed by a **port** the application supplies. PAW does not
+run shells - the product charter does not authorize shell execution - so the port
+is the only thing in the chain that touches the outside world. A port is either
+an object with `async verify(request) -> VerificationOutcome` or a callable with
+the same signature. `VerificationOutcome` carries `passed`, `summary`, `evidence`
+and `command`.
+
+The approval is the human's: the workflow requests the exact effect and calls the
+`approver` you supply. It never approves on your own. Without an approver the
+workflow stops with `awaiting approval: <id>`.
+
+The provider payload is built from the **manifest** - the reviewed, budgeted,
+disclosure-checked view of the compiled context - so the model reasons over the
+sources that were actually retrieved, and what leaves the box is what the
+evidence covers.

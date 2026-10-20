@@ -74,6 +74,22 @@
   proven for the skipped gate, the binding check and the mapper's local
   branch; `tests/test_model_dispatch_fail_closed.py` 32 passed after being
   given a task-bound manifest; ruff check clean.
+- [x] One real engineering workflow, proved: research -> choose -> change ->
+  declared verification, with a failure and a restart. The compiled project
+  context now reaches the model (the payload is built from the manifest), a
+  `VerificationRecord` is recorded under its own ledger event, and a change
+  without a passing declared verification is not a completed change.
+  — RESOLVED. `tests/test_engineering_workflow_contract.py` 6 passed and
+  `tests/test_inference_context_wiring_contract.py` 2 passed, over a real
+  temporary project with a real knowledge ingest, decision lifecycle, reviewed
+  Plan, shared unit and filesystem executor; fail-positive proven;
+  `demos/demo_engineering_workflow.py` runs the chain (failure, restart,
+  completed verification); ruff check clean.
+- [ ] The workflow proves the chain over a *simulated* change. It does not run
+  a real project's own test suite, because PAW does not run shells (the
+  charter does not authorize shell execution). The verification port is where a
+  real CI or test harness plugs in; that integration is the next piece.
+  — OPEN.
 - [x] B-19/F04: provider discovery is an explicit, Policy-admitted operation.
   `ModelRouter.route()` is cache-only; `discover_providers()` is the explicit
   operation; the runtime performs it only after Policy admits

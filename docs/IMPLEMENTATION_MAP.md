@@ -229,6 +229,72 @@ discovering automatically; it now calls the explicit
 `discover_providers()` first, and a new test pins that routing alone performs
 zero discovery and zero initialization. 12 tests pass.
 
+### Engineering workflow, proved end to end — 2026-10-20, STANDARD / READY
+
+**The gap.** The runtime had every piece of the chain and none of the
+chain. The compiled project context was summarised into a fragment count
+and a token estimate, and the model never saw the retrieved sources. The
+proposal's `model_result` was `{}`. `_build_messages()` was defined and
+never called. There was no artifact for an engineering verification, and
+no rule that said a change without one was not finished.
+
+**The inference path (code).** `PawRuntime._model_payload()` builds the
+outbound provider payload from the **manifest** - the reviewed, budgeted,
+disclosure-checked view of the compiled context - rather than from the
+conversation history or the bare goal. The manifest's included candidates
+are the project content, and they are the same evidence the B-19/F05
+payload binding is checked against, so what leaves the box is what the
+evidence covers and the model reasons over what was actually retrieved.
+A caller may still supply conversation messages (the chat REPL does);
+those are kept and the reviewed context is added as its own block.
+
+**The declared verification (code).** `VerificationRecord`
+(`paw/core/models.py`) is an immutable artifact naming what was checked,
+against which target, by which method, with what result and evidence. It
+is recorded under its own ledger event, `VERIFICATION_RECORDED` - distinct
+from `STEP_EXECUTED`, which is the executor's success observation, and
+distinct from a gate verdict. `paw/application/workflow.py` owns the
+verification port: PAW does not run shells (the charter does not authorize
+shell execution), so the check is performed by a port the application
+supplies, and PAW binds and records what it returns.
+
+**The workflow (application).** `EngineeringWorkflow` composes the
+existing primitives - Task, Decision, Plan, the policy gate, the shared
+executable unit, the executors, the checkpoints, the ledger - into
+research -> choose -> change -> declared verification. It adds no new
+orchestration authority: every phase is a normal runtime task with its own
+gate, ledger trail and checkpoint. The rule it exists to enforce is
+**a change without a passing declared verification is not a completed
+change**.
+
+**Evidence.**
+
+* `tests/test_engineering_workflow_contract.py` (6 tests) - the whole
+  chain over a real temporary project with a real knowledge ingest, a
+  real decision lifecycle, a real reviewed Plan, the real shared unit and
+  the real filesystem executor. It proves: the research phase cites the
+  sources it read; the choose phase cannot be skipped (the Planner refuses
+  an implementation Plan without a reviewed FINAL READY decision); a
+  denied approval changes nothing; a **failing** verification is recorded
+  and the change is **not** completed; a **restart** after that failure
+  does not repeat the completed change and a verification that then passes
+  completes the chain; and the record is immutable and bound to the
+  operation it verifies.
+* `tests/test_inference_context_wiring_contract.py` (2 tests) - the
+  compiled project content reaches the provider payload, and the payload's
+  context is the manifest's included candidates.
+* `demos/demo_engineering_workflow.py` - the chain as a runnable artifact:
+  a failure, a restart, and a completed verification.
+
+*Fail-positive proven.* Restoring the old payload (no manifest context)
+fails both inference-wiring tests. Restoring "a change is completed when
+it changed" fails `test_a_failing_verification_is_not_a_completed_change`.
+
+**Still open.** The workflow proves the chain over a *simulated* change;
+it does not yet run against a real project's own test suite, because PAW
+does not run shells. The verification port is where a real CI or test
+harness plugs in, and that integration is the next piece.
+
 ### Checkpoint operation counter (code)
 
 `TaskCheckpoint` now carries `operations_completed`, persisted in a new

@@ -214,6 +214,65 @@ initialize ẩn trong `ChatService.open()` làm fail
 một test mới ghim rằng chỉ routing thì không discover và không initialize. 12
 test pass.
 
+### Engineering workflow, chứng minh end-to-end — 2026-10-20, STANDARD / READY
+
+**Khoảng trống.** Runtime có đủ mọi mảnh của chuỗi nhưng không có chuỗi. Context
+project đã compile chỉ bị tóm tắt thành fragment count và token estimate, model
+chưa bao giờ thấy nguồn đã truy xuất. `model_result` của proposal là `{}`.
+`_build_messages()` được định nghĩa rồi không bao giờ được gọi. Không có
+artifact cho một verification engineering, và không có quy tắc nào nói rằng một
+thay đổi chưa có verification thì chưa xong.
+
+**Đường suy luận (code).** `PawRuntime._model_payload()` dựng payload gửi đi từ
+**manifest** — bản đã review, đã ngân sách, đã kiểm disclosure của compiled
+context — thay vì từ lịch sử hội thoại hay chỉ goal. Included candidate của
+manifest chính là nội dung project, và đó cũng chính là bằng chứng mà payload
+binding của B-19/F05 kiểm tra, nên thứ rời khỏi máy là thứ bằng chứng bao
+phủ, và model suy luận trên đúng thứ đã truy xuất. Caller vẫn có thể truyền
+message hội thoại (chat REPL có truyền); các message đó được giữ, và context
+đã review được thêm thành một block riêng.
+
+**Declared verification (code).** `VerificationRecord` (`paw/core/models.py`) là
+artifact bất biến nêu tên đã kiểm gì, kiểm với mục tiêu nào, bằng phương pháp
+nào, kết quả và bằng chứng ra sao. Nó được ghi dưới event ledger riêng,
+`VERIFICATION_RECORDED` — khác `STEP_EXECUTED` (thành công của executor), và
+khác một phán quyết gate. `paw/application/workflow.py` sở hữu verification
+port: PAW không chạy shell (charter không cấp quyền shell execution), nên việc
+kiểm do port mà application cấp thực hiện, còn PAW ràng buộc và ghi lại kết quả.
+
+**Workflow (application).** `EngineeringWorkflow` ghép các primitive sẵn có — Task,
+Decision, Plan, policy gate, shared executable unit, executor, checkpoint,
+ledger — thành research -> choose -> change -> declared verification. Nó không
+thêm quyền điều phối nào: mỗi phase là một runtime task bình thường, có gate,
+ledger trail và checkpoint riêng. Quy tắc mà nó tồn tại để bảo vệ là **một thay
+đổi chưa có declared verification pass thì chưa phải thay đổi đã hoàn thành**.
+
+**Bằng chứng.**
+
+* `tests/test_engineering_workflow_contract.py` (6 test) — cả chuỗi trên một
+  project tạm thật, với ingest knowledge thật, vòng đời decision thật, Plan đã
+  review thật, shared unit thật và filesystem executor thật. Nó chứng minh:
+  phase research cite đúng nguồn đã đọc; phase choose không thể bỏ qua (Planner
+  từ chối implementation Plan khi chưa có decision FINAL READY đã review); approval
+  bị từ chối thì không thay đổi gì; verification **fail** được ghi lại và thay
+  đổi **không** coi là hoàn thành; **restart** sau failure đó không lặp lại thay
+  đổi đã xong, và verification sau đó pass thì hoàn thành chuỗi; và record bất
+  biến, gắn với operation nó verify.
+* `tests/test_inference_context_wiring_contract.py` (2 test) — nội dung project đã
+  compile thực sự tới payload của provider, và context trong payload chính là
+  included candidate của manifest.
+* `demos/demo_engineering_workflow.py` — chuỗi như một artifact chạy được: một
+  failure, một restart, và một verification hoàn thành.
+
+*Chứng minh fail-positive.* Khôi phục payload cũ (không có context manifest) làm
+fail cả hai test inference-wiring. Khôi phục "thay đổi xong là hoàn thành" làm
+fail `test_a_failing_verification_is_not_a_completed_change`.
+
+**Còn mở.** Workflow chứng minh chuỗi trên một thay đổi *mô phỏng*; nó chưa
+chạy với test suite thật của một project, vì PAW không chạy shell. Verification
+port là chỗ một CI hay test harness thật cắm vào, và tích hợp đó là phần tiếp
+theo.
+
 ### Bộ đếm operation của checkpoint (code)
 
 `TaskCheckpoint` giờ mang `operations_completed`, lưu trong cột mới

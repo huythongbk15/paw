@@ -132,3 +132,51 @@ await service.close()
 `ChatReply` báo session/task ID, status, stop reason, checkpoint, approval, model/
 executor, artifact và việc context đã được compile hay chưa. Session được bind
 với workspace; mở lại bằng workspace khác sẽ bị từ chối.
+
+## Engineering workflow
+
+`paw.application.workflow.EngineeringWorkflow` ghép các primitive ở trên thành
+research -> choose -> change -> declared verification. Nó không thêm quyền điều
+phối nào: mỗi phase là một runtime task bình thường, có gate, ledger trail và
+checkpoint riêng.
+
+```python
+from paw.application.workflow import (
+    EngineeringWorkflow, VerificationOutcome, VerificationRequest, WorkflowRequest,
+)
+
+workflow = EngineeringWorkflow(runtime, verification_port=my_port, declared_by="me")
+outcome = await workflow.run(
+    WorkflowRequest(
+        goal=task.goal,
+        target="module.py",
+        content=new_content,
+        decision_version_id=final_version_id,
+        method="test_suite",
+    ),
+    task=task,
+    plan=implementation_plan,
+    approver=my_human_approver,
+)
+outcome.completed  # True chỉ khi thay đổi đã xảy ra VÀ verification của nó pass
+```
+
+Quy tắc mà workflow tồn tại để bảo vệ: **một thay đổi chưa có declared
+verification pass thì chưa phải thay đổi đã hoàn thành.** Thành công của
+executor nói là lần ghi đã xảy ra; một `VerificationRecord` nói là một kiểm tra
+có tên đã được thực hiện với một mục tiêu có tên và cho ra một kết quả. Chúng
+được ghi dưới hai event ledger khác nhau, và không cái nào là phán quyết gate.
+
+Việc kiểm do một **port** mà application cấp thực hiện. PAW không chạy shell —
+charter không cấp quyền shell execution — nên port là thứ duy nhất trong chuỗi
+chạm ra ngoài. Port là object có `async verify(request) -> VerificationOutcome`
+hoặc callable cùng chữ ký. `VerificationOutcome` mang `passed`, `summary`,
+`evidence` và `command`.
+
+Approval là của con người: workflow xin phép cho đúng effect đó rồi gọi
+`approver` bạn cấp. Nó không tự approve. Không có approver thì workflow dừng
+với `awaiting approval: <id>`.
+
+Payload gửi provider được dựng từ **manifest** — bản đã review, đã ngân sách,
+đã kiểm disclosure của compiled context — nên model suy luận trên đúng nguồn
+đã truy xuất, và thứ rời khỏi máy là thứ bằng chứng bao phủ.

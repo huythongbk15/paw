@@ -75,6 +75,22 @@
   fail-positive cho gate bị bỏ qua, binding check và nhánh local của mapper;
   `tests/test_model_dispatch_fail_closed.py` 32 passed sau khi được cấp một
   manifest gắn với task; ruff check clean.
+- [x] Một workflow engineering thật, đã chứng minh: research -> choose -> change ->
+  declared verification, có một failure và một restart. Context project đã compile
+  nay thực sự tới model (payload dựng từ manifest), một `VerificationRecord` được
+  ghi dưới event ledger riêng, và một thay đổi chưa có declared verification pass
+  thì không phải thay đổi đã hoàn thành.
+  — RESOLVED. `tests/test_engineering_workflow_contract.py` 6 passed và
+  `tests/test_inference_context_wiring_contract.py` 2 passed, trên một project tạm
+  thật với ingest knowledge thật, vòng đời decision thật, Plan đã review thật,
+  shared unit thật và filesystem executor thật; có chứng minh fail-positive;
+  `demos/demo_engineering_workflow.py` chạy cả chuỗi (failure, restart, verification
+  hoàn thành); ruff check clean.
+- [ ] Workflow chứng minh chuỗi trên một thay đổi *mô phỏng*. Nó chưa chạy test
+  suite thật của một project, vì PAW không chạy shell (charter không cấp quyền shell
+  execution). Verification port là chỗ một CI hay test harness thật cắm vào; tích hợp
+  đó là phần tiếp theo.
+  — OPEN.
 - [x] B-19/F04: provider discovery là thao tác tường minh, do Policy cho phép.
   `ModelRouter.route()` chỉ dùng cache; `discover_providers()` là thao tác tường
   minh; runtime chỉ thực hiện sau khi Policy cho phép `Capability.NETWORK_HTTP`;
