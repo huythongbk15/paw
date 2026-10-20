@@ -318,6 +318,17 @@ async def main() -> int:
     token_new, wired = wire_blocks(token_text)
     report["call_sites_wired"] = wired
 
+    # The baseline oracle must be measured on the PRISTINE repository, before
+    # any write. It used to run after the writes, so "baseline" was really the
+    # post-write state, and the "after" measurement was taken after a
+    # `git checkout` plus a direct `write_text()` that bypassed PAW entirely.
+    # Both states then differed only because of the direct write, so the
+    # benchmark could report "PAW performed a verified change" even when PAW
+    # had refused every write.
+    baseline_failed, baseline_passed, baseline_names = run_oracle(corpus, "baseline")
+    report["oracle_baseline_measured_before_writes"] = True
+    log(f"[4-baseline]  {baseline_failed}f/{baseline_passed}p (pristine state)")
+
     task = await TaskManager.create(
         session_id=args.session, goal=GOAL,
         requested_capabilities=[Capability.FILESYSTEM_WRITE])
@@ -328,20 +339,19 @@ async def main() -> int:
                                        content, operation))
     report["writes"] = writes
     for entry in writes:
-        log(f"[4-{entry['path'].split('/')[-1]:<16}] asked={entry['policy_asked']} "
+        log(f"[5-{entry['path'].split('/')[-1]:<16}] asked={entry['policy_asked']} "
             f"unchanged_before_approval={entry['bytes_unchanged_before_approval']} "
             f"written={entry['written']} ledger={entry['ledger_events']}")
 
     final = (corpus / TOKEN_REL).read_text()
     report["call_sites_after"] = final.count("self._get_counters(*sequences)")
     report["helper_uses"] = final.count("self._prepare_token_counters(*sequences)")
-    log(f"[5-rewired]   direct_get_counters={report['call_sites_before']}"
+    log(f"[6-rewired]   direct_get_counters={report['call_sites_before']}"
         f"->{report['call_sites_after']} helper_uses={report['helper_uses']}")
 
-    baseline_failed, baseline_passed, baseline_names = run_oracle(corpus, "baseline")
-    subprocess.run(["git", "checkout", "--", "."], cwd=corpus, check=False)
-    for rel, content, _op in ((BASE_REL, base_new, ""), (TOKEN_REL, token_new, "")):
-        (corpus / rel).write_text(content)
+    # The "after" oracle must measure the state PAW actually produced. No
+    # reset, no direct write: the files on disk are the ones the runtime
+    # wrote (or did not write).
     after_failed, after_passed, after_names = run_oracle(corpus, "after")
     report["oracle"] = {
         "baseline": {"failed": baseline_failed, "passed": baseline_passed},
@@ -349,18 +359,36 @@ async def main() -> int:
         "new_failures": sorted(after_names - baseline_names),
         "fixed_failures": sorted(baseline_names - after_names),
         "identical_failure_set": after_names == baseline_names,
+        "measured_on_paw_output": True,
     }
-    log(f"[6-verify]    baseline={baseline_failed}f/{baseline_passed}p "
+    log(f"[7-verify]    baseline={baseline_failed}f/{baseline_passed}p "
         f"after={after_failed}f/{after_passed}p "
         f"identical={report['oracle']['identical_failure_set']}")
     if report["oracle"]["new_failures"]:
         log(f"             NEW FAILURES: {report['oracle']['new_failures']}")
 
+    # The verdict must not be able to pass without PAW actually performing the
+    # change. A refused write, an unwritten file, or a new test failure all
+    # make this benchmark fail loudly instead of reporting a verified change.
+    unwritten = [entry["path"] for entry in writes if not entry["written"]]
+    report["paw_performed_all_writes"] = not unwritten
+    report["unwritten_paths"] = unwritten
+    verdict = "PASS"
+    if unwritten:
+        verdict = "FAIL"
+        log(f"VERDICT: FAIL - PAW did not perform these writes: {unwritten}")
+    elif report["oracle"]["new_failures"]:
+        verdict = "FAIL"
+        log(f"VERDICT: FAIL - new test failures: {report['oracle']['new_failures']}")
+    else:
+        log("VERDICT: PASS - PAW performed the change and the oracle did not regress")
+    report["verdict"] = verdict
+
     await db.close()
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2, default=str))
     log(f"report -> {args.output}")
-    return 0
+    return 0 if verdict == "PASS" else 1
 
 
 if __name__ == "__main__":

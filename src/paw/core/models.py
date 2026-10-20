@@ -557,6 +557,18 @@ class ResourceUsage(BaseModel):
             "destructive_ops": self.destructive_ops,
         }
 
+    def to_ledger_dict(self) -> dict[str, Any]:
+        """Ledger payload form: raw fields plus the receipt's provider_calls.
+
+        ``TaskLedger.get_model_call_count`` and
+        ``TaskLedger.assert_model_calls_monotonic`` read
+        ``resources_used["provider_calls"]``. ``model_dump()`` alone omits
+        that key (it is a method, not a field), so a runtime-written
+        STEP_EXECUTED event always counted zero. This is the single
+        canonical serialization for usage written to the ledger.
+        """
+        return {**self.model_dump(), **self.to_receipt()}
+
     def total_cost(self) -> float:
         """Weighted total for budget accounting."""
         return (

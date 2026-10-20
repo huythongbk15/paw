@@ -114,7 +114,7 @@ class TaskLedger:
         total = 0
         for event in events:
             payload = event.payload or {}
-            resources = payload.get("resources_used", {})
+            resources = payload.get("resources_used") or {}
             try:  # noqa: SIM105
                 total += int(resources.get("provider_calls", 0) or 0)
             except (TypeError, ValueError):
@@ -131,7 +131,7 @@ class TaskLedger:
         cumulative = 0
         for event in events:
             payload = event.payload or {}
-            resources = payload.get("resources_used", {})
+            resources = payload.get("resources_used") or {}
             try:
                 provider_calls = int(resources.get("provider_calls", 0) or 0)
             except (TypeError, ValueError):
