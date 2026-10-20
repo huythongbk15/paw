@@ -1070,11 +1070,39 @@ current-status table; everything else links there.
   `Capability.NETWORK_HTTP`; `ChatService.open()` no longer initializes
   providers.
 
+### The engineering workflow, proved (2026-10-20)
+
+The runtime had every piece of the chain and none of the chain. Two gaps
+were closed:
+
+* **The inference path.** The compiled project context was summarised into
+  a fragment count and never reached the model. The payload is now built
+  from the **manifest** — the reviewed, budgeted, disclosure-checked view
+  of the compiled context — so the model reasons over what was actually
+  retrieved, and what leaves the box is what the evidence covers.
+* **The declared verification.** `VerificationRecord` is an immutable
+  artifact naming what was checked, against what, by which method, with
+  what result. It is recorded under its own ledger event
+  (`VERIFICATION_RECORDED`), distinct from `STEP_EXECUTED` (the executor's
+  success observation) and from a gate verdict. `paw/application/workflow.py`
+  owns the verification **port**: PAW does not run shells (the charter does
+  not authorize shell execution), so the check is performed by a port the
+  application supplies and PAW binds and records what it returns.
+
+`EngineeringWorkflow` composes research -> choose -> change -> declared
+verification. The rule it exists to enforce: **a change without a passing
+declared verification is not a completed change.** Proved by
+`tests/test_engineering_workflow_contract.py` (6) and
+`tests/test_inference_context_wiring_contract.py` (2) over a real project, a
+real decision lifecycle, a real reviewed Plan and the real shared unit —
+including a failing verification and a restart that does not repeat the
+change. `demos/demo_engineering_workflow.py` runs the chain.
+
 ### Still open (tracked)
 
-skill versioning/rollback · the end-to-end engineering inference path ·
-provider-issued usage receipts · the gitignored E1-27 measurement report ·
-the runtime e2e harness's reviewed Plan.
+plugging a real test harness into the verification port · skill
+versioning/rollback · provider-issued usage receipts · the gitignored E1-27
+measurement report · the runtime e2e harness's reviewed Plan.
 
 ---
 
@@ -1089,6 +1117,7 @@ the runtime e2e harness's reviewed Plan.
 | E1 | gate VERIFIED / track `PARTIAL` | E1-27 measurement on `8d01d90`; the *track* qualification is not established. Canonical table in `docs/README.md`. |
 | **B-18** | PARTIAL | Shared-unit admission + prepared recovery + two-approval CLI committed (`b54804b`, `31e8266`). |
 | **B-19** | **F04 + F05 CLOSED** | Commits `bd2884e`, `30a2b84`; 35 new contract tests; fail-positive proven. |
-| **Product release** | `PARTIAL` | Working tree clean, 13 commits pushed, D3 green on `a042182`. No clean-release verdict claimed. |
-| **Next** | prove one real engineering workflow | research → choose → change → declared verification, with a failure and a restart |
+| **Product release** | `PARTIAL` | Working tree clean, commits pushed, D3 green. No clean-release verdict claimed. |
+| **B-20** | ✅ PROVED | The engineering workflow: research → choose → change → declared verification, with a failure and a restart. 8 contract tests, fail-positive proven, runnable demo. |
+| **Next** | plug a real test harness into the verification port | so the chain is proved against a real project's own suite |
 
