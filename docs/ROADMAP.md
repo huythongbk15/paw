@@ -25,12 +25,16 @@ order, preserving unfinished E1 ranking work and without enabling training:
 | Feature parity | B-27..B-33 | Sessions/chat, approvals, project/context, decision/DAG, inspect, memory/skills, model/experimental views through shared services. |
 | Product candidate | B-34..B-36 | Install/upgrade/backup/restore and documentation; browser/CLI parity; one clean-revision D3 + explicit release verdict. |
 
-Next safe action: close B-19 discovery/payload controls and remaining failure
-usage receipts. B-15 inventory and B-18 bounded migration have scoped evidence;
-do not reopen their architecture or promote dependent HTTP. B-16/B-17
-have scoped repair evidence in the implementation map, not a clean release.
-F06 is independent repair within the same pre-HTTP safety group; no dependent
-HTTP execution or automatic provider/training expansion is authorized.
+Next safe action: prove one real engineering workflow (research -> choose ->
+change -> declared verification, with a failure and a restart), then close the
+remaining failure usage receipts. **B-19 F04 (discovery is an explicit,
+Policy-admitted operation) and F05 (the outbound payload is bound to the
+reviewed manifest) were closed on 2026-10-20.** B-15 inventory and B-18
+bounded migration have scoped evidence; do not reopen their architecture or
+promote dependent HTTP. B-16/B-17 have scoped repair evidence in the
+implementation map, not a clean release. F06 is independent repair within the
+same pre-HTTP safety group; no dependent HTTP execution or automatic
+provider/training expansion is authorized.
 D0/D1/D2 per packet; D3 at high-risk core boundaries and final candidate.
 The older sequence and counts below are retained as dated historical records;
 where they disagree on current status, this review and actual evidence govern.
