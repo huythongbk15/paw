@@ -409,6 +409,8 @@ class PolicyGuard:
         capabilities: list[Capability],
         context: dict[str, Any] | None = None,
         task_id: ID | None = None,
+        *,
+        capability_contexts: dict[Capability, dict[str, Any]] | None = None,
     ) -> RequestVerdict:
         """Aggregate single-authority gate for a *set* of capabilities.
 
@@ -426,7 +428,8 @@ class PolicyGuard:
         asked: list[Capability] = []
         blocked: list[Capability] = []
         for cap in capabilities:
-            raw = await self.check_detailed(cap, context, task_id)
+            cap_context = (capability_contexts or {}).get(cap, context)
+            raw = await self.check_detailed(cap, cap_context, task_id)
             if raw.decision == PolicyDecision.DENY:
                 blocked.append(cap)
                 details[cap] = raw

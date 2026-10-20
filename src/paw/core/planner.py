@@ -10,11 +10,18 @@ import json
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
+from paw.knowledge.checksum import compute_constraint_fingerprint, compute_repo_revision
+
+from .approval import ApprovalStore
 from .decomposition import StructuredReasoner
 from .logging import get_logger
-from .models import TaskStatus
+from .models import Capability, TaskStatus
+from .policy import PolicyGuard
+from .reasoning_contracts import DecisionVersionState, ImplementationReadiness, PlanPurpose
+from .repo_filter import RepoFilter
 from .storage import db
 from .task import TaskManager
 
@@ -97,8 +104,11 @@ class Plan:
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     # E2-45: plan purpose + effect constraints
-    purpose: str = "implementation"  # PlanPurpose value
+    purpose: str = "research"  # PlanPurpose value; decomposition is not implementation authority
     effect_constraints: list[str] = field(default_factory=list)
+    decision_version_id: str = ""
+    project_revision: str = ""
+    constraint_fingerprint: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -111,6 +121,9 @@ class Plan:
             "updated_at": self.updated_at.isoformat(),
             "purpose": self.purpose,
             "effect_constraints": self.effect_constraints,
+            "decision_version_id": self.decision_version_id,
+            "project_revision": self.project_revision,
+            "constraint_fingerprint": self.constraint_fingerprint,
         }
 
     @classmethod
@@ -125,6 +138,9 @@ class Plan:
             updated_at=datetime.fromisoformat(row["updated_at"]),
             purpose=row.get("purpose", "implementation"),
             effect_constraints=json.loads(row["effect_constraints"]) if row.get("effect_constraints") else [],
+            decision_version_id=row.get("decision_version_id", ""),
+            project_revision=row.get("project_revision", ""),
+            constraint_fingerprint=row.get("constraint_fingerprint", ""),
         )
 
     def topological_sort(self) -> list[TaskNode]:
@@ -156,10 +172,20 @@ class Planner:
     Runtime action proposal and graph scheduling are separate responsibilities.
     """
 
-    def __init__(self, reasoner: StructuredReasoner | None = None):
+    def __init__(
+        self, reasoner: StructuredReasoner | None = None, *, workspace_root: str | Path | None = None,
+        hard_constraints: dict[str, Any] | None = None, repo_filter: RepoFilter | None = None,
+        policy_guard: PolicyGuard | None = None,
+    ):
         self.reasoner = reasoner or StructuredReasoner()
+        self._workspace_root = Path(workspace_root) if workspace_root is not None else None
+        self._constraint_fingerprint = compute_constraint_fingerprint(hard_constraints) if hard_constraints else ""
+        self._repo_filter = repo_filter or RepoFilter.safe_default()
+        self._policy_guard = policy_guard or PolicyGuard(interactive=False)
 
-    async def plan(self, task_id: str) -> Plan:
+    async def plan(
+        self, task_id: str, *, purpose: str = "research", decision_version_id: str = "",
+    ) -> Plan:
         """Create a plan for an existing durable Task.
 
         Task identity, goal and session belong to ``TaskManager``. Requiring the
@@ -170,7 +196,13 @@ class Planner:
         if task is None:
             raise ValueError(f"Unknown task: {task_id}")
 
-        plan = Plan(task_id=task.id, goal=task.goal, session_id=task.session_id)
+        purpose = PlanPurpose(purpose).value
+        plan = Plan(task_id=task.id, goal=task.goal, session_id=task.session_id,
+                    purpose=purpose, decision_version_id=decision_version_id)
+        if purpose == PlanPurpose.IMPLEMENTATION:
+            binding = await self._decision_binding(plan)
+            plan.project_revision = binding["project_revision"]
+            plan.constraint_fingerprint = binding["constraint_fingerprint"]
         plan.id = uuid.uuid4().hex[:16]
 
         nodes = self._decompose(task.goal)
@@ -204,19 +236,87 @@ class Planner:
             )
         return nodes
 
+    async def _decision_binding(self, plan: Plan, *, require_current: bool = True) -> dict:
+        if not plan.decision_version_id:
+            raise ValueError("implementation Plan requires a decision version")
+        version = await db.get_decision_version(plan.decision_version_id)
+        if version is None or version.state != DecisionVersionState.FINAL:
+            raise ValueError("implementation decision must be FINAL")
+        current = await db.get_current_decision_version(version.decision_id)
+        if ((require_current and current != version)
+                or version.payload.get("readiness") != ImplementationReadiness.READY):
+            raise ValueError("implementation decision must be current FINAL READY")
+        parent = await db.get_decision(version.decision_id)
+        if parent is None or parent["task_id"] != plan.task_id or parent["session_id"] != plan.session_id:
+            raise ValueError("implementation decision belongs to a different Task/session")
+        if not await ApprovalStore.is_decision_reviewed(plan.task_id, version.version_id):
+            raise ValueError("implementation decision requires exact recorded human review")
+        return parent
+
+    async def implementation_binding(
+        self, plan_id: str, task_id: str, *, recovery: bool = False,
+        effect_constraints: list[str] | None = None,
+    ) -> dict[str, str]:
+        """Validate persisted authority without filesystem IO or a second Policy call.
+
+        Recovery accepts original reviewed evidence only for read-only intent
+        reconciliation. Runtime, not callers, selects that branch.
+        """
+        plan = await self.get_plan(plan_id)
+        task = await TaskManager.get(task_id)
+        if (plan is None or task is None or plan.task_id != task_id
+                or plan.session_id != task.session_id or plan.goal != task.goal
+                or plan.purpose != "implementation"):
+            raise ValueError("implementation requires a persisted matching Plan")
+        if any(item not in plan.effect_constraints for item in (effect_constraints or [])):
+            raise ValueError("implementation effect constraints are outside the persisted Plan")
+        parent = await self._decision_binding(plan, require_current=not recovery)
+        if (self._workspace_root is None or not self._constraint_fingerprint
+                or plan.constraint_fingerprint != self._constraint_fingerprint
+                or parent["constraint_fingerprint"] != self._constraint_fingerprint
+                or not plan.project_revision or plan.project_revision != parent["project_revision"]):
+            raise ValueError("implementation constraints or revision binding is missing/stale")
+        return {"plan_id": plan.id, "decision_version_id": plan.decision_version_id,
+                "project_revision": plan.project_revision,
+                "constraint_fingerprint": plan.constraint_fingerprint}
+
     async def _save(self, plan: Plan) -> None:
         """Persist the plan and all nodes in one transaction."""
         async with db.transaction() as conn:
+            purpose = PlanPurpose(plan.purpose)
+            if purpose == PlanPurpose.IMPLEMENTATION:
+                binding = await self._decision_binding(plan)
+                if (not self._workspace_root or not self._constraint_fingerprint
+                        or binding["constraint_fingerprint"] != self._constraint_fingerprint
+                        or plan.constraint_fingerprint != self._constraint_fingerprint):
+                    raise ValueError("implementation decision constraints are missing or stale")
+                verdict = await self._policy_guard.evaluate_request(
+                    [Capability.FILESYSTEM_READ],
+                    {"path": str(self._workspace_root), "operation": "readiness.freshness"},
+                    task_id=plan.task_id,
+                )
+                if not verdict.allowed or verdict.verdict != "go":
+                    raise PermissionError("planning freshness read refused by Policy")
+                actual_revision = compute_repo_revision(self._workspace_root, self._repo_filter)
+                if actual_revision != binding["project_revision"] or plan.project_revision != actual_revision:
+                    raise ValueError("implementation decision project revision is stale")
             task_cursor = await conn.execute(
-                "SELECT id FROM tasks WHERE id = ?",
+                "SELECT id, session_id, goal FROM tasks WHERE id = ?",
                 (plan.task_id,),
             )
-            if await task_cursor.fetchone() is None:
+            task = await task_cursor.fetchone()
+            if task is None:
                 raise ValueError(f"Unknown task: {plan.task_id}")
+            if task["session_id"] != plan.session_id or task["goal"] != plan.goal:
+                raise ValueError("Plan must preserve durable Task identity, session and goal")
+            if any(node.task_id != plan.task_id for node in plan.nodes):
+                raise ValueError("Plan nodes must preserve durable Task identity")
             await conn.execute(
                 """
-                INSERT INTO plans (id, task_id, session_id, goal, purpose, effect_constraints, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO plans (id, task_id, session_id, goal, purpose, effect_constraints,
+                                   decision_version_id, project_revision, constraint_fingerprint,
+                                   created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     plan.id,
@@ -225,6 +325,9 @@ class Planner:
                     plan.goal,
                     plan.purpose,
                     json.dumps(plan.effect_constraints),
+                    plan.decision_version_id,
+                    plan.project_revision,
+                    plan.constraint_fingerprint,
                     plan.created_at.isoformat(),
                     plan.updated_at.isoformat(),
                 ),

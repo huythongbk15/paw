@@ -497,18 +497,18 @@ def evaluate_local_eligibility(
 
 
 class ImplementationReadiness(StrEnum):
-    """Readiness level for proceeding with a model inference call.
+    """Engineering readiness for implementation, not model-call permission.
 
     E2-27: This is intentionally separate from PolicyDecision, AutonomyDecision,
     StopReason, and AutonomyStopReason. Readiness captures whether the
-    *preconditions* for a safe, correct, efficient inference are met — not
+    engineering evidence and implementation preconditions are met — not
     whether the autonomy loop should continue or the policy allows execution.
 
     Levels (ordered):
       * NEEDS_RESEARCH   — local evidence insufficient; reconnaissance required.
       * NEEDS_CLARIFICATION — goal is ambiguous; question must be asked.
-      * SPIKE_REQUIRED   — bounded exploration needed before a real call.
-      * READY            — preconditions met; safe to proceed to inference.
+      * SPIKE_REQUIRED   — bounded exploration needed before implementation.
+      * READY            — implementation preconditions met; other gates still apply.
       * REJECTED         — the task should not proceed (e.g. privacy-blocked).
     """
     NEEDS_RESEARCH = "needs_research"
@@ -708,10 +708,49 @@ class DecisionVersionState(StrEnum):
     STALE = "stale"
     SUPERSEDED = "superseded"
 
+    def permits(self, target: DecisionVersionState) -> bool:
+        """Canonical lifecycle; terminal evidence cannot be resurrected."""
+        transitions = {
+            self.DRAFT: (self.DRAFT, self.FINAL),
+            self.FINAL: (self.STALE, self.SUPERSEDED),
+            self.STALE: (self.SUPERSEDED,),
+            self.SUPERSEDED: (),
+        }
+        return DecisionVersionState(target) in transitions[self]
+
+
+def _freeze_decision_value(value: object, ancestors: set[int]) -> object:
+    """Copy JSON-shaped evidence without retaining any mutable caller aliases."""
+    if value is None or type(value) in (str, bool, int):
+        return value
+    if type(value) is float and math.isfinite(value):
+        return value
+    if isinstance(value, Mapping) or type(value) in (list, tuple):
+        identity = id(value)
+        if identity in ancestors:
+            raise ValueError("decision payload must not contain cycles")
+        ancestors.add(identity)
+        try:
+            if isinstance(value, Mapping):
+                if any(type(key) is not str for key in value):
+                    raise ValueError("decision payload keys must be strings")
+                return MappingProxyType({
+                    key: _freeze_decision_value(item, ancestors)
+                    for key, item in value.items()
+                })
+            return tuple(_freeze_decision_value(item, ancestors) for item in value)
+        finally:
+            ancestors.remove(identity)
+    raise ValueError("decision payload must contain finite JSON-shaped values")
+
 
 @dataclass(frozen=True)
 class DecisionVersion:
-    """Immutable snapshot of a decision at one point in time."""
+    """Immutable JSON-shaped evidence; not itself runtime mutation authority.
+
+    Sequences become tuples and mappings become read-only snapshots. Persistence
+    adapters must explicitly encode these rather than use generic asdict/JSON.
+    """
 
     version_id: str
     decision_id: str
@@ -721,17 +760,33 @@ class DecisionVersion:
     created_by: str = ""
     superseded_by: str = ""
 
+    def to_dict(self) -> dict[str, object]:
+        """Encode immutable evidence explicitly; never serialize mapping proxies."""
+        def encode(value):
+            if isinstance(value, Mapping):
+                return {key: encode(item) for key, item in value.items()}
+            if isinstance(value, tuple):
+                return [encode(item) for item in value]
+            return value
+
+        return {
+            "version_id": self.version_id, "decision_id": self.decision_id,
+            "state": self.state.value, "payload": encode(self.payload),
+            "created_at": self.created_at, "created_by": self.created_by,
+            "superseded_by": self.superseded_by,
+        }
+
     def __post_init__(self) -> None:
         if not self.version_id.strip():
             raise ValueError("version_id must not be empty")
         if not self.decision_id.strip():
             raise ValueError("decision_id must not be empty")
-        if not self.state:
-            raise ValueError("state is required")
-        if not self.payload:
+        object.__setattr__(self, "state", DecisionVersionState(self.state))
+        if not isinstance(self.payload, Mapping) or not self.payload:
             raise ValueError("payload must not be empty")
         if not self.created_at.strip():
             raise ValueError("created_at must not be empty")
+        object.__setattr__(self, "payload", _freeze_decision_value(self.payload, set()))
 
 
 # E2-48: typed reasoning assessment fields and deterministic role/OOD thresholds

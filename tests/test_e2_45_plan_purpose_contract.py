@@ -19,7 +19,7 @@ from paw.core.storage import db
 
 def test_plan_purpose_default():
     plan = Plan(goal="test")
-    assert plan.purpose == "implementation"
+    assert plan.purpose == "research"
     assert plan.effect_constraints == []
 
 

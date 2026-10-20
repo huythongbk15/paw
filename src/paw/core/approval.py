@@ -74,6 +74,44 @@ class ApprovalStore:
     """Persistence and transition rules for approval requests."""
 
     @staticmethod
+    async def _decision_review_action(version_id: str) -> ProposedAction:
+        version = await db.get_decision_version(version_id)
+        if version is None or version.state.value != "final" or version.payload.get("readiness") != "ready":
+            raise ValueError("decision review requires a FINAL READY snapshot")
+        parent = await db.get_decision(version.decision_id)
+        if parent is None:
+            raise ValueError("decision review binding is missing")
+        task = await db.fetch_one("SELECT * FROM tasks WHERE id = ?", (parent["task_id"],))
+        if task is None or task["session_id"] != parent["session_id"]:
+            raise ValueError("decision review requires a durable matching Task/session")
+        return ProposedAction(
+            operation_id=f"decision-review:{version_id}",
+            goal="Review implementation readiness evidence",
+            context={
+                "decision": version.to_dict(), "task_id": parent["task_id"],
+                "session_id": parent["session_id"], "project_revision": parent["project_revision"],
+                "constraint_fingerprint": parent["constraint_fingerprint"],
+            },
+            metadata={"purpose": "decision_review"},
+            is_mutating=False, is_research=True, plan_purpose="research",
+        )
+
+    @staticmethod
+    async def request_decision_review(version_id: str) -> ApprovalRequest:
+        """Request human review of this exact snapshot; never approve automatically."""
+        action = await ApprovalStore._decision_review_action(version_id)
+        return await ApprovalStore.request(action.context["task_id"], action, metadata={"purpose": "decision_review"})
+
+    @staticmethod
+    async def is_decision_reviewed(task_id: str, version_id: str) -> bool:
+        """Review grants evidence acceptance, not execution ASK authorization."""
+        try:
+            action = await ApprovalStore._decision_review_action(version_id)
+        except ValueError:
+            return False
+        return action.context["task_id"] == task_id and await ApprovalStore.is_approved(task_id, action)
+
+    @staticmethod
     async def request(
         task_id: str,
         action: ProposedAction,

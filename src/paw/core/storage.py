@@ -6,6 +6,7 @@ Uses aiosqlite for async operations. Schema is defined in SQL for clarity and co
 
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from contextlib import asynccontextmanager
@@ -16,10 +17,11 @@ import aiosqlite
 
 from .config import settings
 from .logging import get_logger
+from .reasoning_contracts import DecisionVersion, DecisionVersionState, ImplementationReadiness
 
 logger = get_logger(__name__)
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 8
 
 SCHEMA = """
 -- Core tables for PAW
@@ -310,7 +312,10 @@ CREATE TABLE IF NOT EXISTS plans (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     purpose TEXT NOT NULL DEFAULT 'implementation',
-    effect_constraints TEXT NOT NULL DEFAULT '[]'
+    effect_constraints TEXT NOT NULL DEFAULT '[]',
+    decision_version_id TEXT NOT NULL DEFAULT '',
+    project_revision TEXT NOT NULL DEFAULT '',
+    constraint_fingerprint TEXT NOT NULL DEFAULT ''
 );
 
 -- Decisions
@@ -329,6 +334,72 @@ CREATE TABLE IF NOT EXISTS decision_records (
 );
 
 -- Memory Records (Phase 3)
+-- Immutable decision evidence; not runtime admission authority.
+CREATE TABLE IF NOT EXISTS decision_versions (
+    version_id TEXT PRIMARY KEY,
+    decision_id TEXT NOT NULL REFERENCES decision_records(id),
+    state TEXT NOT NULL CHECK (state IN ('draft', 'final', 'stale', 'superseded')),
+    payload TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    created_by TEXT NOT NULL DEFAULT '',
+    superseded_by TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_decision_versions_parent ON decision_versions(decision_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_decision_version_identity
+ON decision_versions(decision_id, version_id);
+CREATE TABLE IF NOT EXISTS decision_version_publications (
+    decision_id TEXT NOT NULL REFERENCES decision_records(id),
+    version_id TEXT PRIMARY KEY,
+    previous_version_id TEXT UNIQUE,
+    UNIQUE (decision_id, version_id),
+    FOREIGN KEY (decision_id, version_id) REFERENCES decision_versions(decision_id, version_id),
+    FOREIGN KEY (decision_id, previous_version_id)
+        REFERENCES decision_version_publications(decision_id, version_id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_decision_publication_initial
+ON decision_version_publications(decision_id) WHERE previous_version_id IS NULL;
+CREATE TRIGGER IF NOT EXISTS decision_publication_no_update
+BEFORE UPDATE ON decision_version_publications BEGIN
+    SELECT RAISE(ABORT, 'decision publication is immutable');
+END;
+CREATE TRIGGER IF NOT EXISTS decision_publication_no_delete
+BEFORE DELETE ON decision_version_publications BEGIN
+    SELECT RAISE(ABORT, 'decision publication is immutable');
+END;
+CREATE TRIGGER IF NOT EXISTS decision_publication_no_replace
+BEFORE INSERT ON decision_version_publications
+WHEN EXISTS (SELECT 1 FROM decision_version_publications WHERE version_id = NEW.version_id) BEGIN
+    SELECT RAISE(ABORT, 'decision publication identity is immutable');
+END;
+CREATE TRIGGER IF NOT EXISTS decision_version_no_replace
+BEFORE INSERT ON decision_versions
+WHEN EXISTS (SELECT 1 FROM decision_versions WHERE version_id = NEW.version_id) BEGIN
+    SELECT RAISE(ABORT, 'decision version identity is immutable');
+END;
+CREATE TRIGGER IF NOT EXISTS decision_version_no_update
+BEFORE UPDATE ON decision_versions BEGIN
+    SELECT RAISE(ABORT, 'decision version is immutable');
+END;
+CREATE TRIGGER IF NOT EXISTS decision_version_no_delete
+BEFORE DELETE ON decision_versions BEGIN
+    SELECT RAISE(ABORT, 'decision version is immutable');
+END;
+CREATE TRIGGER IF NOT EXISTS versioned_decision_no_update
+BEFORE UPDATE ON decision_records
+WHEN EXISTS (SELECT 1 FROM decision_versions WHERE decision_id = OLD.id) BEGIN
+    SELECT RAISE(ABORT, 'versioned decision binding is immutable');
+END;
+CREATE TRIGGER IF NOT EXISTS versioned_decision_no_delete
+BEFORE DELETE ON decision_records
+WHEN EXISTS (SELECT 1 FROM decision_versions WHERE decision_id = OLD.id) BEGIN
+    SELECT RAISE(ABORT, 'versioned decision binding is immutable');
+END;
+CREATE TRIGGER IF NOT EXISTS versioned_decision_no_replace
+BEFORE INSERT ON decision_records
+WHEN EXISTS (SELECT 1 FROM decision_versions WHERE decision_id = NEW.id) BEGIN
+    SELECT RAISE(ABORT, 'versioned decision binding is immutable');
+END;
+
 CREATE TABLE IF NOT EXISTS memory_records (
     id TEXT PRIMARY KEY,
     memory_type TEXT NOT NULL DEFAULT 'semantic',
@@ -444,6 +515,7 @@ CREATE TABLE IF NOT EXISTS task_checkpoints (
     current_step INTEGER NOT NULL DEFAULT 0,
     total_steps INTEGER NOT NULL DEFAULT 0,
     progress_ratio REAL NOT NULL DEFAULT 0.0,
+    operations_completed INTEGER NOT NULL DEFAULT 0,
     context TEXT NOT NULL DEFAULT '{}',
     context_compiler_state TEXT NOT NULL DEFAULT '{}',
     autonomy_usage TEXT NOT NULL DEFAULT '{}',
@@ -507,8 +579,28 @@ class Database:
         self._conn: aiosqlite.Connection | None = None
         self._initialized = False
         self._transaction_depth = 0
+        self._connection_lock = asyncio.Lock()
+        self._connection_owner: asyncio.Task | None = None
+
+    @asynccontextmanager
+    async def _connection_access(self):
+        """Serialize connection use; only the owning task may re-enter."""
+        task = asyncio.current_task()
+        if task is not None and task is self._connection_owner:
+            yield
+            return
+        async with self._connection_lock:
+            self._connection_owner = task
+            try:
+                yield
+            finally:
+                self._connection_owner = None
 
     async def connect(self) -> None:
+        async with self._connection_access():
+            await self._connect()
+
+    async def _connect(self) -> None:
         if self._conn is not None:
             return
         self._conn = await aiosqlite.connect(self.db_path)
@@ -519,6 +611,12 @@ class Database:
         logger.info("database_connected", path=str(self.db_path))
 
     async def close(self) -> None:
+        async with self._connection_access():
+            if self._transaction_depth:
+                raise RuntimeError("Cannot close database inside an owned transaction")
+            await self._close()
+
+    async def _close(self) -> None:
         if self._conn:
             await self._conn.close()
             self._conn = None
@@ -528,8 +626,14 @@ class Database:
 
     async def initialize(self) -> None:
         """Create all tables and indexes."""
+        async with self._connection_access():
+            await self._initialize()
+
+    async def _initialize(self) -> None:
         if self._initialized and self._conn is not None:
             return
+        if self._transaction_depth:
+            raise RuntimeError("Initialize database before opening a transaction")
         await self.connect()
         await self._conn.executescript(SCHEMA)
         await self._migrate_schema()
@@ -544,6 +648,11 @@ class Database:
         version = int(row[0]) if row else 0
         if version >= SCHEMA_VERSION:
             return
+        plan_cursor = await self._conn.execute("PRAGMA table_info(plans)")
+        plan_columns = {row[1] for row in await plan_cursor.fetchall()}
+        for column in ("decision_version_id", "project_revision", "constraint_fingerprint"):
+            if column not in plan_columns:
+                await self._conn.execute(f"ALTER TABLE plans ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
         # Migrate skills table FIRST: add columns introduced after the table
         # first shipped. The table may already exist from an older schema that
         # lacked these columns; CREATE TABLE IF NOT EXISTS does not alter it,
@@ -645,6 +754,17 @@ class Database:
                 await self._conn.execute(
                     f"ALTER TABLE skills ADD COLUMN {col} {col_def}"
                 )
+        # Runtime: add the checkpoint operation counter. Additive
+        # (INTEGER NOT NULL DEFAULT 0), no row rewrite, no DROP. A
+        # checkpoint that predates the column reports zero completed
+        # operations, which is the honest value for that snapshot.
+        cp_cursor = await self._conn.execute("PRAGMA table_info(task_checkpoints)")
+        cp_cols = {row[1] for row in await cp_cursor.fetchall()}
+        if "operations_completed" not in cp_cols:
+            await self._conn.execute(
+                "ALTER TABLE task_checkpoints "
+                "ADD COLUMN operations_completed INTEGER NOT NULL DEFAULT 0"
+            )
         info_cursor = await self._conn.execute("PRAGMA table_info(model_selections)")
         columns = await info_cursor.fetchall()
         primary_key = [column[1] for column in columns if column[5]]
@@ -673,35 +793,48 @@ class Database:
 
     @asynccontextmanager
     async def transaction(self):
-        """Context manager for database transactions."""
-        await self.connect()
-        self._transaction_depth += 1
-        try:
-            yield self._conn
-            self._transaction_depth -= 1
-            if self._transaction_depth == 0:
-                await self._conn.commit()
-        except Exception:
-            self._transaction_depth = max(0, self._transaction_depth - 1)
-            if self._transaction_depth == 0:
-                await self._conn.rollback()
-            raise
+        """Task-owned transaction, with savepoints for same-task nesting."""
+        async with self._connection_access():
+            await self.connect()
+            depth = self._transaction_depth
+            savepoint = f"paw_nested_{depth}"
+            self._transaction_depth = depth + 1
+            try:
+                await self._conn.execute(f"SAVEPOINT {savepoint}" if depth else "BEGIN")
+                yield self._conn
+                if depth:
+                    await self._conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+                else:
+                    await self._conn.commit()
+            except BaseException:
+                # CancelledError is a BaseException: cancellation must not leak
+                # uncommitted writes or connection ownership to another task.
+                if depth:
+                    await self._conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+                    await self._conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+                else:
+                    await self._conn.rollback()
+                raise
+            finally:
+                self._transaction_depth = depth
 
     # --- Explicit Storage Mutation Contract (Part A6) ---
     # Read operations - no mutation, safe to call without transaction
     async def fetch_one(self, sql: str, params: tuple = ()) -> dict | None:
         """Execute a SELECT query and return one row as dict."""
-        await self.connect()
-        async with self._conn.execute(sql, params) as cursor:
-            row = await cursor.fetchone()
-            return dict(row) if row else None
+        async with self._connection_access():
+            await self.connect()
+            async with self._conn.execute(sql, params) as cursor:
+                row = await cursor.fetchone()
+                return dict(row) if row else None
 
     async def fetch_all(self, sql: str, params: tuple = ()) -> list[dict]:
         """Execute a SELECT query and return all rows as list of dicts."""
-        await self.connect()
-        async with self._conn.execute(sql, params) as cursor:
-            rows = await cursor.fetchall()
-            return [dict(row) for row in rows]
+        async with self._connection_access():
+            await self.connect()
+            async with self._conn.execute(sql, params) as cursor:
+                rows = await cursor.fetchall()
+                return [dict(row) for row in rows]
 
     # Write operations. They commit immediately unless an explicit transaction
     # is active, so durable state cannot silently remain uncommitted.
@@ -710,46 +843,48 @@ class Database:
         Must be called within a transaction context.
         Returns: rowcount
         """
-        await self.connect()
-        cursor = await self._conn.execute(sql, params)
-        if self._transaction_depth == 0:
-            await self._conn.commit()
-        return cursor.rowcount
+        async with self.transaction():
+            cursor = await self._conn.execute(sql, params)
+            return cursor.rowcount
 
     async def write_many(self, sql: str, params_list: list[tuple]) -> int:
         """Execute multiple INSERT/UPDATE/DELETE statements.
         Must be called within a transaction context.
         Returns: rowcount
         """
-        await self.connect()
-        cursor = await self._conn.executemany(sql, params_list)
-        if self._transaction_depth == 0:
-            await self._conn.commit()
-        return cursor.rowcount
+        async with self.transaction():
+            cursor = await self._conn.executemany(sql, params_list)
+            return cursor.rowcount
 
     # Backward compatibility - may be removed in future
     async def execute(self, sql: str, params: tuple = ()) -> aiosqlite.Cursor:
         """Legacy: executes any SQL. Prefer fetch_one/fetch_all for reads,
         write/write_many for writes inside transactions."""
-        await self.connect()
-        cursor = await self._conn.execute(sql, params)
-        if self._transaction_depth == 0:
-            keyword = sql.lstrip().split(None, 1)[0].upper() if sql.strip() else ""
-            if keyword in {"CREATE", "INSERT", "UPDATE", "DELETE", "REPLACE", "ALTER", "DROP", "VACUUM", "REINDEX"}:
-                await self._conn.commit()
-        return cursor
+        async with self._connection_access():
+            await self.connect()
+            try:
+                cursor = await self._conn.execute(sql, params)
+                if self._transaction_depth == 0:
+                    await self._conn.commit()
+                return cursor
+            except BaseException:
+                if self._transaction_depth == 0:
+                    await self._conn.rollback()
+                raise
 
     async def fetchone(self, sql: str, params: tuple = ()) -> aiosqlite.Row | None:
         """Legacy: fetch one row. Prefer fetch_one."""
-        await self.connect()
-        async with self._conn.execute(sql, params) as cursor:
-            return await cursor.fetchone()
+        async with self._connection_access():
+            await self.connect()
+            async with self._conn.execute(sql, params) as cursor:
+                return await cursor.fetchone()
 
     async def fetchall(self, sql: str, params: tuple = ()) -> list[aiosqlite.Row]:
         """Legacy: fetch all rows. Prefer fetch_all."""
-        await self.connect()
-        async with self._conn.execute(sql, params) as cursor:
-            return await cursor.fetchall()
+        async with self._connection_access():
+            await self.connect()
+            async with self._conn.execute(sql, params) as cursor:
+                return await cursor.fetchall()
 
     # --- Storage Helpers ---
 
@@ -781,9 +916,7 @@ class Database:
         if limit is not None:
             sql += f" LIMIT {limit}"
 
-        async with self._conn.execute(sql, params) as cursor:
-            rows = await cursor.fetchall()
-            return [dict(row) for row in rows]
+        return await self.fetch_all(sql, params)
 
     async def get_one(
         self,
@@ -829,7 +962,6 @@ class Database:
 
         sql = f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({placeholders})"
         await self.execute(sql, tuple(values))
-        await self._conn.commit()
 
         # Fetch the created row
         row = await self.get_one(table, where, params)
@@ -860,10 +992,8 @@ class Database:
         placeholders = ", ".join(["?" for _ in columns])
         sql = f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({placeholders})"
 
-        await self.connect()
         params_list = [tuple(row.get(col) for col in columns) for row in rows]
-        await self._conn.executemany(sql, params_list)
-        await self._conn.commit()
+        await self.write_many(sql, params_list)
 
         return len(rows)
 
@@ -915,6 +1045,115 @@ class Database:
             (task_id,),
         )
 
+    async def save_decision_version(self, version: DecisionVersion) -> str:
+        """Commit immutable evidence under a durable bound readiness parent.
+
+        This does not attest review, select a current head, or authorize effects.
+        An identical version retry is a no-op; conflicting identity is rejected.
+        """
+        if not isinstance(version, DecisionVersion):
+            raise ValueError("expected a DecisionVersion")
+
+        # Revalidate frozen input instead of trusting a generic dataclass serializer.
+        version = DecisionVersion(
+            version.version_id, version.decision_id, version.state, version.payload,
+            version.created_at, version.created_by, version.superseded_by,
+        )
+        values = version.to_dict()
+        values["payload"] = json.dumps(values["payload"], sort_keys=True, allow_nan=False)
+        async with self.transaction():
+            parent = await self.get_decision(version.decision_id)
+            if parent is None or parent["decision_type"] != "readiness":
+                raise ValueError("decision version requires a readiness parent")
+            task = await self.fetch_one("SELECT * FROM tasks WHERE id = ?", (parent["task_id"],))
+            if task is None or task["session_id"] != parent["session_id"]:
+                raise ValueError("decision parent requires a durable matching Task/session")
+            if not parent["project_revision"].strip() or not parent["constraint_fingerprint"].strip():
+                raise ValueError("decision parent requires revision and constraints")
+            readiness = version.payload.get("readiness")
+            if readiness != parent["decision_value"]:
+                raise ValueError("decision version readiness must match parent")
+            ImplementationReadiness(readiness)
+            existing = await self.fetch_one(
+                "SELECT * FROM decision_versions WHERE version_id = ?", (version.version_id,),
+            )
+            if existing is not None:
+                if existing != values:
+                    raise ValueError("decision version identity conflict")
+                return version.version_id
+            await self.write(
+                "INSERT INTO decision_versions "
+                "(version_id, decision_id, state, payload, created_at, created_by, superseded_by) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)", tuple(values.values()),
+            )
+        return version.version_id
+
+    async def advance_decision_version(
+        self, version: DecisionVersion, *, expected_version_id: str | None,
+    ) -> str:
+        """Publish a lifecycle transition with an exact expected-head check.
+
+        Snapshot and head commit together. Publication does not authorize
+        execution or attest evidence adequacy, review permission or freshness.
+        """
+        if not isinstance(version, DecisionVersion) or not version.created_by.strip():
+            raise ValueError("decision transition requires an actor")
+        async with self.transaction():
+            head = await self.fetch_one(
+                "SELECT p.* FROM decision_version_publications p WHERE p.decision_id = ? "
+                "AND NOT EXISTS (SELECT 1 FROM decision_version_publications n "
+                "WHERE n.previous_version_id = p.version_id)", (version.decision_id,),
+            )
+            if head is not None and head["version_id"] == version.version_id:
+                if (head["previous_version_id"] == expected_version_id
+                        and await self.get_decision_version(version.version_id) == version):
+                    return version.version_id
+                raise ValueError("decision head conflict")
+            current_id = head["version_id"] if head else None
+            if current_id != expected_version_id:
+                raise ValueError("decision head conflict")
+            if current_id is None:
+                if version.state != DecisionVersionState.DRAFT:
+                    raise ValueError("initial decision publication must be DRAFT")
+            else:
+                current = await self.get_decision_version(current_id)
+                if current is None or not current.state.permits(version.state):
+                    raise ValueError("invalid decision lifecycle transition")
+            await self.save_decision_version(version)
+            await self.write(
+                "INSERT INTO decision_version_publications (decision_id, version_id, previous_version_id) "
+                "VALUES (?, ?, ?)", (version.decision_id, version.version_id, current_id),
+            )
+        return version.version_id
+
+    async def get_current_decision_version(self, decision_id: str) -> DecisionVersion | None:
+        """Return the published head, never a timestamp-selected orphan snapshot."""
+        row = await self.fetch_one(
+            "SELECT v.* FROM decision_versions v JOIN decision_version_publications h "
+            "ON v.version_id = h.version_id AND v.decision_id = h.decision_id "
+            "WHERE h.decision_id = ? AND NOT EXISTS "
+            "(SELECT 1 FROM decision_version_publications n WHERE n.previous_version_id = h.version_id)",
+            (decision_id,),
+        )
+        if row is None:
+            return None
+        return DecisionVersion(
+            row["version_id"], row["decision_id"], row["state"], json.loads(row["payload"]),
+            row["created_at"], row["created_by"], row["superseded_by"],
+        )
+
+    async def get_decision_version(self, version_id: str) -> DecisionVersion | None:
+        """Load typed immutable evidence; never infer freshness or admission."""
+        row = await self.fetch_one(
+            "SELECT * FROM decision_versions WHERE version_id = ?", (version_id,),
+        )
+        if row is None:
+            return None
+        return DecisionVersion(
+            row["version_id"], row["decision_id"], row["state"], json.loads(row["payload"]),
+            row["created_at"], row["created_by"], row["superseded_by"],
+        )
+
     async def upsert(
         self,
         table: str,
@@ -948,7 +1187,6 @@ class Database:
         """
 
         await self.execute(sql, tuple(row[col] for col in columns))
-        await self._conn.commit()
 
         # Fetch the row
         where = " AND ".join([f"{col} = ?" for col in conflict_columns])
