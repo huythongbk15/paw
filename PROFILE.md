@@ -1098,11 +1098,28 @@ real decision lifecycle, a real reviewed Plan and the real shared unit —
 including a failing verification and a restart that does not repeat the
 change. `demos/demo_engineering_workflow.py` runs the chain.
 
+### Personal skill versioning (2026-10-20)
+
+"Learn a personal skill, then roll back safely" was **impossible** rather
+than untested: the registry index was keyed by name, persistence used the
+name as the row id with `INSERT OR REPLACE` (so a new version destroyed
+the old row), and `rollback_skill` searched that one-entry-per-name index
+— it could never find a different version. Review and approval bound only
+a name, so an approval could be carried over to different content, and
+neither required a replay.
+
+Now: a version history keyed by `(name, version)`, one row per version, a
+content hash over the body/trigger/capabilities, review and approval bound
+to the exact version + hash + `SkillReplayEvidence`, and a rollback that
+finds a prior version and survives a reopen. 10 contract tests, fail-positive
+proven.
+
 ### Still open (tracked)
 
-plugging a real test harness into the verification port · skill
-versioning/rollback · provider-issued usage receipts · the gitignored E1-27
-measurement report · the runtime e2e harness's reviewed Plan.
+plugging a real test harness into the verification port · supplying the
+skill replay evidence from the application · provider-issued usage receipts ·
+the gitignored E1-27 measurement report · the runtime e2e harness's
+reviewed Plan.
 
 ---
 
@@ -1119,5 +1136,6 @@ measurement report · the runtime e2e harness's reviewed Plan.
 | **B-19** | **F04 + F05 CLOSED** | Commits `bd2884e`, `30a2b84`; 35 new contract tests; fail-positive proven. |
 | **Product release** | `PARTIAL` | Working tree clean, commits pushed, D3 green. No clean-release verdict claimed. |
 | **B-20** | ✅ PROVED | The engineering workflow: research → choose → change → declared verification, with a failure and a restart. 8 contract tests, fail-positive proven, runnable demo. |
+| **Skill versioning** | ✅ FIXED | Version history, one row per version, review/approval bound to version + content hash + replay, rollback finds a prior version. 10 contract tests, fail-positive proven. |
 | **Next** | plug a real test harness into the verification port | so the chain is proved against a real project's own suite |
 
