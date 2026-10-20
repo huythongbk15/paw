@@ -13,6 +13,7 @@ from typing import Any
 
 from paw.core.approval import ApprovalRequest, ApprovalStore
 from paw.core.autonomy import AutonomyBudget, AutonomyController, AutonomyProfile
+from paw.core.config import settings
 from paw.core.context_compiler import ContextCompiler
 from paw.core.executor import CapabilityRouter, ExecutorRegistry, MockExecutor
 from paw.core.model_executor import ModelExecutor
@@ -22,17 +23,23 @@ from paw.core.models import (
     Capability,
     ChatRole,
     ChatSessionStatus,
+    ExecutionObservation,
     ProposedAction,
+    ResourceUsage,
     StopReason,
     TaskStatus,
 )
+from paw.core.planner import Planner
 from paw.core.policy import PolicyGuard
+from paw.core.reasoning_contracts import DecisionVersion
+from paw.core.repo_filter import RepoFilter
 from paw.core.runtime import PawRuntime, RuntimeOutcome
 from paw.core.session import SessionManager
 from paw.core.skills import get_skill_fabric
 from paw.core.storage import db
 from paw.core.task import Task, TaskManager
 from paw.executors.filesystem import LocalFilesystemExecutor
+from paw.knowledge.checksum import compute_constraint_fingerprint, compute_repo_revision
 
 from .chat_inspection import (
     artifacts_projection,
@@ -271,6 +278,16 @@ class ChatService:
         self._executor_registry.register(LocalFilesystemExecutor(self.workspace_root))
         self._executor_registry.register(MockExecutor())
         self._capability_router = CapabilityRouter(self._executor_registry)
+        # Exclude only PAW's configured mutable state, never all *.db files.
+        exclusions = list(RepoFilter.safe_default().exclude_patterns)
+        for owned in (Path(db.db_path).absolute(), settings.paw_home.absolute()):
+            if owned != self.workspace_root and owned.is_relative_to(self.workspace_root):
+                relative = owned.relative_to(self.workspace_root).as_posix()
+                exclusions.extend([relative, relative + "-wal", relative + "-shm"])
+        self._repo_filter = RepoFilter(exclude_patterns=tuple(exclusions))
+        self._hard_constraints = {"workspace_root": str(self.workspace_root),
+                                  "executor": "local-filesystem", "no_network": True,
+                                  "explicit_review": True}
 
     async def open(self, session_id: str | None = None) -> ChatSessionRecord:
         await db.initialize()
@@ -334,7 +351,8 @@ class ChatService:
         selected.reverse()
         return [item.as_model_message() for item in selected]
 
-    async def send(self, message: str) -> ChatReply:
+    async def _prepare_turn(self, message: str) -> ChatReply | tuple[Task, ProposedAction]:
+        """Admit and persist one turn for every chat transport."""
         session = self._require_session()
         if session.status == ChatSessionStatus.CANCELLED:
             return ChatReply(
@@ -360,6 +378,14 @@ class ChatService:
                     approval_id=pending.id,
                     checkpoint_id=session.last_checkpoint_id,
                 )
+
+        if not isinstance(message, str) or not message.strip() or len(message) > self.MAX_MODEL_CHARS:
+            return ChatReply(
+                session_id=session.session_id,
+                content=f"Yêu cầu phải có nội dung và không vượt {self.MAX_MODEL_CHARS} ký tự.",
+                status="invalid_input",
+                reason="invalid_input",
+            )
 
         filesystem_intent = self._parse_filesystem_intent(message)
         capabilities = self.infer_capabilities(message)
@@ -423,6 +449,13 @@ class ChatService:
         )
         session.metadata["last_action"] = action.to_dict()
         await ChatStateStore.save_session(session)
+        return task, action
+
+    async def send(self, message: str) -> ChatReply:
+        prepared = await self._prepare_turn(message)
+        if isinstance(prepared, ChatReply):
+            return prepared
+        task, action = prepared
         return await self._run_action(task, action)
 
     def _preferred_provider(self) -> str | None:
@@ -466,7 +499,88 @@ class ChatService:
             checkpoint_interval=1,
             default_role="fast",
             preferred_provider=self._preferred_provider(),
+            project_root=str(self.workspace_root), hard_constraints=self._hard_constraints,
+            repo_filter=self._repo_filter,
         )
+
+    async def _request_implementation_review(self, task: Task, action: ProposedAction) -> ChatReply | None:
+        """Bounded FAST decision for the supported structured local write only."""
+        if action.metadata.get("plan_id") or not PawRuntime.requires_implementation(action):
+            return None
+        intent = action.metadata.get("filesystem")
+        if not isinstance(intent, dict) or intent.get("operation") != "write":
+            return None  # Normal runtime Policy then missing-authority refusal.
+        research_runtime = PawRuntime(AutonomyController(
+            budget=AutonomyBudget.from_profile(AutonomyProfile.INTERACTIVE),
+            profile=AutonomyProfile.INTERACTIVE, policy_guard=PolicyGuard(interactive=False),
+        ), auto_checkpoint=False)
+        research = ProposedAction(
+            goal="Bounded structured-write evidence", capabilities=[Capability.FILESYSTEM_READ],
+            context={"path": str(self.workspace_root), "operation": "decision.research_snapshot"},
+            is_mutating=False, is_research=True, plan_purpose="research",
+            operation_id=f"research-{task.id}", estimated_cost=ResourceUsage(tool_calls=1),
+        )
+        async def snapshot(_task_id, _action):
+            try:
+                executor = self._executor_registry.get("local-filesystem")
+                target, relative = executor._target(str(intent["path"]))
+                if executor._write_uses_symlink(target) or not self._repo_filter.match(relative):
+                    raise ValueError("write target is symbolic or excluded from relevant inputs")
+                revision = compute_repo_revision(self.workspace_root, self._repo_filter)
+            except (ValueError, OSError) as exc:
+                return ExecutionObservation(step_id=research.operation_id, action_id=research.operation_id,
+                                            success=False, error=str(exc))
+            return ExecutionObservation(step_id=research.operation_id, action_id=research.operation_id,
+                                        success=True, result={"project_revision": revision, "done": False},
+                                        resources_used=ResourceUsage(tool_calls=1))
+        proof = await research_runtime._execute_unit(task.id, research, iteration_index=0,
+                                                     step_fn=snapshot, operation_type="research",
+                                                     step_id=research.operation_id)
+        if proof.gate is not None or proof.observation is None or not proof.observation.success:
+            reason = (proof.observation.error if proof.observation else "Policy/Autonomy refused research read")
+            return ChatReply(session_id=task.session_id, task_id=task.id, status="failed",
+                             content=f"Không đủ evidence freshness: {reason}", reason="readiness_refused")
+        revision = proof.observation.result["project_revision"]
+        version_id = uuid.uuid4().hex[:24]
+        payload = {
+            "readiness": "ready", "depth": "FAST", "problem": task.goal,
+            "constraints": self._hard_constraints, "evidence": {"project_revision": revision,
+                "intent": intent, "executor": "local-filesystem"},
+            "options": ["bounded local filesystem executor", "manual edit without agent execution"],
+            "selected": "bounded local filesystem executor",
+            "contrary": ["replace may overwrite content", "snapshot is not an external-writer lock"],
+            "stop_condition": "exact intent, complete bounded snapshot, explicit human review",
+            "acceptance": ["exact target/content", "no provider call", "durable intent and read-only recovery"],
+            "implementation_action": action.to_dict(),
+        }
+        async with db.transaction():
+            parent = await db.record_decision(
+                "readiness", "ready", task_id=task.id, session_id=task.session_id,
+                project_revision=revision,
+                constraint_fingerprint=compute_constraint_fingerprint(self._hard_constraints),
+                reason="bounded structured local write; human evidence review pending",
+            )
+            draft = DecisionVersion(version_id + "-draft", parent, "draft", payload,
+                                    datetime.now(UTC).isoformat(), "local-structured-research")
+            final = DecisionVersion(version_id, parent, "final", payload,
+                                    datetime.now(UTC).isoformat(), "local-structured-research")
+            await db.advance_decision_version(draft, expected_version_id=None)
+            await db.advance_decision_version(final, expected_version_id=draft.version_id)
+            review = await ApprovalStore.request_decision_review(final.version_id)
+            session = self._require_session()
+            session.pending_approval_id = review.id
+            session.metadata["last_action"] = action.to_dict()
+            await ChatStateStore.save_session(session)
+            await TaskManager.update_status(task.id, TaskStatus.BLOCKED)
+        content = (f"Cần review decision `{final.version_id}` trước implementation. "
+                   "Phương án: executor filesystem local, không gọi model; thay thế: sửa thủ công. "
+                   "Rủi ro: replace ghi đè; snapshot không khóa writer. "
+                   "Dùng `/approve` để chấp nhận evidence; sau đó còn approval operation riêng."
+                   f"\n\n```diff\n{action.metadata.get('change_preview', '')}\n```")
+        await ChatStateStore.add_message(task.session_id, ChatRole.ASSISTANT, content,
+                                         task_id=task.id, metadata={"purpose": "decision_review"})
+        return ChatReply(session_id=task.session_id, task_id=task.id, status="waiting_approval",
+                         content=content, waiting_for_approval=True, approval_id=review.id)
 
     async def _run_action(
         self,
@@ -476,6 +590,9 @@ class ChatService:
         resume_from_checkpoint: str | None = None,
     ) -> ChatReply:
         session = self._require_session()
+        review = await self._request_implementation_review(task, action)
+        if review is not None:
+            return review
         runtime = await self._build_runtime()
 
         async def brain(
@@ -510,71 +627,16 @@ class ChatService:
         - ``"complete"`` — final :class:`ChatReply`
         - ``"error"`` — error messages
         """
+        prepared = await self._prepare_turn(message)
+        if isinstance(prepared, ChatReply):
+            yield StreamEvent(event_type="complete", reply=prepared)
+            return
+        task, action = prepared
         session = self._require_session()
-
-        # --- same setup as send() ---
-        filesystem_intent = self._parse_filesystem_intent(message)
-        capabilities = self.infer_capabilities(message)
-        task = await TaskManager.create(
-            session_id=session.session_id,
-            goal=message,
-            requested_capabilities=capabilities,
-        )
-        session.current_task_id = task.id
-        session.pending_approval_id = None
-        await ChatStateStore.save_session(session)
-        await ChatStateStore.add_message(
-            session.session_id,
-            ChatRole.USER,
-            message,
-            task_id=task.id,
-        )
-
-        history = await ChatStateStore.history(session.session_id)
-        action_context: dict[str, Any] = {
-            "session_id": session.session_id,
-            "provider_mode": self.provider_mode,
-            "history_messages": len(history),
-            "workspace_root": str(self.workspace_root),
-        }
-        action_metadata: dict[str, Any] = {
-            "done": True,
-            "messages": self._bounded_model_messages(history),
-            "chat_session_id": session.session_id,
-            "preferred_executor": "mock",
-        }
-        if filesystem_intent:
-            target = (
-                self.workspace_root / str(filesystem_intent.get("path") or ".")
-            ).resolve(strict=False)
-            action_context.update(
-                {
-                    "path": str(target),
-                    "filesystem_operation": filesystem_intent["operation"],
-                    "size": len(
-                        str(filesystem_intent.get("content") or "").encode("utf-8")
-                    ),
-                }
-            )
-            action_metadata.update(
-                {
-                    "filesystem": filesystem_intent,
-                    "preferred_executor": "local-filesystem",
-                    "model_required": False,
-                    "change_preview": self._change_preview(filesystem_intent),
-                }
-            )
-
-        action = ProposedAction(
-            goal=message,
-            capabilities=capabilities,
-            context=action_context,
-            metadata=action_metadata,
-            operation_id=f"chat-{task.id}",
-            idempotency_key=f"chat:{task.id}",
-        )
-        session.metadata["last_action"] = action.to_dict()
-        await ChatStateStore.save_session(session)
+        review = await self._request_implementation_review(task, action)
+        if review is not None:
+            yield StreamEvent(event_type="complete", reply=review)
+            return
 
         # --- build runtime and wire streaming callback ---
         runtime = await self._build_runtime()
@@ -849,6 +911,25 @@ class ChatService:
                 content=f"Không tìm thấy task `{request.task_id}`.",
                 status="not_found",
             )
+        if request.metadata.get("purpose") == "decision_review":
+            try:
+                version_id = str(request.action.context["decision"]["version_id"])
+                version = await db.get_decision_version(version_id)
+                action = ProposedAction.model_validate(session.metadata["last_action"])
+                if version is None or version.to_dict()["payload"].get("implementation_action") != action.to_dict():
+                    raise ValueError("reviewed intent and current action differ")
+                planner = Planner(workspace_root=self.workspace_root, hard_constraints=self._hard_constraints,
+                                  repo_filter=self._repo_filter)
+                async with db.transaction():
+                    plan = await planner.plan(task.id, purpose="implementation", decision_version_id=version_id)
+                    action = action.model_copy(update={"metadata": {**action.metadata, "plan_id": plan.id}})
+                    session.metadata["last_action"] = action.to_dict()
+                    await ChatStateStore.save_session(session)
+            except (ValueError, PermissionError, OSError, KeyError) as exc:
+                return ChatReply(session_id=session.session_id, task_id=task.id, status="failed",
+                                 content=f"Decision không đủ quyền implementation: {exc}",
+                                 reason="readiness_refused")
+            return await self._run_action(task, action)
         return await self._run_action(
             task,
             request.action,

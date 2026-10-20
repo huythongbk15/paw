@@ -76,7 +76,7 @@ def test_chat_model_prompt_is_bounded():
 
 
 @pytest.mark.asyncio
-async def test_ask_persists_then_approve_resume_consumes_exact_operation(temp_db):
+async def test_operation_approval_alone_does_not_authorize_unresearched_write(temp_db):
     service = ChatService(provider_mode="local")
     session = await service.open()
 
@@ -112,11 +112,12 @@ async def test_ask_persists_then_approve_resume_consumes_exact_operation(temp_db
     assert await ApprovalStore.is_approved(task.id, reloaded_request.action) is True
     completed = await resumed_service.resume()
 
-    assert completed.status == "completed"
+    assert completed.status == "failed"
+    assert "implementation_admission_refused" in completed.content
     assert completed.task_id == task.id
     request = await ApprovalStore.get(waiting.approval_id)
     assert request is not None
-    assert request.status == ApprovalStatus.CONSUMED
+    assert request.status == ApprovalStatus.APPROVED
     assert await db.fetch_one(
         "SELECT * FROM operation_records WHERE task_id = ? AND op_id = ?",
         (task.id, request.operation_id),
@@ -268,7 +269,8 @@ def test_cli_chat_approval_survives_process_boundary(tmp_path):
     )
     assert resume_process.returncode == 0, resume_process.stderr
     completed = json.loads(resume_process.stdout)
-    assert completed["status"] == "completed"
+    assert completed["status"] == "failed"
+    assert "implementation_admission_refused" in completed["content"]
     assert completed["task_id"] == waiting["task_id"]
-    assert completed["model"] == "local-fast"
-    assert completed["executor"] == "mock"
+    assert completed["model"] is None
+    assert completed["executor"] is None

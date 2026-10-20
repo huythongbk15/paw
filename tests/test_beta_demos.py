@@ -63,13 +63,14 @@ class TestIdeateDemo:
 
 
 class TestChangeDemo:
-    def test_approved_change_writes_and_verifies(self):
+    def test_reviewed_approved_change_writes_without_claiming_engineering_verification(self):
         from demos.demo_change import run_change_demo
-        result = asyncio.run(run_change_demo(approve=True))
+        result = asyncio.run(run_change_demo(approve=True, review=True))
         assert result["uncertainty"]["approval_granted"] is True
         assert result["uncertainty"]["file_written"] is True
-        assert result["uncertainty"]["verification_passed"] is True
-        assert "verified" in result["next_action"].lower()
+        assert result["uncertainty"]["content_observed"] is True
+        assert result["uncertainty"]["verification_passed"] is False
+        assert "observed" in result["next_action"].lower()
 
     def test_denied_change_no_side_effects(self):
         from demos.demo_change import run_change_demo
@@ -97,28 +98,24 @@ class TestReviewDemo:
 class TestRestartSafety:
     """B-08: Restart one demo and prove no completed side effect repeats."""
 
-    def test_denied_change_has_zero_side_effects(self):
+    def test_denied_change_has_zero_side_effects(self, tmp_path):
         from demos.demo_change import run_change_demo
-        import shutil
-        work_dir = Path("/tmp/paw_beta_change_restart")
-        if work_dir.exists():
-            shutil.rmtree(work_dir)
+        work_dir = tmp_path / "restart"
         result = asyncio.run(run_change_demo(approve=False, work_dir=str(work_dir)))
         assert result["uncertainty"]["file_written"] is False
         assert not (work_dir / "changed_file.txt").exists()
 
-    def test_approved_change_is_idempotent(self):
+    def test_duplicate_create_does_not_overwrite_existing_content(self, tmp_path):
         from demos.demo_change import run_change_demo
-        import shutil
-        work_dir = Path("/tmp/paw_beta_change_idempotent")
-        if work_dir.exists():
-            shutil.rmtree(work_dir)
-        r1 = asyncio.run(run_change_demo(approve=True, work_dir=str(work_dir)))
-        assert r1["uncertainty"]["verification_passed"] is True
-        r2 = asyncio.run(run_change_demo(approve=True, work_dir=str(work_dir)))
-        assert r2["uncertainty"]["verification_passed"] is True
-        assert r2["uncertainty"]["file_written"] is True
-        shutil.rmtree(work_dir)
+        work_dir = tmp_path / "duplicate"
+        r1 = asyncio.run(run_change_demo(approve=True, review=True, work_dir=str(work_dir)))
+        assert r1["uncertainty"]["content_observed"] is True
+        target = work_dir / "changed_file.txt"
+        before = (target.read_bytes(), target.stat().st_mtime_ns)
+        r2 = asyncio.run(run_change_demo(approve=True, review=True, work_dir=str(work_dir)))
+        assert r2["uncertainty"]["file_written"] is False
+        assert r2["uncertainty"]["verification_passed"] is False
+        assert (target.read_bytes(), target.stat().st_mtime_ns) == before
 
 
 class TestBetaInspectCLI:
