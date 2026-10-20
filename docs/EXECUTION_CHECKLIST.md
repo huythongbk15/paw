@@ -90,6 +90,18 @@
   charter does not authorize shell execution). The verification port is where a
   real CI or test harness plugs in; that integration is the next piece.
   — OPEN.
+- [x] Personal skill versioning: a version is a version, not a name. The
+  registry keeps a version history, persistence stores one row per
+  (name, version), review and approval are bound to the exact version and
+  content hash and require replay evidence, and rollback finds a prior
+  version.
+  — RESOLVED. `tests/test_skill_versioning_contract.py` 10 passed, fail-positive
+  proven (6/10 fail with the defects restored); the E3 skill suites and the
+  skill fabric integration tests pass; ruff check clean.
+- [ ] The replay evidence is supplied by the caller, not by PAW: PAW does not
+  run shells, so the proof that a skill actually runs comes from the
+  application. The governance module's callers must be updated to supply it.
+  — OPEN.
 - [x] B-19/F04: provider discovery is an explicit, Policy-admitted operation.
   `ModelRouter.route()` is cache-only; `discover_providers()` is the explicit
   operation; the runtime performs it only after Policy admits

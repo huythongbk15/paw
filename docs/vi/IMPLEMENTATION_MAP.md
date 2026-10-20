@@ -273,6 +273,61 @@ chạy với test suite thật của một project, vì PAW không chạy shell.
 port là chỗ một CI hay test harness thật cắm vào, và tích hợp đó là phần tiếp
 theo.
 
+### Phiên bản personal skill — 2026-10-20, STANDARD / READY
+
+**Các lỗi.** "Học skill cá nhân rồi rollback an toàn" là bất khả thi chứ không
+phải chỉ là chưa được test:
+
+* index trong bộ nhớ được key theo **tên**, nên một candidate cùng tên thay thế
+  manifest đang có — một phiên bản trước đó không với tới được;
+* persistence dùng **tên làm id row** với `INSERT OR REPLACE`, nên lưu phiên
+  bản mới xoá mất row cũ;
+* `rollback_skill` tìm trong đúng index một-entry-per-name đó, nên không bao giờ
+  tìm thấy phiên bản khác: rollback về phiên bản trước là bất khả thi về cấu
+  trúc;
+* `review_skill` và `approve_skill` chỉ gắn theo **tên**, nên approval có thể
+  mang sang nội dung khác;
+* cả hai đều không bắt buộc **replay**. Skill là văn bản có thể thực thi; đọc
+  nó không phải là chạy nó. Nhánh supersede của `approve_skill` cũng là code
+  chết: nó so sánh index entry với chính nó.
+
+**Sửa.**
+
+* `SkillFabric` giữ **lịch sử phiên bản** theo `(tên, phiên bản` bên cạnh
+  index của phiên bản hiện tại. Index vẫn resolve phiên bản hiện tại; lịch sử
+  giữ mọi phiên bản còn với tới được.
+* Id row của persistence nay là cặp `(tên, phiên bản)`, nên phiên bản mới là
+  **row mới** và phiên bản cũ còn lại. Thứ tự load được sắp xếp để phiên bản
+  cập nhật gần nhất là phiên bản hiện tại.
+* `content_hash()` băm body, trigger và capabilities — thứ reviewer đọc và thứ
+  executor chạy. Thay đổi bất kỳ cái nào trong số đó làm approval cũ mất hiệu
+  lực.
+* `review_skill` và `approve_skill` nhận **đúng phiên bản** và **bằng chứng
+  replay** (`SkillReplayEvidence`). Replay fail, thiếu hoặc âm tính thì không
+  review được và không activate được. Record review và approval mang phiên bản,
+  content hash và chi tiết replay.
+* `approve_skill` supersede phiên bản ACTIVE trước đó tìm thấy trong **lịch
+  sử**, và từ chối khi nội dung đã đổi sau lúc review.
+* `rollback_skill` tìm trong lịch sử một phiên bản **trước**, đánh dấu bản hiện
+  tại là superseded, và đưa bản đích trở lại làm hiện tại. Rollback về chính
+  phiên bản hiện tại bị từ chối: đó không phải rollback.
+* `SkillGovernance.promote_to_active` truyền version và replay xuống.
+
+**Bằng chứng.** `tests/test_skill_versioning_contract.py` (10 test). Nó chứng
+minh hai phiên bản của một skill là hai row và cả hai còn lại sau reopen; review
+không có replay bị từ chối, và review có replay fail cũng bị từ chối; approval
+không có replay không activate được skill; nội dung đổi làm approval mất hiệu
+lực; approve một phiên bản không approve phiên bản khác; rollback tìm thấy phiên
+bản trước, làm nó trở lại hiện tại, và còn lại sau reopen; một phiên bản gần
+giống không phải là khớp.
+
+*Chứng minh fail-positive.* Khôi phục name-as-row-id, rollback chỉ tìm trong
+index và "review không cần replay" làm fail 6/10.
+
+**Còn mở.** Replay do caller cung cấp, không phải PAW: PAW không chạy shell, nên
+bằng chứng rằng skill thực sự chạy đến từ application. Các caller của
+governance module phải được cập nhật để cung cấp nó.
+
 ### Bộ đếm operation của checkpoint (code)
 
 `TaskCheckpoint` giờ mang `operations_completed`, lưu trong cột mới

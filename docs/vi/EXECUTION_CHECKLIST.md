@@ -91,6 +91,17 @@
   execution). Verification port là chỗ một CI hay test harness thật cắm vào; tích hợp
   đó là phần tiếp theo.
   — OPEN.
+- [x] Phiên bản personal skill: một phiên bản là một phiên bản, không phải một
+  cái tên. Registry giữ lịch sử phiên bản, persistence lưu một row cho mỗi
+  (tên, phiên bản), review và approval gắn với đúng phiên bản và content hash
+  và bắt buộc có bằng chứng replay, và rollback tìm thấy phiên bản trước.
+  — RESOLVED. `tests/test_skill_versioning_contract.py` 10 passed, có chứng minh
+  fail-positive (6/10 fail khi khôi phục lỗi); các bộ test skill E3 và test
+  tích hợp skill fabric đều pass; ruff check clean.
+- [ ] Bằng chứng replay do caller cung cấp, không phải PAW: PAW không chạy
+  shell, nên bằng chứng rằng skill thực sự chạy đến từ application. Các caller
+  của governance module phải được cập nhật để cung cấp nó.
+  — OPEN.
 - [x] B-19/F04: provider discovery là thao tác tường minh, do Policy cho phép.
   `ModelRouter.route()` chỉ dùng cache; `discover_providers()` là thao tác tường
   minh; runtime chỉ thực hiện sau khi Policy cho phép `Capability.NETWORK_HTTP`;

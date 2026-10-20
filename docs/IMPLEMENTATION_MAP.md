@@ -295,6 +295,64 @@ it does not yet run against a real project's own test suite, because PAW
 does not run shells. The verification port is where a real CI or test
 harness plugs in, and that integration is the next piece.
 
+### Personal skill versioning — 2026-10-20, STANDARD / READY
+
+**The defects.** "Learn a personal skill, then roll back safely" was
+impossible rather than merely untested:
+
+* the in-memory index was keyed by **name**, so a candidate with the same
+  name replaced the manifest that was there - a prior version was
+  unreachable;
+* persistence used the **name as the row id** with `INSERT OR REPLACE`, so
+  saving a new version destroyed the old row;
+* `rollback_skill` searched that same one-entry-per-name index, so it could
+  never find a different version: rolling back to a prior version was
+  structurally impossible;
+* `review_skill` and `approve_skill` bound only a **name**, so an approval
+  could be carried over to different content;
+* neither required a **replay**. A skill is executable text; reading it is
+  not running it. The `approve_skill` supersede branch was also dead code:
+  it compared the index entry with itself.
+
+**The fix.**
+
+* `SkillFabric` keeps a **version history** keyed by `(name, version)`
+  alongside the current-version index. The index still resolves the
+  current version; the history keeps every version reachable.
+* The persistence row id is now the `(name, version)` pair, so a new
+  version is a **new row** and the prior one survives. The load is
+  ordered so the most recently updated version becomes current.
+* `content_hash()` hashes the body, the trigger and the capabilities - what
+  a reviewer reads and what an executor runs. A change to any of them
+  invalidates the approval that covered them.
+* `review_skill` and `approve_skill` take the **exact version** and
+  **replay evidence** (`SkillReplayEvidence`). A failed, missing or
+  negative replay cannot be reviewed and cannot be activated. The review
+  and approval records carry the version, the content hash and the replay
+  detail.
+* `approve_skill` supersedes the previously ACTIVE version found in the
+  **history**, and refuses when the content changed after the review.
+* `rollback_skill` searches the history for a **prior** version, marks the
+  current one superseded, and makes the target current again. Rolling back
+  to the current version is refused: that is not a rollback.
+* `SkillGovernance.promote_to_active` passes the version and the replay
+  through.
+
+**Evidence.** `tests/test_skill_versioning_contract.py` (10 tests). It proves
+two versions of one skill are two rows and both survive a reopen; a review
+without replay evidence is refused and so is one with a failed replay; an
+approval without replay evidence cannot activate a skill; changed content
+invalidates the approval; approving one version does not approve another;
+rollback finds a prior version, becomes current again, and survives a
+reopen; a near-miss version is not a match.
+
+*Fail-positive proven.* Restoring the name-as-row-id, the index-only
+rollback and "review without replay" fails 6 of the 10.
+
+**Still open.** The replay is supplied by the caller, not by PAW: PAW does
+not run shells, so the evidence that a skill actually runs comes from the
+application. The governance module's callers must be updated to supply it.
+
 ### Checkpoint operation counter (code)
 
 `TaskCheckpoint` now carries `operations_completed`, persisted in a new
