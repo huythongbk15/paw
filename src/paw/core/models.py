@@ -180,23 +180,54 @@ class SkillState(StrEnum):
     SUPERSEDED = "superseded"
 
 
+@dataclass(frozen=True)
+class SkillReplayEvidence:
+    """Evidence that a skill version was replayed before activation.
+
+    A skill is executable text. Reviewing it says someone read it;
+    replaying it says it actually runs. Activation requires the replay:
+    a failed, missing or negative replay cannot activate a skill.
+    """
+
+    ok: bool
+    detail: str = ""
+    content_hash: str = ""
+
+
 @dataclass
 class ReviewRecord:
-    """Record of a skill review (E3-04)."""
+    """Record of a skill review (E3-04).
+
+    The record binds the review to the **exact** version and the exact
+    content that was reviewed. Without that binding an approval can be
+    carried over to different content, and a review of one version can
+    silently approve another.
+    """
     reviewer: str
     reviewed_at: str  # ISO datetime
     diff_summary: str
     safety_assessment: str
     expected_effect: str
+    skill_version: str = ""
+    content_hash: str = ""
+    replay_ok: bool = False
+    replay_detail: str = ""
 
 
 @dataclass
 class ApprovalRecord:
-    """Record of skill approval for ACTIVE promotion (E3-18)."""
+    """Record of skill approval for ACTIVE promotion (E3-18).
+
+    Bound to the exact version, the exact content hash and the replay
+    evidence that justified it. A changed body invalidates the approval.
+    """
     approver: str
     approved_at: str  # ISO datetime
     skill_version: str
     notes: str = ""
+    content_hash: str = ""
+    replay_ok: bool = False
+    replay_detail: str = ""
 
 
 # --- E3-03: Legal skill state transitions ---
