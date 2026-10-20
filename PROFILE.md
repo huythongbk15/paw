@@ -1007,14 +1007,88 @@ Handoff spec: `_filter_for_availability` restore supported-role filtering + desc
 
 ---
 
-## Current progress snapshot (2026-09-15)
+---
+
+## 2026-10-20 — Evidence-reliability repair + B-19 F04/F05 closed
+
+**Status: product release still `PARTIAL`; the working tree is now clean and
+every prior session's uncommitted work is committed and pushed.**
+
+13 atomic commits from base `9fb893e` to `a042182`, pushed to `origin/main`.
+Final D3 on the frozen revision: **2316 passed, 2 skipped, 0 failed** (19:04),
+ruff clean.
+
+### Ledger / evidence reliability (code)
+
+Two real defects made the ledger unusable for cost analysis:
+
+1. `commit_operation` serialized `ResourceUsage` with `model_dump()`, which
+   emits only pydantic *fields*. `provider_calls` is a *method*, so it was
+   absent from every STEP_EXECUTED payload — `get_model_call_count()` returned
+   **0** for every runtime task and `assert_model_calls_monotonic` was vacuous.
+   Fixed by `ResourceUsage.to_ledger_dict()` as the single canonical form.
+2. `commit_operation` already writes one STEP_EXECUTED atomically with the
+   OperationRecord, and `_execute_unit` wrote a **second** one for the same
+   operation — every operation produced two events. The duplicate is removed.
+
+`tests/test_ledger_usage_accounting_contract.py` (6) — fail-positive proven
+(5/6 fail with the defects restored).
+
+### Benchmark oracle attribution
+
+`benchmarks/runtime/run_e2e.py` measured its baseline *after* the PAW writes,
+then reset the corpus and wrote both files **directly**, so the "after"
+measurement described the direct write rather than PAW's output — and it
+returned 0 regardless. Baseline is now measured on the pristine repository
+before any write, "after" on the files PAW actually produced, and the exit
+code reflects an explicit verdict. The harness still has no reviewed Plan, so
+it now reports `FAIL` (a negative control) rather than certifying a write.
+
+### Document status synchronization
+
+The canonical set carried contradictory verdicts: the English and Vietnamese
+Roadmaps gave **opposite** verdicts for the same dated 2026-09-09 review and
+named different "current tracks". The root README claimed E1 VERIFIED / E2
+READY while the canonical set said E1 PARTIAL / E2 BLOCKED. The resolution
+separates a **gate** measured in its own scope from a **track** qualification
+for release. `docs/README.md` + `docs/vi/README.md` now hold the single
+current-status table; everything else links there.
+
+### B-19 closed
+
+* **F05** — the outbound payload is bound to the reviewed manifest. A remote
+  call with no manifest now *refuses* instead of skipping the gate; a foreign
+  manifest refuses; content the disclosure refused cannot ride the message
+  list; an oversized payload refuses. A second defect surfaced: the runtime
+  used the provider *name* as the disclosure *kind*, so every real cloud
+  provider refused as `unknown_provider_kind` and the class table never
+  decided anything. `provider_kind_for()` now owns the E1-03 mapping.
+* **F04** — provider discovery is an explicit, Policy-admitted operation.
+  `ModelRouter.route()` is cache-only ("selects only from admitted cached
+  manifests", per AGENTS.md); `discover_providers()` is the explicit
+  operation; the runtime performs it only after Policy admits
+  `Capability.NETWORK_HTTP`; `ChatService.open()` no longer initializes
+  providers.
+
+### Still open (tracked)
+
+skill versioning/rollback · the end-to-end engineering inference path ·
+provider-issued usage receipts · the gitignored E1-27 measurement report ·
+the runtime e2e harness's reviewed Plan.
+
+---
+
+## Current progress snapshot (2026-10-20)
 
 | Track | Status | Evidence |
 |---|---|---|
 | Phase 0–22 + E0–E4 + E3 | PASS | Full suite green, ruff clean |
 | BETA (demos + chat REPL + log/thinking) | COMPLETE | 55 beta tests pass |
-| **TUI** | ✅ COMPLETE | `paw tui` command, 3-panel, token streaming. 80 regression tests pass. Commit `f1f9a35` pushed. |
-| **TUI Vietnamese input fix** | ✅ COMPLETE | Inline telex converter (`paw.tui.telex`) + IME timing fix (0.1s delay, live value read, async clear). `/telex on/off/status` commands + `--telex` CLI flag. 31 tests pass. Commit `46d8a2b` pushed. |
-| E1 | VERIFIED | 200+ E1 tests, min_recall=1.00 on `8d01d90` |
-| **Next** | await Đại ca | TUI runtime testing or next feature track
+| TUI | ✅ COMPLETE | `paw tui` command, 3-panel, token streaming. Commit `f1f9a35` pushed. |
+| TUI Vietnamese input fix | ✅ COMPLETE | Inline telex converter + IME timing fix. Commit `46d8a2b` pushed. |
+| E1 | gate VERIFIED / track `PARTIAL` | E1-27 measurement on `8d01d90`; the *track* qualification is not established. Canonical table in `docs/README.md`. |
+| **B-18** | PARTIAL | Shared-unit admission + prepared recovery + two-approval CLI committed (`b54804b`, `31e8266`). |
+| **B-19** | **F04 + F05 CLOSED** | Commits `bd2884e`, `30a2b84`; 35 new contract tests; fail-positive proven. |
+| **Product release** | `PARTIAL` | Working tree clean, 13 commits pushed, D3 green on `a042182`. No clean-release verdict claimed. |
+| **Next** | prove one real engineering workflow | research → choose → change → declared verification, with a failure and a restart |
 
