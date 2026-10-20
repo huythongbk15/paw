@@ -1,12 +1,8 @@
-"""E2-39: Make NEEDS_CLARIFICATION persist the question and wait without execution.
+"""Legacy raw readiness is diagnostic, never executable authority.
 
-Four-layer evidence:
-  1. Invariant  — ProposedAction has clarification_question field
-  2. Runtime    — NEEDS_CLARIFICATION blocks mutating proposals and returns clarification error
-  3. Adversarial — empty question yields generic message; non-mutating bypasses gate
-  4. Measurable — error message includes "needs_clarification:" prefix; ledger logs NEEDS_CLARIFICATION
-
-Decision level: D2.
+Migrated 2026-10-07: private mutating calls must refuse even with READY/research/
+spike flags. Reviewed positive, real freshness and recovery proofs are in
+ test_runtime_implementation_admission.py; no raw-string compatibility bypass.
 """
 import pytest
 
@@ -45,7 +41,7 @@ async def test_rt1_needs_clarification_blocks_with_question():
     )
     obs = await runtime._execute_action("task-1", proposed)
     assert obs.success is False
-    assert obs.error == "needs_clarification:What is the target environment?"
+    assert "implementation_admission_refused" in obs.error
 
 
 @pytest.mark.asyncio
@@ -64,7 +60,7 @@ async def test_rt2_needs_clarification_blocks_empty_question():
     )
     obs = await runtime._execute_action("task-2", proposed)
     assert obs.success is False
-    assert obs.error == "needs_clarification:no_question_provided"
+    assert "implementation_admission_refused" in obs.error
 
 
 @pytest.mark.asyncio
@@ -88,7 +84,7 @@ async def test_rt3_needs_clarification_allows_non_mutating():
 
 
 @pytest.mark.asyncio
-async def test_rt4_ready_bypasses_clarification():
+async def test_rt4_ready_refuses_raw_clarification():
     guard = PolicyGuard(interactive=False)
     ac = AutonomyController(budget=AutonomyBudget(), policy_guard=guard)
     runtime = PawRuntime(ac, readiness="READY")
@@ -104,4 +100,4 @@ async def test_rt4_ready_bypasses_clarification():
     async def step_fn(task_id, action):
         return ExecutionObservation(action_id=action.operation_id, success=True)
     obs = await runtime._execute_action("task-4", proposed)
-    assert obs.success is True
+    assert obs.success is False

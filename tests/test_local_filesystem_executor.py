@@ -122,6 +122,10 @@ async def test_chat_approval_executes_exact_filesystem_write_once(temp_db, tmp_p
     assert "+xin chào PAW" in waiting.content
     assert not (tmp_path / "demo.txt").exists()
 
+    operation_waiting = await service.approve()
+    assert operation_waiting.status == "waiting_approval"
+    assert operation_waiting.approval_id != waiting.approval_id
+    assert not (tmp_path / "demo.txt").exists()
     completed = await service.approve()
 
     assert completed.status == "completed"
@@ -130,7 +134,7 @@ async def test_chat_approval_executes_exact_filesystem_write_once(temp_db, tmp_p
     assert (tmp_path / "demo.txt").read_text() == "xin chào PAW"
     assert completed.artifacts[0]["path"] == "demo.txt"
 
-    approval = await ApprovalStore.get(waiting.approval_id)
+    approval = await ApprovalStore.get(operation_waiting.approval_id)
     assert approval is not None
     assert approval.status == ApprovalStatus.CONSUMED
 
@@ -211,6 +215,14 @@ def test_cli_filesystem_write_and_explain_across_processes(tmp_path):
         text=True,
         check=False,
         timeout=30,
+    )
+    assert approved_process.returncode == 0, approved_process.stderr
+    approved = json.loads(approved_process.stdout)
+    assert approved["status"] == "waiting_approval"
+    assert not (workspace / "cli.txt").exists()
+    approved_process = subprocess.run(
+        approved_process.args, cwd=project_root, env=env,
+        capture_output=True, text=True, check=False, timeout=30,
     )
     assert approved_process.returncode == 0, approved_process.stderr
     approved = json.loads(approved_process.stdout)

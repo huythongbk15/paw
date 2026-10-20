@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
 
 from .repo_filter import RepoFilter
@@ -50,7 +50,9 @@ def _assert_safe_root(root: Path) -> None:
         raise ValueError(f"repo root is not a directory: {raw!r}")
 
 
-def _walk(root: Path) -> Iterable[Path]:
+def _walk(
+    root: Path, *, strict_filter: RepoFilter | None = None, max_entries: int = 10000,
+) -> Iterable[Path]:
     """Deterministic walk over ``root`` that skips symlinks
     at every depth.
 
@@ -66,9 +68,16 @@ def _walk(root: Path) -> Iterable[Path]:
     return a list of usable paths, not to surface every
     transient filesystem error.
     """
-    for dirpath, dirnames, filenames in os.walk(
-        str(root), followlinks=False
-    ):
+    def unreadable(error):
+        raise error
+
+    walk_options = {"followlinks": False}
+    if strict_filter is not None:
+        walk_options["onerror"] = unreadable
+    unbounded_depth = replace(strict_filter, max_depth=10**9) if strict_filter else None
+    directory_filter = replace(unbounded_depth, include_patterns=()) if strict_filter else None
+    seen = 0
+    for dirpath, dirnames, filenames in os.walk(str(root), **walk_options):
         current = Path(dirpath)
         # Drop symlinked dirs in place so os.walk does not
         # descend into them. ``os.walk`` already respects
@@ -77,25 +86,49 @@ def _walk(root: Path) -> Iterable[Path]:
         # real path is outside the root; we drop those.
         kept_dirs: list[str] = []
         for d in sorted(dirnames, key=str.casefold):
+            if strict_filter is not None:
+                seen += 1
+                if seen > max_entries:
+                    raise ValueError("repository entry limit exceeded")
+                relative = (current / d).relative_to(root).as_posix()
+                if not directory_filter.match(relative):
+                    continue
+                if len(PurePosixPath(relative).parts) >= strict_filter.max_depth:
+                    raise ValueError("repository depth limit exceeded")
             try:
                 p = current / d
             except ValueError:
                 continue
             try:
                 if p.is_symlink():
+                    if strict_filter is not None:
+                        raise ValueError("eligible repository symlink refused")
                     continue
                 # Confirm the target stays inside ``root``;
                 # any symlink with a resolved target outside
                 # is also dropped.
                 resolved = p.resolve(strict=False)
                 if not resolved.is_relative_to(root.resolve(strict=False)):
+                    if strict_filter is not None:
+                        raise ValueError("repository path escaped root")
                     continue
                 kept_dirs.append(d)
             except (OSError, ValueError):
+                if strict_filter is not None:
+                    raise
                 continue
         dirnames[:] = kept_dirs
 
         for name in sorted(filenames, key=str.casefold):
+            if strict_filter is not None:
+                seen += 1
+                if seen > max_entries:
+                    raise ValueError("repository entry limit exceeded")
+                relative = (current / name).relative_to(root).as_posix()
+                if not unbounded_depth.match(relative):
+                    continue
+                if len(PurePosixPath(relative).parts) > strict_filter.max_depth:
+                    raise ValueError("repository depth limit exceeded")
             if "\x00" in name:
                 continue
             try:
@@ -104,11 +137,17 @@ def _walk(root: Path) -> Iterable[Path]:
                 continue
             try:
                 if p.is_symlink():
+                    if strict_filter is not None:
+                        raise ValueError("eligible repository symlink refused")
                     continue
                 resolved = p.resolve(strict=False)
                 if not resolved.is_relative_to(root.resolve(strict=False)):
+                    if strict_filter is not None:
+                        raise ValueError("repository path escaped root")
                     continue
             except (OSError, ValueError):
+                if strict_filter is not None:
+                    raise
                 continue
             yield p
 
@@ -118,6 +157,8 @@ def scan_repo(
     repo_filter: RepoFilter,
     *,
     follow_symlinks: bool = False,
+    require_complete: bool = False,
+    max_entries: int = 10000,
 ) -> list[str]:
     """Walk ``root`` deterministically and return the
     repo-relative POSIX paths that ``repo_filter.match``
@@ -137,6 +178,11 @@ def scan_repo(
     item may relax this with a separate change-control
     surface.
     """
+    if require_complete:
+        if type(max_entries) is not int or max_entries <= 0:
+            raise ValueError("repository entry limit must be a positive integer")
+        if type(repo_filter.max_files) is not int or type(repo_filter.max_depth) is not int:
+            raise ValueError("complete repository file/depth limits must be integers")
     if follow_symlinks:
         raise ValueError(
             "follow_symlinks=True is not supported by the E1-05 contract; "
@@ -144,6 +190,8 @@ def scan_repo(
         )
     root_path = Path(root)
     _assert_safe_root(root_path)
+    if require_complete and any(parent.is_symlink() for parent in root_path.parents):
+        raise ValueError("repository root has a symlink ancestor")
     # Collect every candidate first; sort; then apply the
     # filter once. The filter itself does the dedup, the
     # max_depth check, the include/exclude decision, and
@@ -156,14 +204,22 @@ def scan_repo(
     # the ``relative_to`` step works regardless of
     # whether the caller passed an absolute or relative
     # ``root``.
-    for p in _walk(root_path):
+    walk = (
+        _walk(root_path, strict_filter=repo_filter, max_entries=max_entries)
+        if require_complete else _walk(root_path)
+    )
+    for p in walk:
         try:
             rel = p.resolve(strict=False).relative_to(root_resolved)
         except ValueError:
+            if require_complete:
+                raise
             # Defensive: the is_relative_to guard above
             # should have caught this. Skip and continue.
             continue
         candidates.append(rel.as_posix())
+        if require_complete and len(candidates) > repo_filter.max_files:
+            raise ValueError("repository file limit exceeded")
     # Sort by POSIX parts for cross-platform determinism.
     candidates.sort(key=lambda s: (PurePosixPath(s).parts, s))
     return repo_filter.filter_paths(candidates)

@@ -141,6 +141,7 @@ class TestRuntimeEnforcement:
             capabilities=[],
             estimated_cost=ResourceUsage(),
             idempotency_key="key-1",
+            is_mutating=False,
         )
         async def step_fn(task_id, action):
             raise AssertionError("step_fn must not be called when research budget exhausted")
@@ -159,6 +160,7 @@ class TestRuntimeEnforcement:
             capabilities=[],
             estimated_cost=ResourceUsage(),
             idempotency_key="key-2",
+            is_mutating=False,
         )
         async def step_fn(task_id, action):
             return ExecutionObservation(action_id=action.operation_id, success=True)

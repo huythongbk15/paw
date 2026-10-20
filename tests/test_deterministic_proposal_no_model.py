@@ -94,12 +94,15 @@ def _runtime(router: Any) -> PawRuntime:
 
 
 def _brain(*, deterministic: bool):
-    """Mirror what ``ChatService`` proposes for a structured filesystem write."""
+    """Compare deterministic writes with read-only model-backed analysis."""
 
     async def _fn(task_id, goal, context, last_observation):
         return ProposedAction(
             goal=goal,
-            capabilities=[Capability.FILESYSTEM_WRITE],
+            capabilities=[
+                Capability.FILESYSTEM_WRITE if deterministic else Capability.FILESYSTEM_READ
+            ],
+            is_mutating=deterministic,
             context=context if isinstance(context, dict) else {},
             operation_id="op-deterministic",
             idempotency_key="k:deterministic",
@@ -179,4 +182,9 @@ async def test_model_backed_proposal_still_routes():
     outcome = await _run_with_brain("task-model-01", _CountingRouter(), deterministic=False)
 
     assert calls == ["task-model-01"], "a model-backed proposal must still be routed"
-    assert outcome.model_selections, "the routed model must be reported"
+    events = await TaskLedger.get_events("task-model-01")
+    assert TaskEventType.MODEL_SELECTED in [event.event_type for event in events]
+    # This fixture deliberately raises on model invocation. That failure must
+    # now stop the loop rather than be hidden by a successful mock executor.
+    assert outcome.last_observation.success is False
+    assert outcome.last_observation.error == "model_dispatch:route_or_provider_failed"

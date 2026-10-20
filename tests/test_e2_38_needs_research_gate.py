@@ -1,12 +1,8 @@
-"""E2-38: Make NEEDS_RESEARCH schedule only bounded research operations.
+"""Legacy raw readiness is diagnostic, never executable authority.
 
-Four-layer evidence:
-  1. Invariant  — ProposedAction has is_research field
-  2. Runtime    — NEEDS_RESEARCH blocks non-research mutating proposals
-  3. Adversarial — READY still allows everything; research proposals bypass NEEDS_RESEARCH gate
-  4. Measurable — error message includes readiness level; is_research defaults to False (fail-closed)
-
-Decision level: D2.
+Migrated 2026-10-07: private mutating calls must refuse even with READY/research/
+spike flags. Reviewed positive, real freshness and recovery proofs are in
+ test_runtime_implementation_admission.py; no raw-string compatibility bypass.
 """
 import pytest
 
@@ -45,12 +41,12 @@ async def test_rt1_needs_research_blocks_non_research_mutating():
     )
     obs = await runtime._execute_action("task-1", proposed)
     assert obs.success is False
-    assert "readiness_not_ready" in obs.error
-    assert "NEEDS_RESEARCH" in obs.error
+    assert "implementation_admission_refused" in obs.error
+    assert "implementation_admission_refused" in obs.error
 
 
 @pytest.mark.asyncio
-async def test_rt2_needs_research_allows_research_proposals():
+async def test_rt2_needs_research_refuses_raw_research_proposals():
     guard = PolicyGuard(interactive=False)
     ac = AutonomyController(budget=AutonomyBudget(), policy_guard=guard)
     runtime = PawRuntime(ac, readiness="NEEDS_RESEARCH")
@@ -66,7 +62,7 @@ async def test_rt2_needs_research_allows_research_proposals():
     async def step_fn(task_id, action):
         return ExecutionObservation(action_id=action.operation_id, success=True)
     obs = await runtime._execute_action("task-2", proposed)
-    assert obs.success is True
+    assert obs.success is False
 
 
 @pytest.mark.asyncio
@@ -90,7 +86,7 @@ async def test_rt3_needs_research_allows_non_mutating():
 
 
 @pytest.mark.asyncio
-async def test_rt4_ready_allows_non_research():
+async def test_rt4_ready_refuses_raw_non_research():
     guard = PolicyGuard(interactive=False)
     ac = AutonomyController(budget=AutonomyBudget(), policy_guard=guard)
     runtime = PawRuntime(ac, readiness="READY")
@@ -106,4 +102,4 @@ async def test_rt4_ready_allows_non_research():
     async def step_fn(task_id, action):
         return ExecutionObservation(action_id=action.operation_id, success=True)
     obs = await runtime._execute_action("task-4", proposed)
-    assert obs.success is True
+    assert obs.success is False

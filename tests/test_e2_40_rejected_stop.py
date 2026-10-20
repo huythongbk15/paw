@@ -1,12 +1,8 @@
-"""E2-40: Make REJECTED stop with recorded reasons and no implementation Plan.
+"""Legacy raw readiness is diagnostic, never executable authority.
 
-Four-layer evidence:
-  1. Invariant  — ProposedAction has rejection_reasons field
-  2. Runtime    — REJECTED blocks mutating proposals, logs reasons, returns error
-  3. Adversarial — empty reasons yields generic message; non-mutating bypasses gate
-  4. Measurable — error message includes "rejected:" prefix; no step_fn called
-
-Decision level: D2.
+Migrated 2026-10-07: private mutating calls must refuse even with READY/research/
+spike flags. Reviewed positive, real freshness and recovery proofs are in
+ test_runtime_implementation_admission.py; no raw-string compatibility bypass.
 """
 import pytest
 
@@ -45,7 +41,7 @@ async def test_rt1_rejected_blocks_with_reasons():
     )
     obs = await runtime._execute_action("task-1", proposed)
     assert obs.success is False
-    assert obs.error == "rejected:privacy_blocked;budget_exceeded"
+    assert "implementation_admission_refused" in obs.error
 
 
 @pytest.mark.asyncio
@@ -64,7 +60,7 @@ async def test_rt2_rejected_blocks_empty_reasons():
     )
     obs = await runtime._execute_action("task-2", proposed)
     assert obs.success is False
-    assert obs.error == "rejected:no_reasons_provided"
+    assert "implementation_admission_refused" in obs.error
 
 
 @pytest.mark.asyncio
@@ -88,7 +84,7 @@ async def test_rt3_rejected_allows_non_mutating():
 
 
 @pytest.mark.asyncio
-async def test_rt4_ready_bypasses_rejected():
+async def test_rt4_ready_refuses_raw_rejected():
     guard = PolicyGuard(interactive=False)
     ac = AutonomyController(budget=AutonomyBudget(), policy_guard=guard)
     runtime = PawRuntime(ac, readiness="READY")
@@ -104,4 +100,4 @@ async def test_rt4_ready_bypasses_rejected():
     async def step_fn(task_id, action):
         return ExecutionObservation(action_id=action.operation_id, success=True)
     obs = await runtime._execute_action("task-4", proposed)
-    assert obs.success is True
+    assert obs.success is False

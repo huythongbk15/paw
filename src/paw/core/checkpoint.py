@@ -157,11 +157,11 @@ class CheckpointStore:
             f"""
             INSERT OR REPLACE INTO {cls.TABLE_NAME} (
                 checkpoint_id, task_id, task_status, current_step, total_steps,
-                progress_ratio, context, context_compiler_state, autonomy_usage,
-                autonomy_profile, progress_history, repetition_state, stall_state,
-                loop_iteration, loop_decision_history, created_at,
+                progress_ratio, operations_completed, context, context_compiler_state,
+                autonomy_usage, autonomy_profile, progress_history, repetition_state,
+                stall_state, loop_iteration, loop_decision_history, created_at,
                 parent_checkpoint_id, tags, metadata
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 data["checkpoint_id"],
@@ -170,6 +170,7 @@ class CheckpointStore:
                 data["current_step"],
                 data["total_steps"],
                 data["progress_ratio"],
+                data["operations_completed"],
                 json.dumps(data["context"]),
                 json.dumps(data["context_compiler_state"]),
                 json.dumps(data["autonomy_usage"]),
@@ -247,6 +248,7 @@ class CheckpointStore:
             current_step=row["current_step"],
             total_steps=row["total_steps"],
             progress_ratio=row["progress_ratio"],
+            operations_completed=row.get("operations_completed", 0) or 0,
             context=json.loads(row["context"]) if row["context"] else {},
             context_compiler_state=json.loads(row["context_compiler_state"]) if row["context_compiler_state"] else {},
             autonomy_usage=json.loads(row["autonomy_usage"]) if row["autonomy_usage"] else {},

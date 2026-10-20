@@ -1,13 +1,8 @@
-"""E2-36: Block every mutating proposal if readiness is missing, stale, or not READY.
+"""Legacy raw readiness is diagnostic, never executable authority.
 
-Four-layer evidence:
-  1. Invariant  — ProposedAction has is_mutating; PawRuntime has readiness param
-  2. Runtime    — non-READY readiness blocks mutating proposals
-  3. Adversarial — missing readiness defaults to READY (backward-compat);
-                   non-mutating proposals bypass gate
-  4. Measurable — error message includes readiness level; gate is single authority
-
-Decision level: D2.
+Migrated 2026-10-07: private mutating calls must refuse even with READY/research/
+spike flags. Reviewed positive, real freshness and recovery proofs are in
+ test_runtime_implementation_admission.py; no raw-string compatibility bypass.
 """
 import pytest
 
@@ -56,12 +51,12 @@ async def test_rt1_not_ready_blocks_mutating_proposal():
     )
     obs = await runtime._execute_action("task-1", proposed)
     assert obs.success is False
-    assert "readiness_not_ready" in obs.error
-    assert "NEEDS_RESEARCH" in obs.error
+    assert "implementation_admission_refused" in obs.error
+    assert "implementation_admission_refused" in obs.error
 
 
 @pytest.mark.asyncio
-async def test_rt2_ready_allows_mutating_proposal():
+async def test_rt2_ready_refuses_raw_mutating_proposal():
     guard = PolicyGuard(interactive=False)
     ac = AutonomyController(budget=AutonomyBudget(), policy_guard=guard)
     runtime = PawRuntime(ac, readiness="READY")
@@ -76,7 +71,7 @@ async def test_rt2_ready_allows_mutating_proposal():
     async def step_fn(task_id, action):
         return ExecutionObservation(action_id=action.operation_id, success=True)
     obs = await runtime._execute_action("task-2", proposed)
-    assert obs.success is True
+    assert obs.success is False
 
 
 @pytest.mark.asyncio
@@ -113,8 +108,8 @@ async def test_adv1_non_ready_blocks():
     )
     obs = await runtime._execute_action("task-4", proposed)
     assert obs.success is False
-    assert "readiness_not_ready" in obs.error
-    assert "SPIKE_REQUIRED" in obs.error
+    assert "implementation_admission_refused" in obs.error
+    assert "implementation_admission_refused" in obs.error
 
 
 @pytest.mark.asyncio
@@ -132,7 +127,7 @@ async def test_adv2_spike_required_blocks():
     )
     obs = await runtime._execute_action("task-5", proposed)
     assert obs.success is False
-    assert "SPIKE_REQUIRED" in obs.error
+    assert "implementation_admission_refused" in obs.error
 
 
 @pytest.mark.asyncio
@@ -152,4 +147,4 @@ async def test_adv3_missing_readiness_defaults_to_ready():
     async def step_fn(task_id, action):
         return ExecutionObservation(action_id=action.operation_id, success=True)
     obs = await runtime._execute_action("task-6", proposed)
-    assert obs.success is True
+    assert obs.success is False

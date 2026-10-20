@@ -491,7 +491,8 @@ class TestPhase19RuntimeHardening:
             initial_context={"user_preference": "concise"},
             available_skills=[
                 {"name": "skill_a", "required_capabilities": ["filesystem.read"]},
-                {"name": "skill_b", "required_capabilities": ["filesystem.write"]},
+                # This callback observes loop state; it performs no project write.
+                {"name": "skill_b", "required_capabilities": ["filesystem.read"]},
             ],
             step_fn=step_fn,
         )
@@ -525,7 +526,7 @@ class TestPhase19RuntimeHardening:
         assert len(step_states) == 2
         for state in step_states:
             assert "filesystem.read" in state["capabilities"]
-            assert "filesystem.write" in state["capabilities"]
+            assert "filesystem.write" not in state["capabilities"]
 
     async def test_resume_skips_completed_operations(
         self, temp_db, autonomy_controller, policy_guard

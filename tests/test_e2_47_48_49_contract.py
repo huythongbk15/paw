@@ -49,6 +49,52 @@ def test_decision_version_invalid_empty():
         )
 
 
+def test_decision_version_snapshots_nested_payload():
+    payload = {"options": [{"name": "reviewed"}], "readiness": "ready"}
+    version = DecisionVersion("v1", "d1", "final", payload, "2026-10-05")
+    payload["options"][0]["name"] = "changed"
+    payload["options"].append({"name": "extra"})
+    assert version.payload["options"][0]["name"] == "reviewed"
+    assert len(version.payload["options"]) == 1
+    assert version.state is DecisionVersionState.FINAL
+    with pytest.raises(TypeError):
+        version.payload["readiness"] = "rejected"
+    with pytest.raises(TypeError):
+        version.payload["options"][0]["name"] = "changed"
+
+
+@pytest.mark.parametrize("payload", [{"bad": set()}, {1: "bad"}, {"bad": float("nan")}])
+def test_decision_version_rejects_non_durable_payload(payload):
+    with pytest.raises(ValueError):
+        DecisionVersion("v1", "d1", DecisionVersionState.FINAL, payload, "2026-10-05")
+
+
+def test_decision_version_rejects_invalid_state():
+    with pytest.raises(ValueError):
+        DecisionVersion("v1", "d1", "invalid", {"ok": True}, "2026-10-05")
+
+
+def test_decision_version_rejects_payload_cycle():
+    payload = {}
+    payload["cycle"] = payload
+    with pytest.raises(ValueError):
+        DecisionVersion("v1", "d1", DecisionVersionState.FINAL, payload, "2026-10-05")
+
+
+def test_decision_version_accepts_shared_aliases_and_snapshot_input():
+    shared = {"values": [None, True, 3, 1.5, "text"]}
+    version = DecisionVersion(
+        "v1", "d1", DecisionVersionState.FINAL,
+        {"first": shared, "second": shared}, "2026-10-05",
+    )
+    copied = DecisionVersion("v2", "d1", "final", version.payload, "2026-10-05")
+    shared["values"].clear()
+    assert copied.payload["first"]["values"] == (None, True, 3, 1.5, "text")
+    assert copied.payload["second"] == copied.payload["first"]
+    with pytest.raises(AttributeError):
+        copied.payload["first"]["values"].append("bad")
+
+
 def test_reasoning_tier_values():
     assert ReasoningTier.ROUTINE.value == "routine"
     assert ReasoningTier.COMPLEX.value == "complex"

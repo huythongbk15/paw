@@ -1,12 +1,8 @@
-"""E2-37: Invalidate READY when the relevant project revision or hard constraint changes.
+"""Legacy raw readiness is diagnostic, never executable authority.
 
-Four-layer evidence:
-  1. Invariant  — PawRuntime accepts readiness_revision/current_revision
-  2. Runtime    — stale revision or constraints blocks mutating proposals
-  3. Adversarial — empty revision/constraints bypass staleness check (backward-compat)
-  4. Measurable — error message includes stale dimension and old/new values
-
-Decision level: D2.
+Migrated 2026-10-07: private mutating calls must refuse even with READY/research/
+spike flags. Reviewed positive, real freshness and recovery proofs are in
+ test_runtime_implementation_admission.py; no raw-string compatibility bypass.
 """
 import pytest
 
@@ -47,14 +43,14 @@ async def test_rt1_revision_mismatch_blocks():
     )
     obs = await runtime._execute_action("task-1", proposed)
     assert obs.success is False
-    assert "readiness_stale" in obs.error
-    assert "revision" in obs.error
-    assert "abc" in obs.error
-    assert "def" in obs.error
+    assert "implementation_admission_refused" in obs.error
+    assert "implementation_admission_refused" in obs.error
+    assert "implementation_admission_refused" in obs.error
+    assert "implementation_admission_refused" in obs.error
 
 
 @pytest.mark.asyncio
-async def test_rt2_revision_match_allows():
+async def test_rt2_revision_match_refuses_raw():
     guard = PolicyGuard(interactive=False)
     ac = AutonomyController(budget=AutonomyBudget(), policy_guard=guard)
     runtime = PawRuntime(
@@ -74,7 +70,7 @@ async def test_rt2_revision_match_allows():
     async def step_fn(task_id, action):
         return ExecutionObservation(action_id=action.operation_id, success=True)
     obs = await runtime._execute_action("task-2", proposed)
-    assert obs.success is True
+    assert obs.success is False
 
 
 @pytest.mark.asyncio
@@ -97,14 +93,14 @@ async def test_rt3_constraint_mismatch_blocks():
     )
     obs = await runtime._execute_action("task-3", proposed)
     assert obs.success is False
-    assert "readiness_stale" in obs.error
-    assert "constraints" in obs.error
-    assert "v1" in obs.error
-    assert "v2" in obs.error
+    assert "implementation_admission_refused" in obs.error
+    assert "implementation_admission_refused" in obs.error
+    assert "implementation_admission_refused" in obs.error
+    assert "implementation_admission_refused" in obs.error
 
 
 @pytest.mark.asyncio
-async def test_rt4_empty_revision_bypasses():
+async def test_rt4_empty_revision_refuses_raw():
     guard = PolicyGuard(interactive=False)
     ac = AutonomyController(budget=AutonomyBudget(), policy_guard=guard)
     runtime = PawRuntime(
@@ -124,7 +120,7 @@ async def test_rt4_empty_revision_bypasses():
     async def step_fn(task_id, action):
         return ExecutionObservation(action_id=action.operation_id, success=True)
     obs = await runtime._execute_action("task-4", proposed)
-    assert obs.success is True
+    assert obs.success is False
 
 
 @pytest.mark.asyncio

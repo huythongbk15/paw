@@ -53,10 +53,14 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+import os
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
+from contextvars import ContextVar
+from dataclasses import dataclass, field, replace
+from pathlib import Path
 from typing import Any
 
+from .approval import action_fingerprint
 from .autonomy import AutonomyController, AutonomyDecision, StopReason
 from .checkpoint import CheckpointManager, OperationRecordStore
 from .executor import (
@@ -73,10 +77,10 @@ from .ledger import (
     log_checkpoint_restored,
     log_operation_recorded,
     log_policy_gate_evaluated,
-    log_step_executed,
     log_step_proposed,
 )
 from .logging import get_logger
+from .model_executor import ModelDispatchError
 from .models import (
     Capability,
     ExecutionObservation,
@@ -86,6 +90,7 @@ from .models import (
     ResourceUsage,
     TaskStatus,
 )
+from .planner import Planner
 from .policy import RequestVerdict
 from .privacy import RemoteDisclosureRefusedError
 from .reasoning_contracts import (
@@ -99,11 +104,17 @@ from .reasoning_contracts import (
     check_role_ceiling,
     classify_inference,
 )
+from .repo_filter import RepoFilter
 from .runtime_persistence import RuntimePersistence
 from .task import TaskManager
 from .task_scheduler import TaskScheduleStatus
 
 logger = get_logger(__name__)
+
+# Runtime-owned, task-local authority; a metadata flag cannot mint this receipt.
+_unit_admission: ContextVar[tuple[int, str, str, dict[str, str], Any] | None] = ContextVar(
+    "paw_unit_admission", default=None,
+)
 
 
 # --- Action Proposer ---
@@ -577,6 +588,7 @@ class _UnitExecutionResult:
     progress: float = 0.0
     done: bool = False
     operation_completed: bool = False
+    step_called: bool = False
     model_selections: list[str] = field(default_factory=list)
     skills_used: list[str] = field(default_factory=list)
 
@@ -656,6 +668,8 @@ class PawRuntime:
         readiness_constraints: str = "",
         current_revision: str = "",
         current_constraints: str = "",
+        hard_constraints: dict[str, Any] | None = None,
+        repo_filter: RepoFilter | None = None,
     ):
         self.autonomy = autonomy
         self.proposer = proposer or ActionProposer()
@@ -687,13 +701,91 @@ class PawRuntime:
         self.current_constraints = current_constraints
         # E2-10: project root for reconnaissance evidence gathering.
         self._project_root = project_root
-
+        self._implementation_planner = Planner(
+            workspace_root=project_root, hard_constraints=hard_constraints, repo_filter=repo_filter,
+        )
+        self._repo_filter = repo_filter or RepoFilter.safe_default()
         self._max_iterations = max_iterations
-
-        # Streaming callback for token-level emission (used by the TUI).
-        # When set, _execute_action uses model_executor.stream() instead of
-        # complete() and calls self._stream_callback(chunk) per token chunk.
         self._stream_callback: Any = None
+
+    @staticmethod
+    def requires_implementation(action: ProposedAction) -> bool:
+        """Declared effects dominate cosmetic research/is_mutating flags."""
+        writes = {Capability.FILESYSTEM_WRITE, Capability.FILESYSTEM_DELETE,
+                  Capability.SHELL_EXECUTE, Capability.PROCESS_SPAWN,
+                  Capability.GIT_WRITE, Capability.DESTRUCTIVE, Capability.FINANCIAL}
+        return bool(writes.intersection(action.capabilities)) or (
+            not action.capabilities and action.is_mutating
+        )
+
+    def _scope_implementation(self, action: ProposedAction) -> ProposedAction:
+        if not self.requires_implementation(action) or not self._project_root:
+            return action
+        caps = list(action.capabilities)
+        if Capability.FILESYSTEM_READ not in caps:
+            caps.append(Capability.FILESYSTEM_READ)
+        context = {**action.context, "implementation_read_root": str(self._project_root)}
+        metadata = dict(action.metadata)
+        if not metadata.get("plan_id") and getattr(self.plan, "id", ""):
+            metadata["plan_id"] = self.plan.id
+        intent = action.metadata.get("filesystem")
+        if isinstance(intent, dict) and intent.get("operation") == "write":
+            requested = Path(str(intent.get("path") or "."))
+            target = requested if requested.is_absolute() else Path(self._project_root) / requested
+            context["path"] = os.path.abspath(target)  # noqa: PTH100 -- lexical; no pre-gate IO
+        return action.model_copy(update={"capabilities": caps, "context": context, "metadata": metadata})
+
+    async def _implementation_admission(
+        self, task_id: str, action: ProposedAction, *, recovery: bool,
+    ) -> dict[str, str]:
+        if self.autonomy.policy_guard is None:
+            raise ValueError("implementation Policy is missing")
+        binding = await self._implementation_planner.implementation_binding(
+            str(action.metadata.get("plan_id") or ""), task_id, recovery=recovery,
+            effect_constraints=action.effect_constraints,
+        )
+        intent = action.metadata.get("filesystem")
+        if isinstance(intent, dict) and intent.get("operation") == "write":
+            root = Path(os.path.abspath(self._project_root))  # noqa: PTH100
+            target = Path(action.context["path"])
+            if not target.is_relative_to(root) or not self._repo_filter.match(target.relative_to(root).as_posix()):
+                raise ValueError("implementation target is outside/excluded from reviewed relevant inputs")
+        if not recovery:
+            from paw.knowledge.checksum import compute_repo_revision
+            actual = compute_repo_revision(Path(self._project_root), self._repo_filter)
+            if actual != binding["project_revision"]:
+                raise ValueError("implementation project revision is stale")
+        return binding
+
+    async def _reconcile_implementation(
+        self, task_id: str, action: ProposedAction, record: Any, binding: dict[str, str],
+    ) -> ExecutionObservation:
+        """Only the known local read-only reconciliation port, never step_fn."""
+        from paw.executors.filesystem import LocalFilesystemExecutor
+        if (record.metadata.get("implementation_binding") != binding
+                or record.metadata.get("action_fingerprint") != action_fingerprint(action)):
+            raise ValueError("prepared implementation binding/action changed or missing")
+        intent = EffectIntent.from_dict(record.metadata["effect_intent"])
+        executor = self.capability_router.registry.get(intent.executor)
+        if (not isinstance(executor, LocalFilesystemExecutor)
+                or getattr(executor.reconcile_effect, "__func__", None) is not LocalFilesystemExecutor.reconcile_effect
+                or executor.workspace_root != Path(self._project_root).resolve()):
+            raise ValueError("prepared recovery executor/root is unsupported")
+        context = json.dumps(action.context, default=str)
+        task = ExecutableTask(task_id=task_id, goal=action.goal,
+                              capabilities=action.capabilities, context=context,
+                              operation_id=action.operation_id, idempotency_key=action.idempotency_key,
+                              metadata=copy.deepcopy(action.metadata))
+        recovered = await executor.reconcile_effect(task, context, intent)
+        return ExecutionObservation(
+            step_id=action.operation_id, action_id=action.operation_id,
+            success=recovered.success, error=recovered.error,
+            resources_used=ResourceUsage(tool_calls=1),
+            result={"done": recovered.success, "progress": 1.0 if recovered.success else 0.0,
+                    "executor": executor.name, "output": recovered.output,
+                    "artifacts": recovered.artifacts, "executor_metadata": recovered.metadata,
+                    "effect_intent": intent.to_dict()},
+        )
 
     async def _execute_model(self, selection: Any, messages: list[dict[str, Any]]) -> dict[str, Any]:
         """Execute model completion with optional streaming.
@@ -713,7 +805,7 @@ class PawRuntime:
                     # Accumulate into model_result for post-processing
                     for k, v in chunk.items():
                         if k == "response":
-                            model_result["model_response"] = model_result.get("model_response", "") + str(v)
+                            model_result["response"] = model_result.get("response", "") + str(v)
                         elif k == "thinking" and v:
                             model_result["thinking"] = str(v)
                         elif k == "model_thinking" and v:
@@ -1145,7 +1237,7 @@ class PawRuntime:
             observation = unit.observation
             if observation is None:  # pragma: no cover - internal contract guard
                 raise RuntimeError("executable-unit pipeline returned no observation")
-            step_called = True
+            step_called = step_called or unit.step_called
             last_observation = observation
 
             if unit.operation_completed:
@@ -1174,7 +1266,7 @@ class PawRuntime:
                     stopped=True,
                     task_id=task_id,
                     reason=StopReason.TASK_FAILED,
-                    step_called=True,
+                    step_called=step_called,
                     iterations=idx + 1,
                     last_observation=observation,
                     checkpoint_id=checkpoint.checkpoint_id if checkpoint else None,
@@ -1230,6 +1322,11 @@ class PawRuntime:
         ledger_context = dict(ledger_context or {})
         result = _UnitExecutionResult()
         action = self._unwrap_proposed(proposed)
+        scoped = self._scope_implementation(action)
+        if scoped is not action:
+            proposed = (replace(proposed, proposed_action=scoped)
+                        if isinstance(proposed, CanonicalProposal) else scoped)
+            action = scoped
 
         selected_skill = action.metadata.get("selected_skill")
         if selected_skill:
@@ -1269,7 +1366,33 @@ class PawRuntime:
                 }
             )
         try:
-            observation = await step_fn(task_id, step_action)
+            binding = None
+            prepared = None
+            if self.requires_implementation(step_action):
+                prepared = await OperationRecordStore.get(task_id, step_action.operation_id)
+                recovery = prepared is not None and prepared.status == "prepared"
+                try:
+                    binding = await self._implementation_admission(task_id, step_action, recovery=recovery)
+                    if recovery:
+                        observation = await self._reconcile_implementation(task_id, step_action, prepared, binding)
+                except (ValueError, OSError, KeyError, TypeError) as exc:
+                    binding = None
+                    observation = ExecutionObservation(
+                        step_id=step_id, action_id=action.operation_id, success=False,
+                        error=f"implementation_admission_refused:{exc}",
+                        result={"done": False, "progress": 0.0},
+                    )
+                if binding is not None and not recovery:
+                    token = _unit_admission.set((id(self), task_id, action_fingerprint(step_action), binding,
+                                                 asyncio.current_task()))
+                    try:
+                        result.step_called = True
+                        observation = await step_fn(task_id, step_action)
+                    finally:
+                        _unit_admission.reset(token)
+            else:
+                result.step_called = True
+                observation = await step_fn(task_id, step_action)
         except RemoteDisclosureRefusedError as exc:
             # Hard gate: disclosure refused, operation not completed.
             # The OperationRecord is persisted as 'failed' so reopen/resume
@@ -1306,6 +1429,7 @@ class PawRuntime:
             return _UnitExecutionResult(
                 observation=fail_obs,
                 operation_completed=False,
+                step_called=result.step_called,
             )
         observation.action_id = action.operation_id
         observation.step_id = step_id
@@ -1319,7 +1443,12 @@ class PawRuntime:
                 result.model_selections.append(str(observed_model))
 
         operation_status = "completed" if observation.success else "failed"
-        operation_metadata: dict[str, Any] = {}
+        operation_metadata: dict[str, Any] = dict(prepared.metadata) if prepared is not None else {}
+        if binding is not None:
+            operation_metadata.update({"implementation_binding": binding,
+                                       "action_fingerprint": action_fingerprint(step_action)})
+        if observation.error and observation.error.startswith("implementation_admission_refused:"):
+            operation_metadata["reason"] = "implementation_admission_refused"
         if isinstance(observation.result, dict):
             effect_intent = observation.result.get("effect_intent")
             if isinstance(effect_intent, dict):
@@ -1338,33 +1467,29 @@ class PawRuntime:
         )
         result.operation_completed = observation.success
 
-        # E2-42: isolated spike proposals skip persistence and usage accumulation.
-        if not getattr(action, "isolated", False):
-            if observation.success and self.approval_store is not None:
-                await self.approval_store.consume(task_id, action)
+        # Caller isolation flags never erase observed costs or exact approvals.
+        if observation.success and self.approval_store is not None:
+            await self.approval_store.consume(task_id, action)
 
-            if observation.resources_used:
-                self.autonomy.usage.model_calls += observation.resources_used.model_calls
-                self.autonomy.usage.tool_calls += observation.resources_used.tool_calls
-                self.autonomy.usage.total_tokens += observation.resources_used.tokens
-                self.autonomy.usage.wall_time_seconds += (
-                    observation.resources_used.wall_time_ms / 1000.0
-                )
-                # E2-16: record the *observed* usage once in the ledger.
-                # The StepProposed event logged the *estimate*; this records the
-                # actual observed usage. They are separate audit records — summing
-                # StepProposed.estimated_cost + StepExecuted.resources_used would
-                # be double accounting; the authoritative source for actuals is
-                # this StepExecuted entry.
-                await log_step_executed(
-                    task_id,
-                    action.operation_id,
-                    success=observation.success,
-                    resources_used=observation.resources_used.model_dump(),
-                    error=observation.error,
-                )
+        if observation.resources_used:
+            self.autonomy.usage.model_calls += observation.resources_used.model_calls
+            self.autonomy.usage.tool_calls += observation.resources_used.tool_calls
+            self.autonomy.usage.total_tokens += observation.resources_used.tokens
+            self.autonomy.usage.wall_time_seconds += (
+                observation.resources_used.wall_time_ms / 1000.0
+            )
+            # E2-16: the *observed* usage is recorded by
+            # ``RuntimePersistence.commit_operation`` above, atomically with
+            # the OperationRecord. It writes exactly one STEP_EXECUTED event
+            # per operation, carrying ``resources_used`` in the canonical
+            # ledger form (which includes ``provider_calls``).
+            #
+            # A second, separate STEP_EXECUTED write here duplicated every
+            # event and made ``TaskLedger.get_model_call_count`` count each
+            # operation twice. The StepProposed event still logs the
+            # *estimate*; this one is the authoritative actual.
 
-            await self.autonomy.record_iteration(result.progress)
+        await self.autonomy.record_iteration(result.progress)
         return result
 
     # ------------------------------------------------------------------
@@ -1388,8 +1513,14 @@ class PawRuntime:
         verdict = None
         approval_request = None
         if self.autonomy.policy_guard is not None and action.capabilities:
+            scope_kwargs = {}
+            if self.requires_implementation(action) and self._project_root:
+                scope_kwargs["capability_contexts"] = {Capability.FILESYSTEM_READ: {
+                    **action.context, "path": str(self._project_root),
+                    "operation": "implementation.freshness_or_reconciliation",
+                }}
             verdict = await self.autonomy.policy_guard.evaluate_request(
-                action.capabilities, action.context, task_id=task_id
+                action.capabilities, action.context, task_id=task_id, **scope_kwargs,
             )
             needs_approval = verdict.verdict == "ask" or (
                 verdict.verdict == "block"
@@ -1655,22 +1786,28 @@ class PawRuntime:
                     if selection.model_manifest
                     else "local"
                 )
-                if not selection.model_name:
-                    selection = ModelSelection(model_name="local")
                 evidence_refs: tuple[str, ...] = ()
                 if recon is not None and getattr(recon, "recent_changed_files", None):
                     evidence_refs = tuple(str(p) for p in recon.recent_changed_files[:3])
                 if not evidence_refs:
                     evidence_refs = (f"task:{task_id}",)
-                gated_proposal = CanonicalProposal(
-                    proposed_action=proposed,
-                    selected_model=selection.model_name or "",
-                    inference_classification=inference_class.value,
-                    reasoning_assessment=reasoning_assessment,
-                    provider_kind=provider_kind,
-                    budget=self.execution_profile,
-                    evidence_refs=evidence_refs,
-                )
+                if not selection.model_name:
+                    # No route is a failure, not an implicit local selection.
+                    # Preserve the exact action and its normal gates; the
+                    # execution boundary records the failed operation.
+                    gated_proposal = proposed.model_copy(update={"metadata": {
+                        **proposed.metadata, "model_route_failure": "no_route",
+                    }})
+                else:
+                    gated_proposal = CanonicalProposal(
+                        proposed_action=proposed,
+                        selected_model=selection.model_name,
+                        inference_classification=inference_class.value,
+                        reasoning_assessment=reasoning_assessment,
+                        provider_kind=provider_kind,
+                        budget=self.execution_profile,
+                        evidence_refs=evidence_refs,
+                    )
             else:
                 gated_proposal = proposed
 
@@ -1714,7 +1851,7 @@ class PawRuntime:
             observation = unit.observation
             if observation is None:  # pragma: no cover - internal contract guard
                 raise RuntimeError("executable-unit pipeline returned no observation")
-            step_called = True
+            step_called = step_called or unit.step_called
             progress = unit.progress
             last_observation = observation
 
@@ -1737,7 +1874,7 @@ class PawRuntime:
                     stopped=True,
                     task_id=task_id,
                     reason=StopReason.TASK_FAILED,
-                    step_called=True,
+                    step_called=step_called,
                     iterations=iterations,
                     last_observation=observation,
                     checkpoint_id=checkpoint.checkpoint_id if checkpoint else None,
@@ -1768,7 +1905,7 @@ class PawRuntime:
                     stopped=True,
                     task_id=task_id,
                     reason=stop,
-                    step_called=True,
+                    step_called=step_called,
                     iterations=iterations,
                     decision=decision,
                     last_observation=observation,
@@ -2035,6 +2172,19 @@ class PawRuntime:
         inference_class = classify_inference(recon)
         return selection, recon, inference_class
 
+    @staticmethod
+    def _model_failure_observation(action: ProposedAction, error: Exception) -> ExecutionObservation:
+        """Stop downstream execution without persisting provider exception payloads."""
+        reason = error.reason if isinstance(error, ModelDispatchError) else "route_or_provider_failed"
+        return ExecutionObservation(
+            step_id=action.operation_id,
+            action_id=action.operation_id,
+            success=False,
+            error=f"model_dispatch:{reason}",
+            result={"done": False, "model_failure": reason},
+            resources_used=ResourceUsage(),
+        )
+
     async def _execute_action(
         self,
         task_id: str,
@@ -2059,103 +2209,14 @@ class PawRuntime:
         # This is the execution-side model routing (distinct from the proposer's
         # planning-side model call) and is logged for both brain and proposer
         # paths so the ledger always records which model executed a step.
-        # E2-36/E2-37: block mutating proposals unless readiness is READY and fresh.
-        if action.is_mutating:
-            if self.readiness != "READY":
-                # E2-38: NEEDS_RESEARCH allows only bounded research operations.
-                if self.readiness == "NEEDS_RESEARCH" and action.is_research:
-                    pass  # research operations are allowed; budget check is separate
-                # E2-40: REJECTED stops with recorded reasons, no implementation plan.
-                elif self.readiness == "REJECTED":
-                    reasons = action.rejection_reasons or ["no_reasons_provided"]
-                    await log_autonomy_gate_evaluated(
-                        task_id,
-                        action.operation_id,
-                        "REJECTED",
-                        ";".join(reasons),
-                    )
-                    return ExecutionObservation(
-                        step_id=action.operation_id,
-                        action_id=action.operation_id,
-                        success=False,
-                        error=f"rejected:{';'.join(reasons)}",
-                        resources_used=ResourceUsage(),
-                    )
-                # E2-41: SPIKE_REQUIRED allows only explicitly research-only plans.
-                elif self.readiness == "SPIKE_REQUIRED" and action.plan_purpose in ("research", "spike"):
-                    pass  # research/spike plans are allowed
-                elif self.readiness == "SPIKE_REQUIRED":
-                    await log_autonomy_gate_evaluated(
-                        task_id,
-                        action.operation_id,
-                        "READY_NOT_MET",
-                        self.readiness,
-                    )
-                    return ExecutionObservation(
-                        step_id=action.operation_id,
-                        action_id=action.operation_id,
-                        success=False,
-                        error=f"readiness_not_ready:{self.readiness}",
-                        resources_used=ResourceUsage(),
-                    )
-                # E2-39: NEEDS_CLARIFICATION persists the question and waits.
-                elif self.readiness == "NEEDS_CLARIFICATION":
-                    question = action.clarification_question or "no_question_provided"
-                    await log_autonomy_gate_evaluated(
-                        task_id,
-                        action.operation_id,
-                        "NEEDS_CLARIFICATION",
-                        question,
-                    )
-                    return ExecutionObservation(
-                        step_id=action.operation_id,
-                        action_id=action.operation_id,
-                        success=False,
-                        error=f"needs_clarification:{question}",
-                        resources_used=ResourceUsage(),
-                    )
-                else:
-                    await log_autonomy_gate_evaluated(
-                        task_id,
-                        action.operation_id,
-                        "READY_NOT_MET",
-                        self.readiness,
-                    )
-                    return ExecutionObservation(
-                        step_id=action.operation_id,
-                        action_id=action.operation_id,
-                        success=False,
-                        error=f"readiness_not_ready:{self.readiness}",
-                        resources_used=ResourceUsage(),
-                    )
-            # E2-37: staleness check
-            if self.readiness_revision and self.current_revision and self.readiness_revision != self.current_revision:
-                await log_autonomy_gate_evaluated(
-                    task_id,
-                    action.operation_id,
-                    "READY_STALE",
-                    f"revision:{self.readiness_revision}->{self.current_revision}",
-                )
+        # Mutating executor calls are admitted only by the shared unit.
+        if self.requires_implementation(action):
+            receipt = _unit_admission.get()
+            if (receipt is None or receipt[:3] != (id(self), task_id, action_fingerprint(action))
+                    or receipt[4] is not asyncio.current_task()):
                 return ExecutionObservation(
-                    step_id=action.operation_id,
-                    action_id=action.operation_id,
-                    success=False,
-                    error=f"readiness_stale:revision:{self.readiness_revision}->{self.current_revision}",
-                    resources_used=ResourceUsage(),
-                )
-            if (self.readiness_constraints and self.current_constraints
-                    and self.readiness_constraints != self.current_constraints):
-                await log_autonomy_gate_evaluated(
-                    task_id,
-                    action.operation_id,
-                    "READY_STALE",
-                    f"constraints:{self.readiness_constraints}->{self.current_constraints}",
-                )
-                return ExecutionObservation(
-                    step_id=action.operation_id,
-                    action_id=action.operation_id,
-                    success=False,
-                    error=f"readiness_stale:constraints:{self.readiness_constraints}->{self.current_constraints}",
+                    step_id=action.operation_id, action_id=action.operation_id,
+                    success=False, error="implementation_admission_refused:shared_unit_required",
                     resources_used=ResourceUsage(),
                 )
 
@@ -2181,6 +2242,11 @@ class PawRuntime:
         # into metadata, use it instead of re-routing. This preserves the
         # "non-terminal assessment → routing → exact proposal → gates"
         # contract while keeping step_fn backward-compatible.
+        needs_model = Capability.MODEL_INFERENCE in action.capabilities
+        if needs_model and action.metadata.get("model_route_failure"):
+            return self._model_failure_observation(action, ModelDispatchError("no_route"))
+        if needs_model and (self.model_router is None or self.model_executor is None):
+            return self._model_failure_observation(action, ModelDispatchError("backend_unavailable"))
         canonical_model_selection: ModelSelection | None = None
         cached_model = action.metadata.get("selected_model")
         if cached_model:
@@ -2211,7 +2277,6 @@ class PawRuntime:
                 },
             )
 
-        needs_model = Capability.MODEL_INFERENCE in action.capabilities
         if needs_model and self.model_router is not None:
             token_count = _token_count_from_context(action.context)
             # E2-32: enforce per-role token/cost ceiling before inference.
@@ -2357,8 +2422,8 @@ class PawRuntime:
                     # Propagate to _execute_unit which handles it as a
                     # hard stop — the operation is NOT completed.
                     raise
-                except Exception as exc:  # pragma: no cover - defensive
-                    logger.warning("execute_model_route_failed", error=str(exc))
+                except Exception as exc:
+                    return self._model_failure_observation(action, exc)
             else:
                 selection = canonical_model_selection
                 recon = None
@@ -2400,8 +2465,8 @@ class PawRuntime:
                         model_result = await self._execute_model(selection, messages) or {}
                 except RemoteDisclosureRefusedError:
                     raise
-                except Exception as exc:  # pragma: no cover - defensive
-                    logger.warning("execute_model_route_failed", error=str(exc))
+                except Exception as exc:
+                    return self._model_failure_observation(action, exc)
 
         if skill_name and self.skill_fabric is not None:
             try:
@@ -2522,6 +2587,10 @@ class PawRuntime:
                     operation_id=action.operation_id,
                     op_type="external_effect",
                     effect_intent=effect_intent.to_dict(),
+                    operation_metadata={
+                        "implementation_binding": _unit_admission.get()[3],
+                        "action_fingerprint": action_fingerprint(action),
+                    } if _unit_admission.get() else None,
                 )
             executor_result = await executor.execute(executor_task, context_value)
         executed = bool(executor_result.success)

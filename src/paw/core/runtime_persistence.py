@@ -38,6 +38,7 @@ class RuntimePersistence:
         op_type: str,
         effect_intent: dict[str, Any],
         ledger_context: dict[str, Any] | None = None,
+        operation_metadata: dict[str, Any] | None = None,
     ) -> OperationRecord:
         """Durably record an external effect intent before invoking its adapter."""
         context = dict(ledger_context or {})
@@ -46,7 +47,7 @@ class RuntimePersistence:
             op_id=operation_id,
             op_type=op_type,
             status="prepared",
-            metadata={"effect_intent": effect_intent},
+            metadata={**(operation_metadata or {}), "effect_intent": effect_intent},
         )
         await db.initialize()
         async with db.transaction() as connection:
@@ -86,7 +87,7 @@ class RuntimePersistence:
             "action_id": operation_id,
             "success": observation.success,
             "resources_used": (
-                observation.resources_used.model_dump()
+                observation.resources_used.to_ledger_dict()
                 if observation.resources_used
                 else None
             ),
