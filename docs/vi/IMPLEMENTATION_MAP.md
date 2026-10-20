@@ -114,6 +114,106 @@ vẫn giữ một orchestrator duy nhất — **không** tạo thêm lớp "mana
 **không** viết lại framework. Đặc biệt, fix F04/F05 thuộc về chỗ sở hữu
 provider discovery và outbound payload, không phải một abstraction mới.
 
+### B-19/F05: ràng buộc payload gửi đi với manifest đã review — 2026-10-20, STANDARD / READY
+
+**Lỗi.** Đường remote chỉ hỏi một câu — "manifest này có được gửi tới provider
+này không?" — và `gate_remote_disclosure` trả lời trên `manifest.included`. Nhưng
+byte thực sự gửi đi là thứ khác: `action.metadata["messages"]`, một kênh độc
+lập mà manifest không mô tả. Ba lỗ hổng:
+
+* lệnh gọi remote **không có manifest** bỏ qua gate hoàn toàn
+  (`if manifest is not None:`), nên không có gì authorise nó;
+* manifest thuộc **task khác** vẫn được chấp nhận;
+* nội dung mà quyết định disclosure **từ chối** vẫn có thể tới provider qua
+  danh sách message — gate chứng minh một thuộc tính của *manifest*, không phải
+  của *payload*.
+
+**Sửa.** `paw.core.privacy.bind_remote_payload` là ràng buộc canonical mới. Nó
+từ chối theo thứ tự: `manifest_missing` (fail closed — lệnh gọi remote không có
+manifest thì không có gì authorise nó), `foreign_manifest`, các lý do từ chối
+theo từng candidate tái dùng từ `gate_remote_disclosure`, `payload_not_approved`
+(payload mang nội dung mà disclosure đã từ chối, hoặc nội dung từ một bản ghi
+SECRET/WORKSPACE mà compiler đã thấy nhưng không đưa vào), và
+`payload_oversized` (payload vượt ngân sách của chính manifest). Kết quả mang
+digest của payload và của manifest để bản ghi audit nêu đúng byte và đúng bằng
+chứng bao phủ chúng. Cả hai đường remote trong `_execute_action` đều gọi nó.
+
+**Một lỗi thứ hai phát hiện khi làm việc này.** Runtime dùng *tên* provider làm
+*kind* disclosure (`PROVIDER_LOCAL if name == "ollama" else name`). Với mọi
+provider cloud thật, giá trị đó nằm ngoài `PROVIDER_KINDS`, nên mọi lệnh gọi
+remote đều bị từ chối với `unknown_provider_kind` và **bảng class chưa bao giờ
+thực sự quyết định điều gì**. `provider_kind_for()` giờ sở hữu mapping theo
+E1-03: provider on-box (`local`, `offline`, `vllm`, `ollama`) là `local`, cloud
+được charter cho phép là `cloud_approved` (tập được cho phép **rỗng mặc định**,
+theo hợp đồng E1-03 hoãn cloud baseline), còn lại là `cloud_unapproved`.
+`ModelManifest.local` nay đọc cùng một tập canonical nên hai bên không thể
+trôi lệch nhau.
+
+**Bằng chứng.** `tests/test_b19_f05_payload_binding_contract.py` (13 test) và
+`tests/test_b19_f05_provider_kind_contract.py` (16 test).
+
+*Chứng minh fail-positive.* Khôi phục gate cũ `if manifest is not None` làm
+`test_remote_call_without_manifest_makes_zero_provider_calls` fail với provider
+remote thực sự bị gọi (`{'model': 'remote-llama', 'messages': [...]}`). Tắt
+binding check làm fail `test_payload_carrying_refused_content_refuses` và
+`test_excluded_secret_record_cannot_ride_the_payload`. Tắt nhánh local của
+mapper làm fail 6 test provider-kind.
+
+*Tương tác.* `tests/test_model_dispatch_fail_closed.py` trước đây tới được
+provider remote mà không có manifest. Nay điều đó bị từ chối trước khi tới
+provider — đúng như vậy — nên test được cấp một manifest gắn với task của nó.
+Test đó về *dispatch* failure, không phải disclosure; gate nằm upstream. 32 test
+pass.
+
+**Còn mở.** Một secret chưa từng đi vào manifest (ví dụ được gõ vào một lượt
+chat) không bị binding phát hiện, vì binding chỉ thấy được những gì compiler
+đưa lên. Phân loại raw user text là việc của chat layer, không phải của
+manifest.
+
+### B-19/F04: provider discovery là thao tác tường minh, do Policy cho phép — 2026-10-20, STANDARD / READY
+
+**Lỗi.** Có hai chỗ provider-I/O ẩn:
+
+* `ChatService.open()` gọi `initialize_all()`, nên *mở một phiên chat* đã
+  chạm provider mà không có operation nào được authorise;
+* `ModelRouter.route()` gọi `ensure_providers_ready()` rồi `discover_models()`,
+  nên *chọn một model* đã chạm provider mà không có operation nào được
+  authorise.
+
+Hợp đồng AGENTS.md vốn đã nói đúng hình dạng mong muốn: *"Model Router selects
+only from admitted cached manifests"*. Code chưa khớp.
+
+**Sửa.**
+
+* `ModelRouter.route()` nay **chỉ dùng cache**: đăng ký các model local
+  stand-in và chọn từ các manifest đã được admit. Nó không còn initialize hay
+  discover provider.
+* `ModelRouter.discover_providers()` là thao tác discover **tường minh**. Nó
+  đăng ký model local stand-in trước (để cache luôn có fallback, bất kể thứ tự
+  admit), initialize provider và admit model của chúng.
+* `_available_provider_names()` không còn dò provider. Provider chưa được
+  initialize báo `available is None`; manifest cache của nó vẫn dùng được, vì
+  việc admit đã là một quyết định. Provider đã initialize và báo
+  `available == False` thì bị loại.
+* `PawRuntime._admit_provider_discovery()` chỉ discover sau khi Policy cho
+  phép `Capability.NETWORK_HTTP` qua cùng single-authority gate. Khi bị từ
+  chối, cache giữ nguyên và run tiếp tục trên manifest đã cache.
+* `ChatService.open()` không còn initialize provider.
+  `ChatService.__init__` nhận thêm registry `providers` tuỳ chọn để caller (hay
+  test) có thể cấp provider riêng.
+
+**Bằng chứng.** `tests/test_b19_f04_discovery_contract.py` (6 test).
+
+*Chứng minh fail-positive.* Khôi phục discover ẩn trong `route()` và
+initialize ẩn trong `ChatService.open()` làm fail
+`test_routing_performs_no_provider_io` và
+`test_opening_a_chat_session_does_no_provider_io`.
+
+*Tương tác.* `tests/test_phase15_model_router_v2.py` trước đây dựa vào việc
+`route()` tự discover; nay nó gọi `discover_providers()` tường minh trước, và
+một test mới ghim rằng chỉ routing thì không discover và không initialize. 12
+test pass.
+
 ### Bộ đếm operation của checkpoint (code)
 
 `TaskCheckpoint` giờ mang `operations_completed`, lưu trong cột mới

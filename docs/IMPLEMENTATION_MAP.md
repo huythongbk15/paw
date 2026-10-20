@@ -122,6 +122,113 @@ orchestrator — **not** to introduce another "manager" layer and **not** to
 rewrite the framework. The F04/F05 fixes in particular belong in the places
 that own provider discovery and outbound payload, not in a new abstraction.
 
+### B-19/F05: bind the outbound payload to the reviewed manifest — 2026-10-20, STANDARD / READY
+
+**The defect.** The remote path asked only one question — *"may this manifest
+go to this provider?"* — answered by `gate_remote_disclosure` over
+`manifest.included`. The bytes actually sent were a different thing:
+`action.metadata["messages"]`, an independent channel the manifest never
+described. Three holes followed:
+
+* a remote call with **no manifest** skipped the gate entirely
+  (`if manifest is not None:`), so nothing authorized it;
+* a manifest belonging to **another task** was accepted;
+* content the disclosure decision **refused** could still reach the provider
+  through the message list — the gate proved a property of the *manifest*,
+  not of the *payload*.
+
+**The fix.** `paw.core.privacy.bind_remote_payload` is the new canonical
+binding. It refuses, in order: `manifest_missing` (fail closed — a remote
+call with no manifest is not authorized by anything), `foreign_manifest`,
+the per-candidate disclosure reasons reused from `gate_remote_disclosure`,
+`payload_not_approved` (the payload carries text the disclosure refused, or
+text from a SECRET/WORKSPACE record the compiler saw but did not include),
+and `payload_oversized` (the payload exceeds the manifest's own budget). The
+result carries the payload digest and the manifest digest so an audit record
+names the exact bytes and the exact evidence that covered them. Both remote
+paths in `_execute_action` now call it.
+
+**A second defect found while doing this.** The runtime used the provider
+*name* as the disclosure *kind*
+(`PROVIDER_LOCAL if name == "ollama" else name`). For every real cloud
+provider that produced a value outside `PROVIDER_KINDS`, so every remote call
+refused as `unknown_provider_kind` and **the class table never actually
+decided anything**. `provider_kind_for()` now owns the E1-03 mapping: an
+on-box provider (`local`, `offline`, `vllm`, `ollama`) is `local`, a
+charter-admitted cloud provider is `cloud_approved` (the admitted set is
+**empty by default**, per the E1-03 contract that defers the cloud
+baseline), and everything else is `cloud_unapproved`. `ModelManifest.local`
+now reads the same canonical set so the two cannot drift.
+
+**Evidence.** `tests/test_b19_f05_payload_binding_contract.py` (13 tests) and
+`tests/test_b19_f05_provider_kind_contract.py` (16 tests).
+
+*Fail-positive proven.* Restoring the old `if manifest is not None` gate
+makes `test_remote_call_without_manifest_makes_zero_provider_calls` fail with
+the remote provider actually called
+(`{'model': 'remote-llama', 'messages': [...]}`). Disabling the binding
+check fails `test_payload_carrying_refused_content_refuses` and
+`test_excluded_secret_record_cannot_ride_the_payload`. Disabling the
+mapper's local branch fails 6 of the provider-kind tests.
+
+*Interaction.* `tests/test_model_dispatch_fail_closed.py` reached a remote
+provider with no manifest. That is now refused before the provider is
+reached — correctly — so the test was given a manifest bound to its task.
+The test was about *dispatch* failure, not about disclosure; the gate is
+upstream of it. 32 tests pass.
+
+**Still open.** A secret that never entered the manifest (for example typed
+into a chat turn) is not detected by the binding, because the binding can
+only see what the compiler surfaced. Classifying raw user text is a chat
+layer concern, not a manifest concern.
+
+### B-19/F04: provider discovery is an explicit, Policy-admitted operation — 2026-10-20, STANDARD / READY
+
+**The defect.** Two implicit provider-I/O sites existed:
+
+* `ChatService.open()` called `initialize_all()`, so *starting a chat session*
+  reached a provider with no operation authorized;
+* `ModelRouter.route()` called `ensure_providers_ready()` and then
+  `discover_models()`, so *choosing a model* reached a provider with no
+  operation authorized.
+
+The AGENTS.md contract already said what the right shape is: *"Model Router
+selects only from admitted cached manifests"*. The implementation did not
+match it.
+
+**The fix.**
+
+* `ModelRouter.route()` is now **cache-only**: it registers the local
+  stand-ins and selects from the manifests already admitted. It no longer
+  initializes or discovers a provider.
+* `ModelRouter.discover_providers()` is the **explicit** discovery
+  operation. It registers the local stand-ins first (so the cache always
+  holds the fallback, whatever order admission happens in), initializes the
+  providers and admits their models.
+* `_available_provider_names()` no longer probes providers. A provider that
+  has not been initialized reports `available is None`; its cached manifests
+  stay usable, because admission was already a decision. A provider that was
+  initialized and reports `available == False` is filtered out.
+* `PawRuntime._admit_provider_discovery()` performs discovery only after
+  Policy admits `Capability.NETWORK_HTTP` through the same single-authority
+  gate. A denied discovery leaves the cache as it was and the run continues
+  on the cached manifests.
+* `ChatService.open()` no longer initializes providers.
+  `ChatService.__init__` gained an optional `providers` registry so a caller
+  (or a test) can supply its own providers.
+
+**Evidence.** `tests/test_b19_f04_discovery_contract.py` (6 tests).
+
+*Fail-positive proven.* Restoring the implicit discovery in `route()` and the
+implicit initialization in `ChatService.open()` fails
+`test_routing_performs_no_provider_io` and
+`test_opening_a_chat_session_does_no_provider_io`.
+
+*Interaction.* `tests/test_phase15_model_router_v2.py` relied on `route()`
+discovering automatically; it now calls the explicit
+`discover_providers()` first, and a new test pins that routing alone performs
+zero discovery and zero initialization. 12 tests pass.
+
 ### Checkpoint operation counter (code)
 
 `TaskCheckpoint` now carries `operations_completed`, persisted in a new

@@ -63,9 +63,30 @@
   provider receipt.
   — OPEN. Per-provider token/cost measurement stays approximate; router
   efficiency and cloud savings must not be concluded from ledger numbers yet.
-- [ ] B-19 F04/F05 remain open: provider discovery before the gate, and the
-  outbound payload not bound to the reviewed manifest.
-  — OPEN, next safe action. Unchanged by this repair.
+- [x] B-19/F05: the outbound payload is bound to the reviewed manifest.
+  A remote call with no manifest now refuses instead of skipping the gate; a
+  foreign manifest refuses; content the disclosure refused cannot ride the
+  message list; an oversized payload refuses. The provider name is mapped to a
+  real disclosure kind, so the class table decides instead of every remote
+  call refusing as `unknown_provider_kind`.
+  — RESOLVED. `tests/test_b19_f05_payload_binding_contract.py` 13 passed,
+  `tests/test_b19_f05_provider_kind_contract.py` 16 passed; fail-positive
+  proven for the skipped gate, the binding check and the mapper's local
+  branch; `tests/test_model_dispatch_fail_closed.py` 32 passed after being
+  given a task-bound manifest; ruff check clean.
+- [x] B-19/F04: provider discovery is an explicit, Policy-admitted operation.
+  `ModelRouter.route()` is cache-only; `discover_providers()` is the explicit
+  operation; the runtime performs it only after Policy admits
+  `Capability.NETWORK_HTTP`; `ChatService.open()` no longer initializes
+  providers.
+  — RESOLVED. `tests/test_b19_f04_discovery_contract.py` 6 passed, fail-positive
+  proven for both implicit-I/O sites;
+  `tests/test_phase15_model_router_v2.py` 12 passed after being updated to the
+  explicit admission; ruff check clean.
+- [ ] A secret that never entered the manifest (for example typed into a chat
+  turn) is not detected by the payload binding; the binding can only see what
+  the compiler surfaced.
+  — OPEN. Classifying raw user text is a chat-layer concern.
 
 ## Current B-18 runtime packet — 2026-10-07
 

@@ -64,9 +64,28 @@
   receipt từ provider.
   — OPEN. Đo token/chi phí theo provider vẫn xấp xỉ; chưa được kết luận về
   hiệu quả router hay tiết kiệm cloud từ số liệu ledger.
-- [ ] B-19 F04/F05 vẫn mở: provider discovery trước gate, và payload gửi đi
-  chưa được ràng buộc với manifest đã review.
-  — OPEN, next safe action. Sửa đợt này không đụng tới.
+- [x] B-19/F05: payload gửi đi được ràng buộc với manifest đã review.
+  Lệnh gọi remote không có manifest nay bị từ chối thay vì bỏ qua gate;
+  manifest của task khác bị từ chối; nội dung mà disclosure đã từ chối không
+  thể đi qua danh sách message; payload vượt ngân sách bị từ chối. Tên provider
+  nay được map sang một kind disclosure thật, nên bảng class thực sự quyết định
+  thay vì mọi lệnh gọi remote bị từ chối với `unknown_provider_kind`.
+  — RESOLVED. `tests/test_b19_f05_payload_binding_contract.py` 13 passed,
+  `tests/test_b19_f05_provider_kind_contract.py` 16 passed; chứng minh
+  fail-positive cho gate bị bỏ qua, binding check và nhánh local của mapper;
+  `tests/test_model_dispatch_fail_closed.py` 32 passed sau khi được cấp một
+  manifest gắn với task; ruff check clean.
+- [x] B-19/F04: provider discovery là thao tác tường minh, do Policy cho phép.
+  `ModelRouter.route()` chỉ dùng cache; `discover_providers()` là thao tác tường
+  minh; runtime chỉ thực hiện sau khi Policy cho phép `Capability.NETWORK_HTTP`;
+  `ChatService.open()` không còn initialize provider.
+  — RESOLVED. `tests/test_b19_f04_discovery_contract.py` 6 passed, có chứng minh
+  fail-positive cho cả hai chỗ I/O ẩn;
+  `tests/test_phase15_model_router_v2.py` 12 passed sau khi được cập nhật sang
+  admit tường minh; ruff check clean.
+- [ ] Một secret chưa từng đi vào manifest (ví dụ gõ vào một lượt chat) không
+  bị payload binding phát hiện; binding chỉ thấy được những gì compiler đưa lên.
+  — OPEN. Phân loại raw user text là việc của chat layer.
 
 ## Packet runtime B-18 hiện tại — 2026-10-07
 
