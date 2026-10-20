@@ -25,9 +25,12 @@ order, preserving unfinished E1 ranking work and without enabling training:
 | Feature parity | B-27..B-33 | Sessions/chat, approvals, project/context, decision/DAG, inspect, memory/skills, model/experimental views through shared services. |
 | Product candidate | B-34..B-36 | Install/upgrade/backup/restore and documentation; browser/CLI parity; one clean-revision D3 + explicit release verdict. |
 
-Next safe action: prove one real engineering workflow (research -> choose ->
-change -> declared verification, with a failure and a restart), then close the
-remaining failure usage receipts. **B-19 F04 (discovery is an explicit,
+Next safe action: plug a real test harness into the workflow's verification
+port, so the chain is proved against a real project's own suite rather than a
+simulated change; then close the remaining failure usage receipts. **The
+engineering workflow was proved on 2026-10-20** (research -> choose -> change ->
+declared verification, with a failure and a restart) - see the B-20 record in
+the implementation map. **B-19 F04 (discovery is an explicit,
 Policy-admitted operation) and F05 (the outbound payload is bound to the
 reviewed manifest) were closed on 2026-10-20.** B-15 inventory and B-18
 bounded migration have scoped evidence; do not reopen their architecture or
