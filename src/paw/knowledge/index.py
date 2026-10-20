@@ -33,6 +33,17 @@ _MAX_HYBRID_CANDIDATES = 100
 FLOOR_RELATIVE_TO_BEST = 0.10
 FLOOR_JUNK = 0.02
 
+# Short, sparse files (e.g. a star-import __init__.py with ~6 lines) are
+# semantically the exact answer to queries about "public API" or "star
+# re-exports" but score below the admission floor because the long query
+# denominator dilutes both their content ratio and their path boost to
+# nothing. Containment-based scoring kicks in below this threshold: path
+# relevance is normalised by the metadata token count (not the query token
+# count) and structural patterns that the query *describes* (star re-exports)
+# are recognised even when the content tokens don't literally contain the
+# query words.
+SHORT_CHUNK_CHARS = 1000
+
 
 @dataclass
 class KnowledgeSearchResult:
@@ -580,6 +591,27 @@ class KnowledgeIndex:
             }
             if parts and parts.issubset(query):
                 definition_boost = max(definition_boost, 0.4)
+        # Containment-based scoring for short, sparse files. A short file
+        # (e.g. a star-import __init__.py) can be semantically the exact answer
+        # while its lexical ratio is diluted to ~0 by a long query denominator.
+        # For short chunks we switch to containment: normalise path relevance
+        # by the metadata token count (not the query count) and recognise
+        # structural patterns the query describes but the content doesn't
+        # literally contain.
+        metadata_denom = sum(weight(t) for t in metadata)
+        if len(chunk.content) < SHORT_CHUNK_CHARS:
+            if metadata_denom > 0:
+                path_containment = metadata_match / metadata_denom
+                path_boost = min(path_containment, 0.3)
+            # Structural containment: "star re-exports" in an __init__ module
+            # produce a score the ratio scorer cannot see.
+            star_imports = bool(re.search(r"from\s+\.\S+\s+import\s+\*", chunk.content))
+            star_query = any(
+                t in query for t in ("star", "export", "exports", "reexport", "reexports")
+            )
+            if star_imports and star_query:
+                definition_boost = max(definition_boost, 0.5)
+
         return min(coverage + path_boost + definition_boost, 1.0)
 
 
