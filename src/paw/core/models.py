@@ -103,6 +103,11 @@ class TaskEventType(StrEnum):
     APPROVAL_REQUESTED = "approval_requested"
     APPROVAL_DECIDED = "approval_decided"
     APPROVAL_CONSUMED = "approval_consumed"
+    # A declared engineering verification. Kept distinct from
+    # STEP_EXECUTED (the executor's success observation) and from any
+    # gate verdict: recording a verification says what was checked, not
+    # that the work may ship.
+    VERIFICATION_RECORDED = "verification_recorded"
 
 
 class PolicyDecision(StrEnum):
@@ -648,3 +653,48 @@ class ProposedAction(BaseModel):
 
     def to_dict(self) -> dict[str, Any]:
         return self.model_dump(mode="json")
+
+
+# --- Declared engineering verification ----------------------------------
+
+
+@dataclass(frozen=True)
+class VerificationRecord:
+    """A **declared** engineering verification.
+
+    This is not an executor's success observation. An executor reporting
+    "the write succeeded" is an ``OBSERVED`` effect: it says the adapter
+    did what it was asked. A verification says something stronger and
+    different - that a named check was performed, against a named target,
+    and produced a stated result.
+
+    It is also not a gate verdict. Recording a verification says nothing
+    about whether a track may ship; the gate verdicts live in the
+    canonical status table and are reached by their own evidence chain.
+
+    The record is immutable. It is bound to the operation it verifies, so
+    a verification cannot be silently re-used for a different change.
+    """
+
+    operation_id: str
+    method: str
+    passed: bool
+    summary: str = ""
+    evidence: str = ""
+    command: str = ""
+    revision: str = ""
+    declared_by: str = ""
+    declared_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "operation_id": self.operation_id,
+            "method": self.method,
+            "passed": self.passed,
+            "summary": self.summary,
+            "evidence": self.evidence,
+            "command": self.command,
+            "revision": self.revision,
+            "declared_by": self.declared_by,
+            "declared_at": self.declared_at.isoformat(),
+        }

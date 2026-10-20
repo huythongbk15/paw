@@ -478,6 +478,25 @@ async def log_operation_recorded(
     )
 
 
+async def log_verification_recorded(
+    task_id: ID,
+    record: Any,
+) -> None:
+    """Record a declared engineering verification.
+
+    This is deliberately a different event from ``STEP_EXECUTED``. The
+    executor's event says an effect was observed; this one says a named
+    check was performed against a named target and produced a stated
+    result. Neither is a gate verdict.
+    """
+    payload = record.to_dict() if hasattr(record, "to_dict") else dict(record)
+    await TaskLedger.record(
+        task_id,
+        TaskEventType.VERIFICATION_RECORDED,
+        payload,
+    )
+
+
 async def log_checkpoint_restored(
     task_id: ID,
     checkpoint_id: str,
