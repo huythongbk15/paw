@@ -1,5 +1,516 @@
 # Bản đồ triển khai và audit ổn định PAW
 
+## Chụp working tree — 2026-10-20
+
+Base revision `9fb893e2017eceb01d80be4de7ee7a3744eb8ce5`. Lệnh chụp:
+`git status --short --untracked-files=all`, `git diff --stat HEAD`,
+`git ls-files --others --exclude-standard`, `git rev-parse HEAD`.
+
+Trạng thái chụp: **68 path** — 55 sửa, 13 untracked; `+3672 / -697` trên diff
+đã track. Đây là *toàn bộ* working tree chưa commit tại đầu đợt sửa
+2026-10-20, trải qua nhiều phiên trước.
+
+Phân loại — mỗi path gán đúng một track owner:
+
+| Track | Path đã chụp | Số |
+|---|---:|---:|
+| B-18 decision evidence | `src/paw/core/{storage,reasoning_contracts,planner,approval,policy}.py` + 5 file test | 10 |
+| B-18 runtime admission | `src/paw/core/{runtime,runtime_persistence,checkpoint,repo_scanner}.py`, `src/paw/knowledge/checksum.py` + 16 file test | 21 |
+| B-19/F06 fail-closed dispatch | `src/paw/core/model_executor.py` + 3 file test | 4 |
+| B-18 CLI two-approval | `src/paw/application/chat.py`, `demos/demo_change.py` + 3 file test | 5 |
+| Evidence repair (ledger/benchmark) | `src/paw/core/{models,ledger}.py`, `benchmarks/runtime/run_e2e.py` + 1 file test | 4 |
+| Docs status sync | `README.md`, 10 `docs/*.md`, 10 `docs/vi/*.md` + 2 file test | 22 |
+| Phase D recovery test repair | `tests/test_phase_d_recovery.py` | 1 |
+| Preserved user change | `src/paw/knowledge/index.py` | 1 |
+| Unrelated | `None identified` | 0 |
+
+Dòng `Unrelated` là một hợp đồng: mọi diff hunk đã được xem và gán. Dòng
+`Preserved user change` là `src/paw/knowledge/index.py` — một thay đổi scoring
+retrieval cho file ngắn thưa, giữ nguyên từ working tree của user và commit
+riêng để không bao giờ bị quy cho một track của PAW.
+
+## Sửa độ tin cậy bằng chứng — 2026-10-20, STANDARD / READY
+
+Xử lý các lỗi ledger/usage làm cho số liệu chi phí và token không dùng được,
+cùng mâu thuẫn trạng thái trong tài liệu khiến agent khác phải tự suy luận lại
+trước khi tiếp tục.
+
+### Ghi nhận usage vào ledger (code)
+
+Hai lỗi, đều đã xác nhận bằng đọc source và tái hiện bằng contract test mới:
+
+1. **Sai key.** `RuntimePersistence.commit_operation` serialize `ResourceUsage`
+   bằng `model_dump()`, chỉ phát ra các *field* pydantic (`model_calls`,
+   `tokens`, ...). `provider_calls` là *method* của `ResourceUsage` nên vắng mặt
+   trong payload STEP_EXECUTED. `TaskLedger.get_model_call_count` đọc
+   `resources_used["provider_calls"]` và vì vậy **luôn trả 0** cho mọi task do
+   runtime ghi, dù đã có bao nhiêu model call thật.
+   `assert_model_calls_monotonic` cũng vô nghĩa vì lý do tương tự.
+
+   Sửa: `ResourceUsage.to_ledger_dict()` giờ là cách serialize canonical duy
+   nhất cho usage ghi vào ledger (field gốc cộng `provider_calls` /
+   `total_tokens` / `total_cost_usd` của receipt). `commit_operation` dùng nó.
+   Reader của ledger cũng chịu được `resources_used` bằng `None`.
+
+2. **Đếm trùng event.** `commit_operation` vốn đã ghi một event STEP_EXECUTED,
+   ngay trong transaction cùng `OperationRecord`. `_execute_unit` lại ghi
+   *thêm* một STEP_EXECUTED cho cùng operation, nên mỗi operation sinh ra hai
+   event và một reader đã sửa sẽ đếm mỗi call hai lần.
+
+   Sửa: bỏ lần ghi thứ hai. `commit_operation` là writer STEP_EXECUTED duy nhất
+   có thẩm quyền. `StepProposed` vẫn ghi *ước tính*; STEP_EXECUTED ghi thực tế.
+
+**Bằng chứng.** `tests/test_ledger_usage_accounting_contract.py` (6 test).
+Chứng minh fail-positive: khôi phục cả hai lỗi làm fail 5/6 (test thứ sáu là
+control về quyết định). Regression sweep tập trung: 57 test qua E2-34, Phase 19
+runtime hardening/loop, E2-20 resume, external-effect reconciliation, runtime
+atomicity và outcome task identity — tất cả pass. Sweep rộng hơn: 287 test qua
+E2-3x/E2-4x, ledger, phase-D recovery và E1-2x — tất cả pass. Ruff sạch.
+
+**Còn mở (chưa sửa ở đây).** Usage cuối đường executor vẫn suy ra từ
+`estimated_cost`, chưa phải receipt từ provider, nên đo token/chi phí theo
+provider vẫn chỉ xấp xỉ. Chưa được kết luận về hiệu quả router hay tiết kiệm
+cloud từ các số này.
+
+### Quy kết oracle của benchmark (benchmark)
+
+`benchmarks/runtime/run_e2e.py` đo oracle theo cách không phân biệt được "PAW
+đã thực hiện thay đổi" với "PAW đã từ chối và một lần ghi file trực tiếp đã làm
+nó":
+
+* oracle **baseline** chạy *sau* các lần PAW ghi, nên "baseline" thực chất là
+  trạng thái sau ghi;
+* script sau đó `git checkout -- .` và ghi cả hai file **trực tiếp** bằng
+  `write_text()`, nên phép đo "after" mô tả lần ghi trực tiếp chứ không phải
+  output của PAW;
+* chương trình `return 0` vô điều kiện, nên oracle fail cũng không làm
+  benchmark fail.
+
+Sửa: oracle baseline đo trên repository nguyên trạng **trước** mọi lần ghi;
+oracle "after" đo trên đúng file PAW đã tạo ra (không reset, không ghi trực
+tiếp); và exit code nay phản ánh một verdict tường minh. `FAIL` được trả về
+khi có bất kỳ file nào PAW chưa ghi được, hoặc khi oracle có failure mới.
+`PASS` đòi hỏi PAW thực sự thực hiện thay đổi.
+
+**Chưa đóng.** `paw_write` trong harness đó đề xuất action `FILESYSTEM_WRITE`
+mà không có implementation Plan đã lưu, không có ràng buộc project root và
+không có decision đã review, nên theo hợp đồng admission hiện tại runtime sẽ
+từ chối lần ghi. Benchmark nay báo cáo trung thực là `FAIL` thay vì âm thầm
+chứng nhận một lần ghi trực tiếp. Việc nối harness vào một Plan + binding đã
+review thật là phần công việc còn lại; cho tới lúc đó benchmark này là *negative
+control*, không phải một lần pass.
+
+### Kích thước module và phân tách trách nhiệm (ghi nhận, không phải work item)
+
+Kích thước source hiện tại: `runtime.py` 2743, `model_router.py` 1413,
+`skills.py` 1397, `storage.py` 1226, `context_compiler.py` 1186,
+`application/chat.py` 1031.
+
+Số dòng tự nó không chứng minh thiết kế sai, nhưng nó chỉ ra coupling nằm ở
+đâu: `runtime.py` đang gánh routing, reconnaissance, admission, privacy,
+execution, recovery và usage accounting, còn `chat.py` gánh thêm việc dựng
+decision/review. Hướng an toàn kế tiếp là tách những trách nhiệm đã có proof,
+vẫn giữ một orchestrator duy nhất — **không** tạo thêm lớp "manager" và
+**không** viết lại framework. Đặc biệt, fix F04/F05 thuộc về chỗ sở hữu
+provider discovery và outbound payload, không phải một abstraction mới.
+
+### Bộ đếm operation của checkpoint (code)
+
+`TaskCheckpoint` giờ mang `operations_completed`, lưu trong cột mới
+`task_checkpoints.operations_completed` (migration additive,
+`SCHEMA_VERSION` 7 → 8, không ghi lại row, không DROP). `_create_checkpoint`
+mang bộ đếm; `CheckpointManager.get_latest()` uỷ quyền cho `CheckpointStore`;
+`TaskCheckpoint.status` là alias của `task_status`. Checkpoint có trước cột này
+báo 0 operation hoàn thành — đó là giá trị trung thực cho snapshot đó.
+
+### Trạng thái tài liệu (docs)
+
+Bộ canonical mang các tuyên bố trạng thái mâu thuẫn. Cách giải quyết tách hai
+thứ từng cùng được gọi là "E1/E2 VERIFIED":
+
+* một **gate** đo được trong đúng phạm vi khai báo (E1-27 production measurement
+  verify trên revision sạch `8d01d90`; E2 prerequisite contract ratify trên
+  cùng revision), và
+* một **track** qualification để phát hành (E1 chưa thiết lập; E2/E3/BETA
+  bị chặn bởi nó).
+
+`docs/README.md` (và `docs/vi/README.md`) nay giữ bảng trạng thái hiện tại
+**duy nhất**; hai file Roadmap không nhắc lại phán quyết nữa mà trỏ tới đó.
+Trước đây hai Roadmap (tiếng Anh và tiếng Việt) đưa ra phán quyết *ngược nhau*
+cho cùng một rà soát 2026-09-09 và gọi "track hiện tại" khác nhau; nay cả hai
+nói cùng một điều. `docs/PROJECT_MAP.md` không còn tuyên bố chung "VERIFIED on
+clean revision after all phases", và stage READINESS CHECK không tồn tại trong
+runtime đã được thay bằng hợp đồng implementation-admission thật.
+`docs/api.md` không còn nói routing chỉ xảy ra sau gate (nó xảy ra trong lúc
+đề xuất — release blocker F04/F05). `docs/examples.md` nay mô tả structured write
+cần hai approval.
+
+**Caveat bằng chứng ghi trong bảng trạng thái:** báo cáo đo E1-27
+`benchmarks/e1/e1_production_report.md` bị *gitignore*, nên phán quyết
+`VERIFIED` đó dựa trên tài liệu ghi nhận chứ không phải artifact được track.
+Track lại file đó là tiền đề phát hành.
+
+## Migration runtime B-18 — 2026-10-07, DEEP / READY
+
+Working tree đã thay bốn xfail callback bằng assertion zero-callback thật
+(trước sửa: 4 failures/2.27s). Packet focused cuối: 154 passed/129.30s, gồm
+runtime/admission/recovery/CLI/stream/Plan/migration readiness và change demo.
+Full Ruff/diff/locked sync pass; wheel offline khớp 83 file Python. CLI installed
+ngoài repo chứng minh review/effect approval riêng, write thật, Task giữ identity
+qua process, idle replay và dirty revision refusal. Candidate tích hợp đầu:
+2260 passed, 3 skipped, 2 failed/1013.06s. Fixture routing model khai báo write
+sai; fixture vòng lặp SQLite quảng cáo write dù callback chỉ quan sát. Đã chuyển
+hai control sang read-only, không nới admission production. Một lượt focused
+nạp assertion cũ khi đang sửa (31 passed, 1 failed); cần chạy mới trên freeze
+đã sửa. Lượt mới: hai file regression 13 passed/20.83s. D3 cuối:
+`python -m pytest -q --disable-warnings --tb=short --show-capture=no`,
+2262 passed, 3 skipped/1264.19s, exit 0. Ruff/diff và wheel parity 83 file đã
+kiểm tra lại. Acceptance bounded B-18 được đáp ứng; handoff/product vẫn PARTIAL
+trên dirty tree, không VERIFIED clean release. Fixture cookiecutter optional vẫn skip ở
+host này; migration fixture-human review chưa là proof đã chạy. Change demo
+dùng ChatService và review=True/approve=True tường minh; read-back OBSERVED,
+không VERIFIED. Không mở provider/web/training.
+
+Spike 2026-10-06 đã đủ cơ sở cho implementation bounded này, chưa release:
+source/test reconciliation filesystem chỉ đọc exact intent; probe callback
+tái hiện bốn lỗi. Chọn shared-unit gate thay check executor riêng. Bất lợi:
+fixture raw READY không còn quyền ghi; CLI write cần hai approval tường minh.
+Không giữ compatibility không an toàn. Capability write và callback mutating
+không scope cần Plan persisted, decision immutable đã review, root/filter/
+constraints trusted. Read/model vẫn qua Policy, không giả implementation.
+Read scope freshness vào proposal exact trước Policy một lần; quyền callback
+task-local do runtime tạo, không phải flag của caller.
+
+Recovery prepared không gọi callback/model/prepare/execute; chỉ method đối soát
+chỉ đọc của executor filesystem local hiện có, khớp fingerprint action, Plan/
+review gốc, root executor và intent durable. Review có thể historical khi
+recovery nhưng không cấp quyền write mới. Unsupported/ambiguous/changed bị từ
+chối; replay completed giữ nguyên. Snapshot vẫn không phải khóa writer.
+
+Chọn review decision rồi approval effect riêng thay approval kết hợp: thêm bước
+user nhưng không biến ASK thành review. Chỉ structured local write có FAST
+evidence bounded; chat mutating không hỗ trợ phải refuse, không bịa Plan.
+Task/version/Plan/approval giữ identity qua reopen. Scope Planner/runtime/Policy
+scope/RuntimePersistence metadata/ChatService/test caller, không store/provider/
+web mới. Budget/stop: negative trước sửa, positive reviewed/callback/write,
+stale/foreign/forged/private-call, Policy trước read, crash/reopen exact recovery,
+ambiguous refusal, CLI/stream hai approval. Reassess nếu adapter không chứng
+minh read-only recovery; D3 tích hợp ghi phía trên.
+
+Growth review: `_execute_unit` vẫn owner orchestration; Planner binding, Policy
+scope admission, persistence commit, executor filesystem hiện có reconciliation.
+Receipt private context-local khớp async task. Xóa readiness riêng ở executor
+tránh gate thứ hai; không runtime/store mới. B-19 F04/F05 tiếp theo là
+NEEDS_RESEARCH, chưa triển khai: so sánh cache-only routing + discovery gated
+riêng với discovery operation trước chọn model. Budget một lượt call-site bounded
+và negative zero-call trước READY; không initialize khi ASK/DENY hoặc nhân đôi
+Policy. Payload complete/stream bị thay, evidence thiếu/sai Task/cũ/quá size phải
+refuse trước provider. Chưa promote HTTP.
+
+## Admission runtime chung B-18 — 2026-10-06, DEEP / SPIKE_REQUIRED
+
+Evidence source: `_execute_unit` gọi callback sau Policy/Autonomy nhưng chưa
+check readiness durable. Chỉ `_execute_action` check string và cho phép flag
+research/spike. ChatService chưa truyền Plan binding/cấu hình freshness trusted.
+Operation prepared chỉ tới reconciliation ở đoạn sau; LocalFilesystemExecutor
+so executor/operation/idempotency/request/content và không lặp write. Gate
+freshness chung có thể chặn xác nhận write đã xảy ra; miễn gate theo prepared
+status lại có thể cho phép callback tùy ý.
+
+So sánh (1) check freshness trước mọi callback: nhỏ nhưng phá recovery/CLI;
+(2) admission ở shared unit, branch reconciliation chỉ đọc bị giới hạn chặt,
+migrate workflow review/approval application cùng lúc: ưu tiên nhưng chưa READY.
+Bất lợi phương án 2: phải giữ identity, fingerprint approval exact, Policy đúng
+một lần; isolated/research/is_mutating=False/prepared flag/raw READY không cấp
+quyền write. Replay completed không tạo effect mới. Reconciliation chỉ chứng
+minh intent durable exact, không fallback execute/callback tùy ý; read scope
+phải vào proposal trước Policy. ASK thông thường không thay decision review.
+
+Owner/file: PawRuntime shared unit/gate/executor, ChatService intake/approval/
+resume, ApprovalStore, Plan, executor local hiện có; không manager/store mới.
+Trước chọn migration application, so review decision rồi approval operation
+tường minh với approval kết hợp. Invariant: reviewed fresh implementation,
+gate trước effect, exact approval, idempotency prepared, failure durable typed,
+mọi mode dùng một owner. Budget/stop: probe callback local, CLI approval/reopen,
+reconciliation fixture; không provider ngoài hoặc dữ liệu user. Chỉ chuyển
+SPIKE_REQUIRED sang READY khi proof end-to-end có positive reviewed, negative
+unreviewed/stale/foreign/flags với zero callback/provider/executor; replay
+completed, prepared recovery chỉ đọc exact, từ chối ambiguous, Policy một lần
+trước read freshness/reconciliation. Sau đó migrate production và chạy D3
+working tree tích hợp đã freeze.
+
+`test_runtime_readiness_admission_gap.py` là acceptance control còn mở: mock
+callback, tách admission Policy/Autonomy; chỉ xfail sau xác nhận callback không
+an toàn thực sự thành công. Lỗi bất ngờ vẫn fail. Xfail là nợ, không proof PASS.
+Lệnh pytest focused trên runtime_readiness_admission_gap, runtime_unit_pipeline,
+productization_document_contract: 3 passed, 4 xfailed trong 5.12s; full Ruff/
+git diff --check pass. Packet chẩn đoán chưa sửa production runtime; gate PARTIAL.
+Kiểm tra tích hợp source giữ nguyên: `.venv/bin/python -m pytest -q
+--disable-warnings --tb=short`: 2238 passed, 3 skipped, 4 xfailed trong
+1020.17s, exit 0; locked sync resolved 38/checked 37 package. Đây là số liệu
+full-suite v7 mới thay số lịch sử, không xóa control còn thiếu. Bốn xfail là
+lỗ hổng nêu trên; gate B-18/product vẫn PARTIAL, chưa VERIFIED/clean release.
+Không đổi source production khi chạy; smoke v7 cũ chưa chứng minh runtime gate.
+
+## Proof theo phạm vi B-18 v7 — 2026-10-06
+
+Lệnh focused cuối (đầy đủ ở bản EN): pytest trên readiness_freshness,
+plan_decision_binding, planning_contract, e2_45_plan_purpose_contract,
+e1_04_repo_filter_contract, e1_05_repo_scanner_contract, e1_06_source_diff_contract,
+e1_08_bounded_tree_contract: 122 passed trong 49.04s. Negative trước sửa:
+freshness 6 failures/2.72s; Plan fixture hợp lệ 8 failures/6.00s.
+Caller planning 79 passed/89.20s; CLI/executor/storage 60 passed/62.25s trước
+tinh chỉnh bounds freshness cuối. Wheel v7 offline khớp cả 83 file Python;
+smoke installed ngoài repo chứng minh refusal chưa review, Plan reviewed và
+reopen. Không suy ra runtime/web/clean revision. Full suite hiện tại ở trên;
+thiếu runtime admission nên B-18 PARTIAL.
+
+## Plan gắn review B-18 — 2026-10-06, STANDARD / READY
+
+Planner ghi implementation Plan chưa có decision. So sánh thêm ref tùy chọn
+không check (nhỏ nhưng admission giả) với default research decomposition và
+implementation tường minh cần current FINAL READY, Task/session durable đúng,
+human review exact được lưu, root/filter/hard constraints do server cấu hình còn
+fresh (chọn). Bất lợi: caller cũ tạo research Plan; implementation cần workflow
+review explicit. Giữ purpose/row legacy, không sửa lịch sử; unbound không authority.
+Scope Planner/ApprovalStore/DecisionVersion JSON/schema v7 additive owner hiện có;
+không manager/export core mới. Review decision không thay/consume execution ASK.
+Policy trước IO snapshot planning. Default readiness runtime vẫn là migration
+riêng. Budget/stop: negative missing/orphan/draft/stale/foreign/unreviewed/freshness/
+constraints/Policy, positive review/reopen/private-save. Root/filter/constraints
+chỉ trusted app config, không request HTTP. Plan lưu ref version/revision/
+constraints; save transaction recheck head/review. Snapshot không khóa external
+writer; runtime phải recheck trước effect ở packet kế tiếp.
+
+## Completeness freshness B-18 — 2026-10-06, STANDARD / READY
+
+Scanner context cap danh sách và skip symlink/read error; không đủ làm evidence
+freshness đầy đủ. So sánh dùng output partial (loại), scanner mới (trùng owner),
+và strict completeness opt-in scanner hiện có + checksum owner hiện có (chọn).
+Bất lợi: strict từ chối project lớn/sâu/không đọc được dù context UI vẫn xem được;
+không tự nâng bounds. Scope repo_scanner.py, knowledge/checksum.py, test/docs
+EN/VI; chưa đổi gate/provider/schema/Plan/default runtime. Nghiệm thu: dirty edit/
+add/delete/root/filter đổi revision; excluded file không đổi; symlink/error/depth/
+file-count/entry-count/byte bound/concurrent change bị từ chối thay vì hash thiếu.
+Budget/stop: caller scanner/checksum, negative fixture local. Đây là evidence
+bounded, không filesystem lock atomic hay authority review; phải Policy trước
+read khi nối runtime/Planner.
+
+## Sửa lifecycle B-18 — 2026-10-06, STANDARD / READY
+
+Snapshot lưu chưa có current-head/lifecycle. So sánh chọn timestamp (nhỏ nhưng
+caller điều khiển/không rõ thứ tự) với head CAS và version append-only (chọn).
+Bất lợi: schema v6 additive cần D3 tích hợp. Database vẫn một owner; trạng thái
+thuộc DecisionVersionState canonical. Khởi đầu DRAFT; DRAFT→DRAFT/FINAL;
+FINAL→STALE/SUPERSEDED; STALE→SUPERSEDED; SUPERSEDED terminal. Retry đúng no-op,
+expected-head conflict không insert. Mỗi transition cần actor. Đây là lifecycle,
+chưa phải adequacy/review/freshness hay quyền thực thi. Budget/stop: storage/
+schema/test lifecycle/docs EN/VI; negative reopen/rollback/CAS/orphan FINAL/
+terminal. Chưa đổi default runtime trước migrate Plan/freshness/caller đồng bộ.
+Freshness target: snapshot nội dung relevant input bounded và hard constraints
+do server xác định, không chỉ HEAD. Agent ghi file làm stale proposal chưa chạy
+trừ khi quyết định review mới cho phép. Operation đã commit replay result, không
+chạy lại; reconciliation effect prepared giữ intent/idempotency gốc. Hash toàn
+workspace là phương án khác nhưng stale vì thay đổi không liên quan; raw string/
+flag caller không là authority. Phải chứng minh input-set đầy đủ trước admission.
+
+Triển khai bằng edge publication bất biến, unique initial/predecessor giữ toàn
+chuỗi thay vì ghi đè head. Chỉ published leaf là current; upgrade v5→v6 không
+promote legacy/FINAL chưa publish. Trước sửa: 6 test fail trong 2.80s. Lệnh focused
+test_decision_version_lifecycle/storage, test_e2_28_decision_persistence,
+test_e2_47_48_49_contract, test_storage_task_isolation, test_runtime_atomicity,
+document contract/project lock: 76 passed trong 57.77s. Full Ruff/diff/locked
+sync pass (38 resolved/37 checked). Build/install v6 offline, parity 83 file và
+smoke lifecycle/retry/reopen installed pass. Full D3 hiện tại chờ integration
+B-18; D3/wheel cũ không certify v6. Subproof lifecycle PASS; B-18/product PARTIAL.
+Packet này chưa implement freshness, Plan binding hoặc shared-unit gate.
+Growth review: enum canonical giữ transitions, Database giữ constraints/
+transaction; không manager/store/root export thứ hai.
+
+## Rà soát đóng gói — 2026-10-05, baseline `9fb893e`
+
+### Quyết định B-19/F06 — STANDARD / READY
+
+Audit B-18 xác nhận default READY, application chưa tạo FINAL artifact và Planner
+chưa lookup; đổi default không đủ sửa readiness durable. Migration vẫn bắt buộc.
+Trong cùng nhóm safety trước HTTP, sửa F06 độc lập trước: executor fallback
+remote thiếu sang local echo; runtime nuốt lỗi model rồi capability executor
+báo thành công. Chọn lỗi dispatch typed và observation thất bại. Phương án khác
+là reroute/re-gate fallback (cần proposal mới, không tái dùng approval); defer
+giữ false success. Bằng chứng ngược: test cũ chấp nhận remote→local; migrate test
+và giữ positive explicit-local. Invariant routing độc lập/exact proposal/Policy/
+observation trung thực/durable acknowledgement. Budget source/caller/regression,
+không network. Acceptance complete/stream zero-call negatives, local explicit,
+registered provider và failed operation sau reopen. File model_executor/runtime,
+test và map/checklist EN/VI; không provider/schema/dependency/root export mới.
+D3 tích hợp cần trước release; không tuyên bố B-18 hoặc toàn B-19 hoàn tất.
+
+Proof F06 working tree: trước sửa 8 negative fail/2 explicit-local pass;
+regression cuối phủ dispatch/executor/Ollama/chat/intake/privacy/agent loop/
+provenance/deterministic routing/unit pipeline/atomicity: 100 passed trong
+107.05s. Ruff và locked sync pass (38 resolved/37 checked). Full D3 bằng lệnh
+`.venv/bin/python -m pytest -q --disable-warnings --tb=short --maxfail=3`:
+2182 passed, 3 skipped trong 1500.12s, exit 0. Đây là proof tích hợp working
+tree, không phải chứng nhận release trên revision sạch.
+ModelDispatchError có reason ổn định; stand-in chỉ dùng khi manifest chọn local
+tường minh. Manifest thiếu/sai, no-route, provider unavailable, backend thiếu,
+exception/error envelope đều chặn capability executor. No-route không bị biến
+thành local. Failed observation/operation/Task tồn tại sau reopen. Exception
+payload provider không được chép vào observation/ledger ở nhánh này.
+Còn thiếu receipt usage khi fail/stream dở; usage zero không chứng minh provider
+không tính phí. Discovery và actual approved payload là subchange B-19 riêng,
+chưa sửa. Handoff `PARTIAL`.
+
+### B-18 snapshot bất biến — STANDARD / READY
+
+DecisionVersion frozen vẫn giữ payload mutable của caller và nhận state sai.
+Chỉ test contract đang tạo nó, chưa có consumer runtime/persistence. So sánh
+deepcopy (snapshot vẫn sửa được) với snapshot JSON đệ quy bằng mapping chỉ đọc/
+tuple (chọn). Điểm bất lợi: serializer JSON/dataclass generic không encode trực
+tiếp mapping proxy; migration persistence phải encode tường minh. Từ chối object
+không hỗ trợ, key không phải string, cycle và số không finite; chuẩn hóa state
+hợp lệ về enum. Invariant: evidence bất biến, chưa phải lifecycle FINAL/freshness
+hay authority mutation. File: reasoning_contracts.py và test contract. Budget/
+stop: caller nội bộ, negative alias/nested/state; không sửa schema/runtime.
+Nghiệm thu: sửa input không đổi evidence, sửa snapshot bị chặn, shape sai bị từ
+chối. D3 vừa chạy thuộc F06; subchange này proof focused, D3 tích hợp khi admission.
+Regression trước sửa: 6 failed, 11 passed (13.27s); caller sửa nested payload
+làm đổi decision, state/payload sai được nhận. Nay snapshot/validation đệ quy;
+chưa thêm runtime admission.
+Proof cuối: `.venv/bin/python -m pytest -q tests/test_e2_47_48_49_contract.py
+tests/test_productization_document_contract.py tests/test_project_lock.py
+--disable-warnings --tb=short`: 25 passed trong 9.45s. Full Ruff và
+`git diff --check` pass. Subproof contract `PASS`; B-18/product vẫn `PARTIAL`.
+Wheel F06 đã kiểm tra được build trước subchange này.
+
+### B-18 lưu snapshot durable — STANDARD / READY (2026-10-06)
+
+Chưa có save/load/reopen DecisionVersion. Chọn bảng version chuẩn hóa trong
+Database/schema hiện có thay vì nhét metadata generic: nhỏ hơn nhưng metadata
+không cưỡng chế identity/bất biến và tách policy history khỏi snapshot. Bất lợi:
+schema v5/trigger bất biến cần D3, cleanup không được xóa evidence. Scope:
+schema additive, save/load typed, encode JSON tường minh, khóa version và parent;
+không store mới, không latest/head/lifecycle/freshness hay quyền thực thi.
+Parent phải readiness, Task/session durable khớp, revision/constraints không rỗng,
+readiness payload canonical khớp parent. Legacy row riêng không là authority.
+Retry giống nhau idempotent, ID conflict bị từ chối; validate/insert chung
+transaction. Invariant: evidence durable bất biến và rollback trước acknowledge.
+Nghiệm thu: reopen/alias/duplicate, missing/foreign/unbound/policy-parent,
+SQL update/delete bị chặn, rollback, upgrade v4 giữ legacy. Budget/stop: owner/
+caller/test này, chưa admission. Proof focused cho subchange; D3/build/install
+schema mới còn cần trước gate tích hợp; product vẫn PARTIAL.
+
+Evidence working tree: trước sửa 9 test fail (3.37s), thiếu save/load/bảng version.
+Lệnh focused chạy test_decision_version_storage, test_e2_28_decision_persistence,
+test_storage_task_isolation, test_e2_47_48_49_contract, test_runtime_atomicity,
+document contract/project lock: 64 passed trong 25.68s. Full Ruff/diff/locked
+sync pass (38 resolved/37 checked). Build/install wheel offline pass; 83 file
+Python khớp byte source, smoke v5/idempotency/reopen/immutable-delete ngoài repo
+pass. D3 F06 cũ trước schema mới; chưa chạy full D3 hiện tại. Subproof snapshot
+PASS, B-18/product tích hợp PARTIAL. Growth review: Database lớn nhưng repository
+operation/DDL vẫn một owner hiện có; không store/manager/root export mới. Retention/
+cleanup không được bypass trigger; lifecycle migration cần quyết định riêng.
+Integration storage helpers/skills migration/E3 migration/E2 inspect/chat CLI/
+product intake: 44 passed trong 25.06s. Rerun document contract/project lock
+cuối: 7 passed trong 2.58s; diff clean.
+
+### Handoff migration B-18 — DEEP / NEEDS_RESEARCH
+
+Enum readiness lowercase nhưng runtime vẫn so uppercase string; docstring nay
+đã sửa về implementation readiness. DecisionVersion nay snapshot
+JSON lồng nhau bất biến, save/load immutable và lifecycle publication/head.
+Freshness/review Plan đã triển khai; adequacy/shared runtime admission còn thiếu.
+record_decision là history
+generic, nhận revision/constraints rỗng và Task chưa durable; row legacy không
+được làm authority mutation. Planner nay default research; implementation cần
+review/current/freshness và lưu version/revision/constraint ref; application chưa
+tạo FINAL cho workflow thực. Runtime
+tin is_mutating/is_research/purpose/isolated và freshness optional; flag không
+chứng minh read-only research hoặc spike được containment.
+
+Storage snapshot đã chọn normalized rows dưới Database hiện có; lifecycle/
+freshness integration vẫn cần READY riêng. Không manager/store readiness thứ
+hai. Đổi default đơn lẻ
+hay tạo READY từ approval bị loại. Bằng chứng ngược: test string thủ công xanh
+không chứng minh durable admission; một số còn chấp nhận default READY.
+
+Thứ tự subchange: chốt typed payload/lifecycle và freshness source/constraints
+do server xác định, gồm dirty source; persistence immutable/reopen/rollback và
+legacy không authority; Plan/application decision cùng Task; shared unit gate
+trước step_fn/routing/discovery/effect, gồm resume; migrate caller/test không
+fake READY, chặn bypass capability/containment qua flag; rồi D3. Negative matrix:
+missing/draft/stale/superseded/foreign Task/revision rỗng/constraints đổi/raw READY/
+approval thiếu research/mọi runtime mode/reopen. Mọi invalid case zero effect;
+positive cùng Task được review. Budget contract/caller/schema local và admission
+spike bounded; chỉ implement khi quyết định storage/freshness READY. Không
+provider/training/tenant/ResearchTask mới.
+
+### Bằng chứng sửa lỗi working tree — thay thế tái hiện F01/F02 ban đầu
+
+`_prepare_turn` dùng chung cho send/stream: từ chối session cancelled, action
+pending/approved và input rỗng/quá dài trước khi tạo Task/runtime. Stream dùng
+contract `response`, nên nội dung cuối và assistant message lưu DB không còn
+bị thay bằng mock output. Database khóa connection theo asyncio task, nested
+cùng task dùng savepoint; cancellation rollback; reader/helper không đọc hoặc
+commit transaction đang chờ của task khác.
+
+Regression cuối: 47 passed trong 52.71s, gồm nhiều chunk rồi reopen; contract
+tài liệu 7 passed trong 6.24s; Ruff toàn cây và `git diff --check` pass.
+D3 tích hợp working tree: `.venv/bin/python -m pytest -q
+--disable-warnings --tb=short`, exit 0, 2150 passed, 3 skipped trong 1173.83s.
+Case skip không phải bằng chứng provider live hay capability thử nghiệm.
+D3 này chạy trước sửa F06 dispatch, không certify mã nguồn mới hơn.
+Wheel cuối build/install offline vào môi trường riêng; CLI chat và stream/cancel
+chạy ngoài repository pass với local stand-in; cả 83 file Python wheel khớp source.
+Không phải bằng chứng cloud hay
+release clean revision. Handoff sản phẩm vẫn `PARTIAL`; chưa triển khai web.
+
+Tiếp theo bắt buộc B-18/B-19: FINAL READY durable gắn Task/revision/constraints
+(runtime hiện mặc định READY), routing chỉ đọc cache và discovery có gate,
+approval disclosure ràng buộc đúng payload gửi ra, bỏ fallback thành công khi
+provider thiếu. Test đang chấp nhận default READY phải đổi sang fail-closed,
+không dùng làm thẩm quyền. Disconnect/lifespan và ownership cross-process còn
+thuộc acceptance của web spike.
+
+### Quyết định B-16/B-17 — STANDARD / READY
+
+Positive stream test còn phát hiện `_execute_model` gom vào model_response,
+nhưng `_execute_action` đọc response, khiến câu trả lời durable bị thay bằng
+mock. STANDARD/READY: normalize key theo completion contract hiện có, không
+special-case chat projection. Bằng chứng ngược: token live nhìn đúng, reload
+mới mất. Acceptance: exact model answer plain/stream và nhiều chunk persist.
+
+Regression mới tái hiện intake stream khác send và transaction cross-task mất
+dữ liệu. Giữ invariant ASK waits/durable acknowledgement/schema/runtime owner
+và sửa index user; không web endpoint/provider mới. Chọn intake/preparation
+chung + connection lock theo asyncio task, nested savepoint. Connection-per-
+operation khả thi nhưng caller/coordinator hiện dùng connection chung; chỉ
+lock HTTP không bảo vệ CLI/TUI/library. Bằng chứng ngược: serialization giảm
+read concurrency; parent transaction không được await child task truy cập DB
+đang sở hữu (deadlock), phải await write cùng task. Private raw connection
+ngoài transaction không API hỗ trợ. Budget source/callers/regression; dừng khi
+refusal parity/rollback/cancel/reopen đạt. File chat/storage và hai test mới;
+giảm intake trùng, ownership ở storage cũ, không manager mới. Focused proofs và
+Ruff trước D3 tích hợp, chưa certify sản phẩm bằng subset.
+
+Giữ thay đổi user ở `knowledge/index.py`. [Audit BETA/web](BETA_LIMITATIONS.md)
+chứa F01..F12, owner, giải pháp, parity và acceptance; component PASS lịch sử
+không certify các biên mới. `DEEP / READY` cho tài liệu/proof; code web
+`SPIKE_REQUIRED` đến B-15..B-19. Không sửa production/dependency/schema.
+
+Proof DB tạm: cancel session, send trả cancelled nhưng stream completed;
+F01 `FAIL`. Hai coroutine transaction: B trả success nhưng A rollback làm
+mất row B; F02 `FAIL`. Regression dùng asyncio Events cố định interleaving,
+row policy_rules giả và close/reopen. F03..F08 là rủi ro inspected cần proof.
+
+Lệnh trên tree hiện tại:
+`uv sync --locked --extra dev`: 38 resolved/37 checked;
+`pytest -q tests/test_chat_cli_demo.py tests/test_runtime_atomicity.py tests/test_runtime_unit_pipeline.py`:
+13 passed/24,65s, chỉ sequential paths;
+`pytest --collect-only -q`: 2131 collected/11,14s, không phải test success.
+Handoff `PARTIAL`, gate web execution đồng thời `FAIL`. Không đọc DB riêng,
+gọi cloud hoặc full suite. Record phía dưới là lịch sử, không release hiện tại.
+
 Tài liệu này ghi lại thực tế mã nguồn hiện tại, không trao trạng thái hoàn thành
 dựa trên ghi chú phase lịch sử. Mỗi thay đổi ownership hoặc wiring runtime phải
 cập nhật tài liệu này.

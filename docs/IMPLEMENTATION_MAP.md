@@ -1,5 +1,607 @@
 # PAW implementation map and stabilization audit
 
+## Working tree capture — 2026-10-20
+
+Base revision `9fb893e2017eceb01d80be4de7ee7a3744eb8ce5`. Capture commands:
+`git status --short --untracked-files=all`, `git diff --stat HEAD`,
+`git ls-files --others --exclude-standard`, `git rev-parse HEAD`.
+
+Captured state: **68 paths** — 55 modified, 13 untracked; `+3672 / -697` net
+over the tracked diff. This is the *entire* uncommitted working tree at the
+start of the 2026-10-20 repair, spanning several prior sessions.
+
+Classification — every path assigned to exactly one track owner:
+
+| Track | Captured paths | Count |
+|---|---:|---:|
+| B-18 decision evidence | `src/paw/core/{storage,reasoning_contracts,planner,approval,policy}.py` + 5 test files | 10 |
+| B-18 runtime admission | `src/paw/core/{runtime,runtime_persistence,checkpoint,repo_scanner}.py`, `src/paw/knowledge/checksum.py` + 16 test files | 21 |
+| B-19/F06 fail-closed dispatch | `src/paw/core/model_executor.py` + 3 test files | 4 |
+| B-18 CLI two-approval | `src/paw/application/chat.py`, `demos/demo_change.py` + 3 test files | 5 |
+| Evidence repair (ledger/benchmark) | `src/paw/core/{models,ledger}.py`, `benchmarks/runtime/run_e2e.py` + 1 test file | 4 |
+| Docs status sync | `README.md`, 10 `docs/*.md`, 10 `docs/vi/*.md` + 2 test files | 22 |
+| Phase D recovery test repair | `tests/test_phase_d_recovery.py` | 1 |
+| Preserved user change | `src/paw/knowledge/index.py` | 1 |
+| Unrelated | `None identified` | 0 |
+
+The `Unrelated` row is a contract: every diff hunk was examined and assigned.
+The `Preserved user change` row is `src/paw/knowledge/index.py` — a retrieval
+scoring change for short sparse files, carried unchanged from the user's
+working tree and committed separately so it is never attributed to a PAW
+track.
+
+## Evidence-reliability repair — 2026-10-20, STANDARD / READY
+
+Addresses the ledger/usage defects that made cost and token numbers
+unusable, plus the documentation-status contradictions that prevented an
+agent from continuing without re-deriving the state.
+
+### Ledger usage accounting (code)
+
+Two defects, both confirmed by reading the source and reproduced by the new
+contract test:
+
+1. **Wrong key.** `RuntimePersistence.commit_operation` serialized
+   `ResourceUsage` with `model_dump()`, which emits only pydantic *fields*
+   (`model_calls`, `tokens`, ...). `provider_calls` is a *method* on
+   `ResourceUsage`, so it was absent from the STEP_EXECUTED payload.
+   `TaskLedger.get_model_call_count` reads
+   `resources_used["provider_calls"]` and therefore returned **0** for every
+   runtime-written task, however many model calls actually happened.
+   `assert_model_calls_monotonic` was vacuous for the same reason.
+
+   Fix: `ResourceUsage.to_ledger_dict()` is now the single canonical
+   serialization for usage written to the ledger (raw fields plus the
+   receipt's `provider_calls` / `total_tokens` / `total_cost_usd`).
+   `commit_operation` uses it. The ledger readers also tolerate a
+   `resources_used` of `None`.
+
+2. **Double-counted events.** `commit_operation` already writes one
+   STEP_EXECUTED event, atomically with the `OperationRecord`. `_execute_unit`
+   then wrote a *second* STEP_EXECUTED for the same operation, so every
+   operation produced two events and a corrected reader would have counted
+   each call twice.
+
+   Fix: the second write is removed. `commit_operation` is the single
+   authoritative STEP_EXECUTED writer. `StepProposed` still logs the
+   *estimate*; STEP_EXECUTED logs the actual.
+
+**Evidence.** `tests/test_ledger_usage_accounting_contract.py` (6 tests).
+Fail-positive proven: restoring both defects fails 5 of 6 (the sixth is the
+decision-invariant control). Focused regression sweep: 57 tests across
+E2-34, Phase 19 runtime hardening/loop, E2-20 resume, external-effect
+reconciliation, runtime atomicity and outcome task identity — all pass.
+Broader sweep: 287 tests across E2-3x/E2-4x, ledger, phase-D recovery and
+E1-2x — all pass. Ruff clean.
+
+**Still open (not fixed here).** The final executor-side usage is still
+derived from `estimated_cost`, not from a provider-issued receipt, so
+per-provider token/cost measurement remains approximate. Router efficiency
+and cloud savings must not be concluded from these numbers yet.
+
+### Benchmark oracle attribution (benchmark)
+
+`benchmarks/runtime/run_e2e.py` measured its oracle in a way that could not
+distinguish "PAW performed the change" from "PAW refused and a direct file
+write did it":
+
+* the **baseline** oracle ran *after* the PAW writes, so "baseline" was
+  really the post-write state;
+* the script then did `git checkout -- .` and wrote both files **directly**
+  with `write_text()`, so the "after" measurement described the direct write,
+  not PAW's output;
+* the program `return 0` unconditionally, so a failed oracle did not fail
+  the benchmark.
+
+Fix: the baseline oracle is measured on the pristine repository **before** any
+write; the "after" oracle is measured on the files PAW actually produced (no
+reset, no direct write); and the exit code now reflects an explicit verdict.
+`FAIL` is returned when any file was not written by PAW, or when the oracle
+gained new failures. `PASS` requires that PAW performed the change.
+
+**Not yet closed.** `paw_write` in that harness proposes a
+`FILESYSTEM_WRITE` action with no persisted implementation Plan, no
+project-root binding and no reviewed decision, so under the current
+admission contract the runtime refuses the write. The benchmark now reports
+that honestly as `FAIL` instead of silently certifying a direct write. Wiring
+the harness to a real reviewed Plan + binding is the remaining work; until
+then this benchmark is a *negative control*, not a pass.
+
+### Module size and responsibility split (observation, not a work item)
+
+Current source sizes: `runtime.py` 2743, `model_router.py` 1413,
+`skills.py` 1397, `storage.py` 1226, `context_compiler.py` 1186,
+`application/chat.py` 1031.
+
+Line count does not by itself prove a design is wrong, but it does show where
+the coupling sits: `runtime.py` currently carries routing, reconnaissance,
+admission, privacy, execution, recovery and usage accounting, and
+`chat.py` additionally builds the decision/review flow. The next safe direction
+is to extract responsibilities that already have proof, while keeping a single
+orchestrator — **not** to introduce another "manager" layer and **not** to
+rewrite the framework. The F04/F05 fixes in particular belong in the places
+that own provider discovery and outbound payload, not in a new abstraction.
+
+### Checkpoint operation counter (code)
+
+`TaskCheckpoint` now carries `operations_completed`, persisted in a new
+`task_checkpoints.operations_completed` column (additive migration,
+`SCHEMA_VERSION` 7 → 8, no row rewrite, no DROP). `_create_checkpoint`
+carries the counter; `CheckpointManager.get_latest()` delegates to
+`CheckpointStore`; `TaskCheckpoint.status` is an alias for `task_status`.
+A checkpoint that predates the column reports zero completed operations,
+which is the honest value for that snapshot.
+
+### Documentation status (docs)
+
+The canonical set carried contradictory status claims. The resolution
+separates two things that were both called "E1/E2 VERIFIED":
+
+* a **gate** measured inside its own declared scope (E1-27 production
+  measurement verified on clean revision `8d01d90`; E2 prerequisite
+  contract ratified on the same revision), and
+* a **track** qualification for release (E1 not established; E2/E3/BETA
+  blocked on it).
+
+`docs/README.md` (and `docs/vi/README.md`) now hold the **single** current
+status table; the Roadmap files no longer restate a verdict and point there
+instead. The English and Vietnamese Roadmaps previously gave *opposite*
+verdicts for the same dated 2026-09-09 review and named different "current
+tracks"; both now state the same thing. `docs/PROJECT_MAP.md` no longer
+claims a blanket "VERIFIED on clean revision after all phases" and its
+phantom READINESS CHECK stage is replaced by the real implementation-admission
+contract. `docs/api.md` no longer claims routing happens only after the gate
+(it happens during proposal — release blockers F04/F05). `docs/examples.md`
+now describes the two-approval structured write.
+
+**Evidence caveat recorded in the status table:** the E1-27 measurement
+report `benchmarks/e1/e1_production_report.md` is *gitignored*, so that
+`VERIFIED` verdict rests on recorded documentation rather than a tracked
+artifact. Re-tracking it is a release prerequisite.
+
+## B-18 runtime migration — 2026-10-07, DEEP / READY
+
+Working-tree implementation replaces the four open callback xfails with actual
+zero-callback assertions (pre-repair: 4 failures in 2.27s). Final focused packet:
+154 passed in 129.30s across shared runtime/admission/recovery/CLI/stream/Plan/
+legacy readiness migration and change-demo controls. Full Ruff/diff and locked
+sync passed. Offline wheel byte parity covers 83 Python files; clean installed
+outside-repo CLI proves separate review/effect approvals, real write, preserved
+Task identity across processes, idle replay and dirty revision refusal.
+First integrated candidate: 2260 passed, 3 skipped, 2 failed in 1013.06s.
+The model-routing control incorrectly declared a write; the SQLite loop fixture
+advertised write capabilities despite its observation-only callback. Both are
+migrated to read-only controls without weakening production admission. A focused
+run loaded one old assertion during editing (31 passed, 1 failed); the corrected
+freeze was rerun: corrected files pass 13 tests in 20.83s. Final D3 command
+`python -m pytest -q --disable-warnings --tb=short --show-capture=no`:
+2262 passed, 3 skipped in 1264.19s, exit 0. Ruff/diff and 83-file wheel parity
+were rechecked. B-18 bounded acceptance is satisfied; handoff/product remain
+PARTIAL on this dirty tree, not clean-release VERIFIED.
+Optional cookiecutter recovery fixtures remain skipped on this host;
+their explicit fixture-human review migration is not an executed proof.
+The change demo uses shared ChatService and explicit review=True/approve=True;
+read-back is OBSERVED, not VERIFIED. No provider/web/training expansion.
+
+The 2026-10-06 spike is resolved for the following bounded implementation,
+not for product release. Existing filesystem reconciliation source/tests prove
+an exact-intent, read-only path; shared callback probes reproduce four gaps.
+Choose shared-unit admission over executor-only checks. Contrary: this breaks
+raw READY fixtures and requires two explicit approvals in CLI write workflows.
+Do not preserve an unsafe compatibility mode. Capability-declared project writes
+require a persisted implementation Plan, reviewed immutable decision and trusted
+root/filter/constraints; unscoped mutating callbacks also fail closed. Read/model
+operations remain under Policy without pretending they are implementation.
+Freshness read scope is included in the exact proposal before Policy evaluates
+once; runtime's callback admission is task-local, not a caller-supplied flag.
+
+Prepared recovery does not call the original callback, model, prepare or execute.
+It invokes only the existing local filesystem read-only reconciliation method,
+matching stored action fingerprint, original reviewed Plan binding, executor root
+and durable intent. Original review may be historical during recovery; this never
+admits a new write. Unsupported/ambiguous/changed recovery refuses. Completed
+operation replay remains unchanged. Snapshot hashing still is not a writer lock.
+
+Application selects separate decision-review and effect-approval steps over
+combined approval: more user interaction, but no silent upgrade of ordinary ASK
+to research review. Only structured local write intents get bounded FAST evidence;
+unsupported mutating chat requests refuse rather than inventing implementation.
+Same durable Task, version/Plan references and approval identity survive reopen.
+Scope: Planner, runtime, Policy capability scope, RuntimePersistence metadata,
+ChatService and focused caller migrations, existing stores only; no providers/web.
+Budget/stop: negative controls first; reviewed callback/real-write positive,
+stale/foreign/forged/private-call denial, Policy-read ordering, crash/reopen exact
+reconciliation, ambiguous refusal and two-approval CLI/stream proof. Reassess
+READY if an adapter cannot satisfy read-only recovery. Integrated D3 above.
+
+Growth review: `_execute_unit` remains the orchestration owner; Planner owns
+binding, Policy scoped admission, persistence commit, and the existing filesystem
+adapter reconciliation. The private context-local receipt is async-task-bound.
+Deleting executor-only readiness avoids a second gate; no new runtime/store.
+Next B-19 F04/F05 is NEEDS_RESEARCH, not implemented: compare cache-only routing
+plus explicit gated discovery with a discovery operation before selection.
+Budget: one bounded call-site review and zero-call negatives before READY.
+Neither option may initialize on ASK/DENY or duplicate Policy. Actual complete/
+stream payload substitution and missing/foreign/stale/oversized evidence must
+refuse before provider invocation. No HTTP promotion is claimed here.
+
+## B-18 shared runtime admission — 2026-10-06, DEEP / SPIKE_REQUIRED
+
+Source evidence: `_execute_unit` invokes `step_fn` after Policy/Autonomy but
+without durable readiness validation. `_execute_action` alone checks caller
+readiness strings and permits research/spike flags. ChatService constructs no
+bound Plan or trusted freshness configuration. Prepared operations reach
+executor reconciliation only later in `_execute_action`; LocalFilesystemExecutor
+checks executor/operation/idempotency/request/content and does not repeat writes.
+This means a generic freshness check can block proof of an already-applied write,
+while simply exempting prepared operations can admit arbitrary callbacks.
+
+Options: (1) add a freshness check before every callback (small, but breaks
+prepared-effect recovery and existing CLI approval); (2) use one shared-unit
+admission with a narrowly constrained read-only reconciliation branch and migrate
+application review/approval together (preferred, not production READY yet).
+Contrary evidence: the second option must preserve operation identity, exact
+approval fingerprints and Policy-once order; no caller `isolated`, research,
+`is_mutating=False`, prepared-status flag or raw READY string may authorize writes.
+Completed-operation replay stays outside new-effect admission. Reconciliation
+may prove only the durable exact intent, never fall back to executor execute or
+an arbitrary callback. Bind its filesystem-read scope before Policy evaluation.
+
+Owner/files: existing PawRuntime `_execute_unit`/`_gate_action`/`_execute_action`,
+ChatService intake/approval/resume, ApprovalStore, Plan and local executor;
+no new readiness manager or parallel approval store. Compare an explicit
+decision-review-then-operation-approval workflow with combined approval before
+choosing the application migration; ordinary ASK is not decision review.
+Invariants: reviewed fresh implementation, gate-before-effect, exact approval,
+prepared-effect idempotency, durable typed failure and common mode ownership.
+Research budget/stop: local callback probes, installed CLI approval/reopen and
+prepared-write reconciliation tests; no external provider or user data. Exit
+SPIKE_REQUIRED only when an end-to-end proof covers reviewed positive execution,
+unreviewed/stale/foreign/flag negatives with zero callback/provider/executor calls,
+completed replay, exact read-only prepared recovery, ambiguous recovery refusal,
+and Policy once before every freshness/reconciliation read. Then record READY
+and implement/migrate callers; run D3 on the integrated frozen working tree.
+
+`tests/test_runtime_readiness_admission_gap.py` is an explicit open acceptance
+control. It isolates successful Policy/Autonomy admission, uses mock callbacks
+and calls `pytest.xfail` only after confirming the unsafe callback succeeded;
+unexpected errors still fail. Expected failures are debt, never PASS evidence.
+Focused command: `.venv/bin/python -m pytest -q
+tests/test_runtime_readiness_admission_gap.py tests/test_runtime_unit_pipeline.py
+tests/test_productization_document_contract.py --disable-warnings --tb=short`:
+3 passed, 4 xfailed in 5.12s. Full Ruff and `git diff --check` pass. Runtime
+production is unchanged by this diagnostic packet; gate result is PARTIAL.
+Integrated frozen-source check: `.venv/bin/python -m pytest -q
+--disable-warnings --tb=short`: 2238 passed, 3 skipped, 4 xfailed in 1020.17s,
+exit 0. Locked sync resolved 38/checked 37 packages. This supersedes the older
+full-suite count for current v7 test evidence, not the open admission controls.
+The four xfails are the explicit gaps above; B-18/product gate remains PARTIAL,
+not VERIFIED or a clean-release result. No production source changed during
+this run. Existing installed v7 scoped smoke still does not prove runtime admission.
+
+## B-18 v7 scoped verification — 2026-10-06
+
+Final focused command: `.venv/bin/python -m pytest -q
+tests/test_readiness_freshness.py tests/test_plan_decision_binding.py
+tests/test_planning_contract.py tests/test_e2_45_plan_purpose_contract.py
+tests/test_e1_04_repo_filter_contract.py tests/test_e1_05_repo_scanner_contract.py
+tests/test_e1_06_source_diff_contract.py tests/test_e1_08_bounded_tree_contract.py
+--disable-warnings --tb=short`: 122 passed in 49.04s. Pre-repair controls:
+freshness 6 failures in 2.72s; valid-fixture Plan admission 8 failures in 6.00s.
+Planning callers 79 passed in 89.20s; affected CLI/executor/storage 60 passed
+in 62.25s pre-final freshness-bound strengthening. Offline v7 wheel byte parity
+covers all 83 Python files; installed outside-repo smoke proves unreviewed
+refusal, explicit reviewed Plan and reopen. No runtime/web/full-current-D3 or
+clean-revision claim follows from these scoped proofs. The current full-suite
+result is recorded above; missing runtime admission keeps B-18 PARTIAL.
+
+## B-18 reviewed Plan binding — 2026-10-06, STANDARD / READY
+
+Planner currently persists implementation Plans without a decision. Compare
+adding an optional unchecked version reference (smaller but still fake admission)
+with default research decomposition and explicit implementation creation requiring
+current FINAL READY, same durable Task/session, exact recorded human review and
+fresh server-configured root/filter/hard constraints (selected). Contrary: old
+callers now create research Plans; callers seeking implementation need an explicit
+review workflow. Preserve old stored purpose/rows, marking unbound legacy Plans
+non-authoritative rather than rewriting history. Scope: existing Planner,
+ApprovalStore, DecisionVersion JSON encoding, centralized additive schema v7;
+no new readiness manager or public root export. Snapshot review is separate from
+execution ASK and does not consume/override exact side-effect approvals.
+Policy evaluates planning filesystem-read scope before completeness/hash IO;
+default runtime readiness is still a separate migration, not solved by Plan alone.
+Budget/stop: defaults, missing/orphan/draft/stale/foreign/unreviewed/freshness/
+constraints/Policy negatives and reviewed positive/reopen/private-save proof.
+Only trusted application configuration supplies root/filter/constraints, not HTTP
+request strings. Store version/revision/constraint reference on Plan; revalidate
+current head and exact review inside the save transaction. Snapshot IO is not an
+atomic external-writer lock. Runtime must recheck before effects in the next packet.
+
+## B-18 freshness completeness — 2026-10-06, STANDARD / READY
+
+Scanner deliberately caps paths and skips symlinks/read errors for context UI;
+this cannot establish complete freshness evidence. Options: reuse its partial
+output (rejected), create a second scanner (unnecessary ownership overlap), or
+add strict opt-in completeness to the existing scanner and hash via the existing
+checksum owner (selected). Contrary: strict mode will refuse large/deep/unreadable
+projects that context browsing still supports; never silently raise its bounds.
+Scope: repo_scanner.py, knowledge/checksum.py, focused tests, EN/VI canonical docs.
+No gate, provider, schema, Plan or runtime default change in this prerequisite.
+Acceptance: dirty edits/add/delete/root/filter changes alter revision; excluded
+files do not; eligible symlink/permission/depth/file-count/entry-count/byte bounds
+and detected concurrent input changes refuse instead of producing a digest.
+Budget/stop: scanner/checksum callers and strict negatives; local fixtures only.
+Snapshot is bounded evidence, not an atomic filesystem lock or review authority;
+Policy admission must precede reads when it is wired into runtime/Planner.
+
+## B-18 lifecycle repair — 2026-10-06, STANDARD / READY
+
+Stored snapshots have no current-head/lifecycle. Compare timestamp selection
+(small but caller-controlled/ambiguous) with CAS head and append-only versions
+(selected). Contrary: additive schema v6 requires D3 at integration. Database
+stays the sole owner; canonical DecisionVersionState owns states. Initial DRAFT;
+DRAFT→DRAFT/FINAL; FINAL→STALE/SUPERSEDED; STALE→SUPERSEDED; SUPERSEDED terminal.
+Exact retry is a no-op; expected-head conflicts insert nothing. Transitions need
+an actor. This is lifecycle, not evidence adequacy/review/freshness authority.
+Budget/stop: storage/schema, lifecycle regressions and EN/VI canonical docs;
+reopen/rollback/CAS/orphan FINAL/terminal-state negatives. Runtime admission
+defaults remain unchanged until Plan/freshness callers migrate together.
+Freshness target: server-owned bounded relevant-input content snapshot and
+canonical hard constraints, not HEAD alone. Agent writes invalidate remaining
+unexecuted proposals unless a new reviewed decision admits them. Completed
+operations replay durable results; prepared-effect reconciliation preserves the
+original intent/idempotency. Full-workspace hashing is viable but creates
+irrelevant-change churn; raw caller strings/flags cannot be authority. Input-set
+completeness must be proven before production admission uses this target.
+
+Lifecycle implementation uses immutable publication edges with a unique initial
+edge and unique predecessor, retaining the full chain rather than overwriting a
+head row. Only published leaves are current; legacy/unpublished FINAL is not
+promoted during v5→v6 upgrade. Pre-repair: 6 tests failed in 2.80s. Final focused
+command: `.venv/bin/python -m pytest -q tests/test_decision_version_lifecycle.py
+tests/test_decision_version_storage.py tests/test_e2_28_decision_persistence.py
+tests/test_e2_47_48_49_contract.py tests/test_storage_task_isolation.py
+tests/test_runtime_atomicity.py tests/test_productization_document_contract.py
+tests/test_project_lock.py --disable-warnings --tb=short`: 76 passed in 57.77s.
+Full Ruff/diff and locked sync passed (38 resolved / 37 checked). Offline v6 wheel
+build/install, 83-file byte parity and installed lifecycle/retry/reopen smoke
+passed. Full current D3 remains pending at B-18 integration; historical D3/wheels
+do not certify v6. Lifecycle subproof PASS, complete B-18/product PARTIAL. No
+freshness check, Plan binding or shared-unit gate is implemented by this packet.
+Growth review: canonical enum owns transitions and Database owns publication
+constraints/transactions; no second manager/store or public root export added.
+
+## Productization review — 2026-10-05 at `9fb893e`
+
+### B-19/F06 dispatch repair decision — STANDARD / READY
+
+B-18 audit confirms default READY, no application final-artifact creation and
+no Planner artifact lookup; changing a constructor default alone is not a
+durable readiness repair. Its production migration remains required. Within
+the same pre-HTTP safety group, repair independently reproducible F06 first.
+Problem: ModelExecutor silently dispatches missing remote routes to local echo;
+runtime catches model failures and continues to a successful capability executor.
+Options: reject invalid/missing/unavailable selected routes with a typed error
+and convert model failures into unsuccessful observations (selected); explicitly
+reroute and re-gate fallback (viable future behavior, but requires a new exact
+proposal and cannot reuse prior approval); defer (leaves false success).
+Contrary evidence: an old executor regression explicitly blesses remote→local
+fallback; migrate it without removing positive explicit-local coverage.
+Invariants: independent routing, exact proposal/Policy, truthful observations,
+durable acknowledgement. Budget: executor/runtime callers and focused regressions
+only; no provider/network research. Stop at complete/stream zero-call negatives,
+explicit-local positive, actual registered dispatch and durable failed operation
+after close/reopen. Files: model_executor.py, runtime.py, focused tests and EN/VI
+map/checklist. No provider, dependency, schema or public root export expansion.
+Core execution integration requires scheduled D3 before release certification.
+
+F06 repair evidence on the current working tree: 8 negative controls failed /
+2 explicit-local controls passed before repair; final focused command covering
+`test_model_dispatch_fail_closed`, `test_phase19_model_executor`,
+`test_phase11_ollama`, chat/intake/privacy, agent-loop/provenance/deterministic
+routing, unit pipeline and atomicity: 100 passed in 107.05s. Full Ruff and locked
+sync passed (38 resolved / 37 checked). Full D3 command `.venv/bin/python -m
+pytest -q --disable-warnings --tb=short --maxfail=3`: 2182 passed, 3 skipped
+in 1500.12s, exit 0. This is working-tree integration evidence, not a clean
+revision release certificate.
+ModelDispatchError carries stable refusal reasons; only an explicit local
+manifest may use stand-in. Missing/mismatched manifests, no route, unavailable
+providers, missing inference backends, provider exceptions/error envelopes stop
+before capability execution. Empty routes no longer become an implicit local
+selection. Failed observation/operation and public-loop Task survive reopen.
+Provider exception payloads are not copied to observation/ledger by this path.
+Remaining: failed/partial-stream usage receipts are incomplete; generic zero
+usage is not evidence of no billed provider work. Discovery and approved actual
+payload controls are separate unfinished B-19 subchanges. Handoff `PARTIAL`.
+
+### B-18 immutable snapshot subchange — STANDARD / READY
+
+Frozen DecisionVersion retains mutable caller payload and accepts invalid states.
+Only contract tests construct it; no runtime/persistence consumer exists. Options:
+deepcopy alone (still editable snapshot), or recursive JSON-shaped read-only
+mapping/tuple snapshot (selected). Contrary evidence: generic JSON/dataclass
+serializers cannot directly encode mapping proxies; future centralized persistence
+must explicitly encode them. Reject unsupported objects, non-string keys, cycles
+and non-finite numbers; normalize valid states to the canonical enum. Invariant:
+immutable evidence, not FINAL lifecycle/freshness or mutation authority. Files:
+reasoning_contracts.py and contract tests. Budget/stop: local callers plus nested
+alias/mutation/state negatives; no schema/runtime changes. Acceptance: caller
+edits cannot change nested evidence, snapshot edits fail, invalid shapes fail.
+The preceding D3 belongs to F06; focused proof now, integrated D3 at B-18 admission.
+Pre-repair regression: 6 failed, 11 passed (13.27s); nested caller edits changed
+the decision and invalid payload/state inputs were accepted. Implementation now
+recursively snapshots and validates evidence; no runtime admission was added.
+Final focused proof: `.venv/bin/python -m pytest -q
+tests/test_e2_47_48_49_contract.py tests/test_productization_document_contract.py
+tests/test_project_lock.py --disable-warnings --tb=short`: 25 passed in 9.45s.
+Full Ruff and `git diff --check` passed. Contract subproof `PASS`; B-18 and
+product handoff remain `PARTIAL`. The installed F06 wheel predates this change.
+
+### B-18 durable snapshot storage — STANDARD / READY (2026-10-06)
+
+Problem: immutable DecisionVersion has no persistence path or reopen proof.
+Choose normalized version rows inside the existing Database/schema owner over
+embedding versions in generic metadata: the latter is smaller but cannot enforce
+version identity/immutability or prevent legacy policy rows becoming snapshots.
+Contrary evidence: adding a table/version and immutable triggers requires D3;
+generic CRUD must remain compatible and table cleanup cannot delete evidence.
+Scope: additive schema v5, typed save/load, explicit JSON conversion, immutable
+version and bound parent rows; no new store, latest/head selection or authority.
+Require an existing readiness parent, durable matching Task/session, nonempty
+revision/constraints and canonical readiness payload matching its parent. Legacy
+rows alone remain non-authoritative. Identical retries are idempotent; conflicting
+version IDs fail. Save validation and insert share the task-owned transaction.
+Invariant: durable immutable evidence and rollback before acknowledgement.
+Acceptance: reopen equality, caller mutation isolation, duplicate conflict,
+missing/foreign/unbound/policy-parent negatives, SQL update/delete refusal,
+rollback and additive v4 upgrade preserving legacy rows. Budget: owner/callers
+and these regressions; stop before lifecycle/freshness/admission integration.
+Focused proof may establish the subchange, but D3/build/install must be scheduled
+for the new schema; product remains PARTIAL until that integration gate passes.
+
+Working-tree evidence: pre-change 9 tests failed (3.37s), missing save/load and
+version table. Final focused command runs `test_decision_version_storage`,
+`test_e2_28_decision_persistence`, `test_storage_task_isolation`,
+`test_e2_47_48_49_contract`, `test_runtime_atomicity`, document contract and
+project lock: 64 passed in 25.68s. Full Ruff/diff and locked sync passed
+(38 resolved, 37 checked). Offline wheel build/install passed; all 83 Python
+files match source bytes, and outside-repo installed v5/idempotency/reopen/
+immutable-delete smoke passed. The old F06 D3 predates this schema; full current
+D3 has not run. Snapshot subproof PASS, integrated B-18/product PARTIAL.
+Growth review: Database is already large, but this bounded repository operation
+and DDL remain with its existing centralized owner; no second store/manager or
+root public export is added. Never bypass immutable triggers for retention or
+cleanup; a future retention/lifecycle migration needs its own explicit decision.
+Affected integration command covering storage helpers, skills migration/E3
+migration, E2 inspect, chat CLI and product intake: 44 passed in 25.06s.
+Final documentation contract/project-lock rerun: 7 passed in 2.58s; diff clean.
+
+### B-18 migration handoff — DEEP / NEEDS_RESEARCH
+
+Source findings: `ImplementationReadiness` values are lowercase enums while
+runtime still compares uppercase free strings; its inference-readiness docstring
+has been corrected to engineering implementation readiness. `DecisionVersion`
+now deeply snapshots its JSON-shaped payload and has immutable save/load, but
+now also has lifecycle publication/current-head selection. Freshness, evidence
+adequacy/runtime admission remain missing; exact review is now required for
+implementation Plan creation. `record_decision` is generic history, permitting empty
+revision/constraints and non-durable Task IDs; those legacy rows are not mutation
+authority. Planner now defaults to research decomposition and explicit
+implementation requires reviewed/current/fresh decision binding, persisted on
+Plan. Application
+creates no final decision and passes no readiness artifact. Runtime trusts
+`is_mutating`, `is_research`, purpose/isolated flags and optional freshness strings;
+these flags alone do not establish bounded read-only research/spike containment.
+
+Snapshot storage choice is now normalized rows under the existing centralized
+Database owner; lifecycle/freshness integration still requires its own READY
+decision. Do not add another readiness manager/store. A temporary
+default change alone or synthesizing READY on approval is rejected. Contrary
+evidence: existing negative tests pass for manually supplied strings; they do
+not prove durable admission and some tests explicitly bless default READY.
+
+Ordered subchanges: (1) ratify canonical version payload, lifecycle and server-
+owned relevant-source/constraint freshness, including dirty source; (2) add
+centralized persistence and immutable-version/reopen/rollback proofs, preserving
+legacy rows as non-authoritative; (3) bind canonical Plan and application decision
+creation to the same durable Task; (4) admit mutation in the shared executable-
+unit owner before any supplied step_fn, routing/discovery or executor effect,
+including resume; (5) migrate callers and tests without fabricated READY, prove
+actual capabilities/effect containment cannot bypass via caller flags; then D3.
+Tests must cover missing/draft/stale/superseded/foreign-Task/empty revision,
+constraint changes, raw READY strings, approval without research, alternate
+runtime modes and close/reopen. Acceptance is zero effect calls for all invalid
+cases plus one reviewed exact-Task positive. Budget: local contract/caller/schema
+review and bounded admission spike; stop until the storage/freshness choice is
+READY. No new provider, training, tenant or research Task is authorized.
+
+### Repair evidence (working tree; supersedes initial F01/F02 reproductions)
+
+Shared `_prepare_turn` now rejects cancelled sessions, pending/approved actions
+and empty/oversized input before either transport creates a task or runtime.
+Streaming accumulation uses the existing `response` contract; the final reply
+and persisted assistant message no longer fall back to mock output.
+Database connection ownership is serialized per asyncio task. Same-task nested
+transactions use savepoints; cancellation rolls back; reads and legacy helpers
+cannot observe or commit another task's pending transaction.
+
+Final focused regression: 47 passed in 52.71s, including multi-chunk reopen;
+document contracts: 7 passed in 6.24s; full Ruff and `git diff --check` passed.
+Integrated D3 working-tree proof: `.venv/bin/python -m pytest -q
+--disable-warnings --tb=short` exited 0: 2150 passed, 3 skipped in 1173.83s.
+Skipped cases are not evidence of live-provider or experimental capability.
+This D3 predates the F06 dispatch repair; it does not certify the later code.
+The final wheel built and installed offline into an isolated environment;
+outside-repository CLI chat and streaming/cancel smoke passed with local stand-in.
+All 83 packaged Python files match the current source bytes.
+These are local boundary proofs, not cloud quality or a clean-revision release.
+Product handoff remains `PARTIAL`. No web endpoint is implemented.
+
+Next mandatory repairs are B-18/B-19: durable FINAL READY tied to Task/revision/
+constraints (runtime currently defaults READY); cached-only routing with gated
+provider discovery; bind disclosure approval to actual outbound messages and
+reject missing-provider success fallbacks. The existing test approving default
+READY must be replaced by a failing-closed acceptance test, not used as authority.
+Disconnect/lifespan and cross-process ownership remain web-spike acceptance.
+
+### B-16/B-17 implementation decision — STANDARD / READY
+
+Accepted-stream regression additionally fails: `_execute_model` accumulates
+tokens into `model_response`, while downstream `_execute_action` reads
+`response`, replacing the durable assistant answer with mock output. STANDARD /
+READY for normalizing the accumulated key to the existing completion contract.
+Alternative: special-case the chat projection (rejected: preserves incompatible
+executor contracts). Contrary evidence: visible live tokens looked correct;
+only persisted/reloaded output exposes the loss. Acceptance: positive stream
+returns the exact same model answer as send and multi-chunk accumulation persists.
+
+Problem and reproduction: the new intake/isolation regressions reproduce stream
+admission divergence and cross-task transaction loss on the unchanged source.
+Constraints/invariants: ASK waits, durable acknowledgement, single runtime and
+schema ownership; preserve user index work; no web endpoint or provider change.
+Options: share intake/proposal preparation and task-owned connection lock with
+nested savepoints (selected); use connection-per-operation (viable, but all
+existing stores and transaction coordinators assume the shared connection);
+defer and serialize only HTTP (cannot protect CLI/TUI/library writers).
+Contrary evidence: serialization reduces read concurrency and a child task
+awaited from inside its parent's transaction would deadlock; such concurrent
+transaction composition is unsupported, callers must await owned writes in
+the same task. Raw private connection access outside an owned transaction is
+not a supported application API. Same-task nested failure uses a savepoint.
+Budget/stop: owners, repository call sites and failing regressions only; stop
+when plain/stream refusal parity, independent rollback, cancellation and
+close/reopen pass. No external research required for these owned semantics.
+Files: application/chat.py, core/storage.py and the two focused regression
+modules. The large-file edits remove duplicated intake and isolate connection
+ownership in the existing storage owner, not a new manager. Acceptance: focused
+new negatives + existing chat/storage/atomicity tests, Ruff; integrated D3 is
+required for storage atomicity before product certification.
+
+Current tree includes the user's `knowledge/index.py` change, preserved.
+[BETA audit](BETA_LIMITATIONS.md) records F01..F12, source owners, remedies,
+parity and acceptance. Historical component PASS claims below do not certify
+these boundaries. Decision: `DEEP / READY` for documentation/diagnostics;
+production web is `SPIKE_REQUIRED` until B-15..B-19. The initial diagnostic
+review changed no production code, provider, dependency or schema; repairs above
+are subsequent working-tree changes.
+
+Current reproductions with isolated temporary DBs:
+
+- Cancel ChatService local; send returns `cancelled`, stream returns
+  `completed`, session remains cancelled. F01 control `FAIL`.
+- A transaction waits; independent B writes/exits successfully; A rolls back.
+  B row is absent. F02 control `FAIL`. Use asyncio Events for exact ordering,
+  existing policy_rules test rows, then close/reopen in the regression repair.
+- `uv sync --locked --extra dev`: 38 resolved, 37 checked.
+- `.venv/bin/python -m pytest -q tests/test_chat_cli_demo.py tests/test_runtime_atomicity.py tests/test_runtime_unit_pipeline.py`:
+  13 passed in 24.65s; existing sequential paths only.
+- `.venv/bin/python -m pytest --collect-only -q`: 2131 tests collected in
+  11.14s. Collection is not test success or release evidence.
+
+Handoff `PARTIAL`; execution-enabled concurrent web gate `FAIL` until repairs.
+F03..F08 are source-inspected risks, not yet complete regression proofs.
+No private DB inspection, live cloud calls or full-suite run in this audit.
+
 This document records current source reality. It does not award completion
 based on historical phase notes. Update it whenever ownership or runtime wiring
 changes.
