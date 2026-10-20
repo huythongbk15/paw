@@ -1302,6 +1302,95 @@ class PawRuntime:
         """Extract the underlying ProposedAction from a canonical wrapper."""
         return proposed.proposed_action if isinstance(proposed, CanonicalProposal) else proposed
 
+    def _manifest_context_text(self) -> str:
+        """The reviewed project context, as text, from the manifest.
+
+        The manifest's *included* candidates are the budgeted,
+        disclosure-checked view of the compiled context. They are the only
+        project context that may leave the box, so they are the only
+        project context the provider payload may carry.
+        """
+        manifest = getattr(self, "_current_manifest", None)
+        if manifest is None:
+            return ""
+        budget = getattr(manifest, "budget", None)
+        max_tokens = int(getattr(budget, "max_tokens", 0) or 0)
+        limit = max_tokens * 4 if max_tokens else 0
+        parts: list[str] = []
+        used = 0
+        for cand in getattr(manifest, "included", ()) or ():
+            content = str(getattr(cand, "content", "") or "")
+            if not content.strip():
+                continue
+            source = getattr(cand, "source", "")
+            source_id = getattr(cand, "source_id", "")
+            block = f"[{source}:{source_id}]\n{content}"
+            if limit and used + len(block) > limit:
+                break
+            parts.append(block)
+            used += len(block)
+        return "\n\n".join(parts)
+
+    def _model_payload(
+        self,
+        action: ProposedAction,
+        *,
+        task_id: str,
+    ) -> tuple[list[dict[str, Any]], str]:
+        """Build the outbound provider payload.
+
+        Returns the payload and the manifest-derived text inside it.
+
+        Before this, the compiled project context never reached the
+        provider: the payload was the conversation history (or the bare
+        task goal), so the model reasoned without the retrieved project
+        sources. The payload is now built from the **manifest** - the
+        reviewed, budgeted, disclosure-checked view of the compiled
+        context - so the model sees the research that was actually done,
+        and what leaves the box is exactly what the evidence covers.
+
+        A caller may still supply conversation messages (the chat REPL
+        does). Those are kept and the reviewed context is added as its own
+        block, because a conversation is the user's own input in their own
+        session while the project context is evidence.
+        """
+        context_text = self._manifest_context_text()
+        supplied = action.metadata.get("messages") if action.metadata else None
+        system = (
+            "You are the planning brain of PAW (Personal Agent Workstation). "
+            "Given the task goal, the reviewed project context and the "
+            "available skills, decide the next concrete action. Prefer "
+            "reusing an available skill. Respond with a short plan and "
+            "whether the task is complete."
+        )
+        skills = action.metadata.get("available_skills") or []
+        skill_text = ", ".join(str(s) for s in skills) or "none"
+        parts = [
+            f"GOAL: {action.goal}",
+            f"AVAILABLE SKILLS: {skill_text}",
+        ]
+        if context_text:
+            parts.append(f"REVIEWED PROJECT CONTEXT:\n{context_text}")
+        else:
+            parts.append("REVIEWED PROJECT CONTEXT: (none compiled for this task)")
+        body = "\n\n".join(parts)
+
+        if supplied:
+            # The reviewed context comes *before* the conversation: the
+            # conversation is the user's own turns, and the last user turn
+            # must stay the last thing the model reads.
+            payload = [
+                {"role": "system", "content": system},
+                {"role": "user", "content": body},
+                *[dict(m) for m in supplied],
+            ]
+        else:
+            payload = [
+                {"role": "system", "content": system},
+                {"role": "user", "content": body},
+            ]
+        return payload, context_text
+
     async def _execute_unit(
         self,
         task_id: str,
@@ -2441,19 +2530,23 @@ class PawRuntime:
                         # class table never decided anything.
                         provider_name = getattr(selection.model_manifest, "provider", "local")
                         provider_kind = provider_kind_for(provider_name)
+                        # The payload is built from the manifest, so the
+                        # reviewed project context actually reaches the model
+                        # and what leaves the box is what the evidence covers.
+                        messages, manifest_text = self._model_payload(
+                            action, task_id=task_id,
+                        )
                         if provider_kind != PROVIDER_LOCAL:
                             # B-19/F05: bind the exact outbound payload to the
                             # reviewed manifest. A missing manifest is a refusal,
                             # not a skip: a remote call that nothing authorized
                             # must not proceed.
-                            messages = action.metadata.get("messages") or [
-                                {"role": "user", "content": action.goal},
-                            ]
                             binding = bind_remote_payload(
                                 manifest,
                                 provider_kind=provider_kind,
                                 task_id=task_id,
                                 payload=messages,
+                                manifest_text=manifest_text,
                             )
                             if not binding.allowed:
                                 logger.info(
@@ -2466,10 +2559,6 @@ class PawRuntime:
                                     provider_kind=provider_kind,
                                     refused=binding.refused,
                                 )
-                        else:
-                            messages = action.metadata.get("messages") or [
-                                {"role": "user", "content": action.goal},
-                            ]
                         model_result = await self._execute_model(selection, messages) or {}
                 except RemoteDisclosureRefusedError:
                     # Propagate to _execute_unit which handles it as a
@@ -2496,9 +2585,11 @@ class PawRuntime:
                             else "local"
                         )
                         provider_kind = provider_kind_for(provider_name)
-                        messages = action.metadata.get("messages") or [
-                            {"role": "user", "content": action.goal},
-                        ]
+                        # The payload is built from the manifest, so the
+                        # reviewed project context actually reaches the model.
+                        messages, manifest_text = self._model_payload(
+                            action, task_id=task_id,
+                        )
                         if provider_kind != PROVIDER_LOCAL:
                             # B-19/F05: same binding as the canonical
                             # proposal path — a missing manifest refuses
@@ -2508,6 +2599,7 @@ class PawRuntime:
                                 provider_kind=provider_kind,
                                 task_id=task_id,
                                 payload=messages,
+                                manifest_text=manifest_text,
                             )
                             if not binding.allowed:
                                 logger.info(

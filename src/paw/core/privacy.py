@@ -337,6 +337,7 @@ def bind_remote_payload(
     provider_kind: str,
     task_id: str,
     payload: Any,
+    manifest_text: str | None = None,
 ) -> PayloadBindingResult:
     """Bind the exact outbound payload to the manifest that was reviewed.
 
@@ -360,8 +361,10 @@ def bind_remote_payload(
       disclosure decision refused, or text from a non-disclosable record
       the compiler saw but did not include. This is the binding: the
       reviewed evidence must actually describe what is sent.
-    * ``payload_oversized`` - the payload exceeds the manifest's own
-      token budget, so it cannot be the payload the manifest budgeted.
+    * ``payload_oversized`` - the reviewed portion of the payload exceeds
+      the manifest's own token budget, so it cannot be the payload the
+      manifest budgeted. ``manifest_text`` is that reviewed portion; when
+      it is not supplied the whole payload is measured.
 
     The function is pure. It does not raise; the caller refuses the
     invocation when ``allowed`` is False.
@@ -417,8 +420,11 @@ def bind_remote_payload(
     budget = getattr(manifest, "budget", None)
     max_tokens = getattr(budget, "max_tokens", None)
     # A token is roughly four characters; the bound is a ceiling on the
-    # payload, not an estimate of its cost.
-    if max_tokens and len(text) > int(max_tokens) * 4:
+    # reviewed portion of the payload, not an estimate of its cost. The
+    # conversation a user typed in their own session is not manifest
+    # budgeted, so it is measured separately.
+    measured = text if manifest_text is None else manifest_text
+    if max_tokens and len(measured) > int(max_tokens) * 4:
         refused.append(("payload_oversized", "payload exceeds the manifest budget"))
 
     return PayloadBindingResult(
