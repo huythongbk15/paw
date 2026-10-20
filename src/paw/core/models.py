@@ -460,7 +460,9 @@ class ModelManifest(BaseModel):
     @property
     def local(self) -> bool:
         """True for providers that run on the user's machine (no cloud)."""
-        return self.provider in ("local", "offline", "vllm", "ollama")
+        from .privacy import LOCAL_PROVIDER_NAMES
+
+        return (self.provider or "").strip().lower() in LOCAL_PROVIDER_NAMES
 
     def supports_role(self, role: str) -> bool:
         """Whether this model can serve the given PAW role."""

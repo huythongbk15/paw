@@ -59,6 +59,26 @@ def _register_mock_model():
     )
 
 
+def _attach_manifest(runtime, task_id: str) -> None:
+    """B-19/F05: a non-local provider call requires a manifest bound to the task.
+
+    The mock provider is named "mockp", which is not an on-box provider, so
+    it takes the remote path. Since 2026-10-20 a remote call without a
+    manifest is refused before the provider is reached (it is not authorized
+    by anything). These tests are about ledger provenance, not disclosure, so
+    they attach the manifest the runtime would have compiled.
+    """
+    from paw.core.context import ContextBudget
+    from paw.core.context_compiler import ContextManifest
+    runtime._current_manifest = ContextManifest(
+        task_id=task_id,
+        budget=ContextBudget(max_tokens=1000),
+        included=(),
+        excluded=(),
+        final_tokens=0,
+    )
+
+
 def _make_runtime(task_signals=None, execution_profile=None):
     from paw.core.autonomy import AutonomyController, AutonomyBudget
     from paw.core.runtime import PawRuntime
@@ -173,6 +193,7 @@ class TestRuntimePersistsRoutingDecision:
         ))
         action = ProposedAction(goal="test", capabilities=[Capability.MODEL_INFERENCE],
                                 context={"tokens": 10})
+        _attach_manifest(runtime, "rt1")
         await runtime._execute_action("rt1", action)
         rows = await TaskLedger.get_events("rt1")
         sel = [r for r in rows if r.event_type == TaskEventType.MODEL_SELECTED]
@@ -197,6 +218,7 @@ class TestRuntimePersistsRoutingDecision:
         ))
         action = ProposedAction(goal="test", capabilities=[Capability.MODEL_INFERENCE],
                                 context={"tokens": 10})
+        _attach_manifest(runtime, "rt2")
         await runtime._execute_action("rt2", action)
         rows = await TaskLedger.get_events("rt2")
         sel = [r for r in rows if r.event_type == TaskEventType.MODEL_SELECTED]
@@ -213,6 +235,7 @@ class TestRuntimePersistsRoutingDecision:
         runtime = _make_runtime(task_signals=None)
         action = ProposedAction(goal="test", capabilities=[Capability.MODEL_INFERENCE],
                                 context={"tokens": 10})
+        _attach_manifest(runtime, "rt3")
         await runtime._execute_action("rt3", action)
         rows = await TaskLedger.get_events("rt3")
         sel = [r for r in rows if r.event_type == TaskEventType.MODEL_SELECTED]
@@ -255,6 +278,7 @@ class TestAdversarialTampering:
         runtime = _make_runtime(execution_profile=FakeProfile())
         action = ProposedAction(goal="g", capabilities=[Capability.MODEL_INFERENCE],
                                 context={"tokens": 5})
+        _attach_manifest(runtime, "rt_budget")
         await runtime._execute_action("rt_budget", action)
         rows = await TaskLedger.get_events("rt_budget")
         sel = [r for r in rows if r.event_type == TaskEventType.MODEL_SELECTED]

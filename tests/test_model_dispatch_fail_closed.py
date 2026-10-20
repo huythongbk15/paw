@@ -9,6 +9,8 @@ from paw.core.model_router import ProviderRegistry
 from paw.core.models import Capability, ModelManifest, ModelSelection, ProposedAction
 from paw.core.autonomy import AutonomyBudget, AutonomyController
 from paw.core.checkpoint import OperationRecordStore
+from paw.core.context import ContextBudget
+from paw.core.context_compiler import ContextManifest
 from paw.core.policy import PolicyGuard
 from paw.core.runtime import PawRuntime
 from paw.core.session import SessionManager
@@ -110,6 +112,18 @@ async def test_runtime_model_failure_is_durable_and_never_routes_executor(canoni
         runtime._stream_callback = Mock()
     session = await SessionManager.create()
     task = await TaskManager.create(session.id, "test model failure")
+    # B-19/F05: a remote call now requires a manifest bound to this task.
+    # Without one the disclosure gate refuses before the provider is
+    # reached, so this test would never exercise the dispatch failure it
+    # is about. The manifest carries no disclosable content, so the
+    # binding itself is not what is under test here.
+    runtime._current_manifest = ContextManifest(
+        task_id=task.id,
+        budget=ContextBudget(max_tokens=1000),
+        included=(),
+        excluded=(),
+        final_tokens=0,
+    )
     action = ProposedAction(
         goal=task.goal,
         capabilities=[Capability.MODEL_INFERENCE],

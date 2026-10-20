@@ -48,6 +48,15 @@ def test_disclosure_refused_reasons_is_closed_set() -> None:
             "class_none_unapproved_cloud",
             "unknown_provider_kind",
             "source_stale",
+            # B-19/F05 (2026-10-20): the outbound payload is bound to the
+            # reviewed manifest. A remote call with no manifest is refused
+            # rather than skipping the gate; a manifest from another task,
+            # a payload carrying refused content, and a payload beyond the
+            # manifest budget are refused too.
+            "manifest_missing",
+            "foreign_manifest",
+            "payload_not_approved",
+            "payload_oversized",
         }
     ) == DISCLOSURE_REFUSED_REASONS
 

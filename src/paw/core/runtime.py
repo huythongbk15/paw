@@ -2394,29 +2394,42 @@ class PawRuntime:
                         # disclosure raises RemoteDisclosureRefused to stop
                         # the loop, not just skip the current call.
                         manifest = getattr(self, "_current_manifest", None)
-                        if manifest is not None:
-                            from .privacy import PROVIDER_LOCAL, gate_remote_disclosure
-                            # Map provider name to provider kind for privacy gate.
-                            # Ollama is a local provider (runs on-box).
-                            provider_name = getattr(selection.model_manifest, "provider", "local")
-                            provider_kind = PROVIDER_LOCAL if provider_name == "ollama" else provider_name
-                            if provider_kind != PROVIDER_LOCAL:
-                                disclosure = gate_remote_disclosure(
-                                    manifest, provider_kind=provider_kind,
+                        from .privacy import PROVIDER_LOCAL, bind_remote_payload, provider_kind_for
+                        # Map the provider name to its disclosure kind. Using
+                        # the name itself as the kind produced a value outside
+                        # PROVIDER_KINDS for every real cloud provider, so the
+                        # class table never decided anything.
+                        provider_name = getattr(selection.model_manifest, "provider", "local")
+                        provider_kind = provider_kind_for(provider_name)
+                        if provider_kind != PROVIDER_LOCAL:
+                            # B-19/F05: bind the exact outbound payload to the
+                            # reviewed manifest. A missing manifest is a refusal,
+                            # not a skip: a remote call that nothing authorized
+                            # must not proceed.
+                            messages = action.metadata.get("messages") or [
+                                {"role": "user", "content": action.goal},
+                            ]
+                            binding = bind_remote_payload(
+                                manifest,
+                                provider_kind=provider_kind,
+                                task_id=task_id,
+                                payload=messages,
+                            )
+                            if not binding.allowed:
+                                logger.info(
+                                    "remote_disclosure_refused",
+                                    provider_kind=provider_kind,
+                                    reasons=[r for r, _ in binding.refused],
+                                    payload_digest=binding.payload_digest,
                                 )
-                                if not disclosure.allowed:
-                                    logger.info(
-                                        "remote_disclosure_refused",
-                                        provider_kind=provider_kind,
-                                        reasons=[r for _, r in disclosure.refused],
-                                    )
-                                    raise RemoteDisclosureRefusedError(
-                                        provider_kind=provider_kind,
-                                        refused=disclosure.refused,
-                                    )
-                        messages = action.metadata.get("messages") or [
-                            {"role": "user", "content": action.goal},
-                        ]
+                                raise RemoteDisclosureRefusedError(
+                                    provider_kind=provider_kind,
+                                    refused=binding.refused,
+                                )
+                        else:
+                            messages = action.metadata.get("messages") or [
+                                {"role": "user", "content": action.goal},
+                            ]
                         model_result = await self._execute_model(selection, messages) or {}
                 except RemoteDisclosureRefusedError:
                     # Propagate to _execute_unit which handles it as a
@@ -2435,33 +2448,38 @@ class PawRuntime:
                         # disclosure raises RemoteDisclosureRefused to stop
                         # the loop, not just skip the current call.
                         manifest = getattr(self, "_current_manifest", None)
-                        if manifest is not None:
-                            from .privacy import PROVIDER_LOCAL, gate_remote_disclosure
-                            # Map provider name to provider kind for privacy gate.
-                            # Ollama is a local provider (runs on-box).
-                            provider_name = (
-                                getattr(selection.model_manifest, "provider", "local")
-                                if selection.model_manifest
-                                else "local"
-                            )
-                            provider_kind = PROVIDER_LOCAL if provider_name == "ollama" else provider_name
-                            if provider_kind != PROVIDER_LOCAL:
-                                disclosure = gate_remote_disclosure(
-                                    manifest, provider_kind=provider_kind,
-                                )
-                                if not disclosure.allowed:
-                                    logger.info(
-                                        "remote_disclosure_refused",
-                                        provider_kind=provider_kind,
-                                        reasons=[r for _, r in disclosure.refused],
-                                    )
-                                    raise RemoteDisclosureRefusedError(
-                                        provider_kind=provider_kind,
-                                        refused=disclosure.refused,
-                                    )
+                        from .privacy import PROVIDER_LOCAL, bind_remote_payload, provider_kind_for
+                        # Map the provider name to its disclosure kind.
+                        provider_name = (
+                            getattr(selection.model_manifest, "provider", "local")
+                            if selection.model_manifest
+                            else "local"
+                        )
+                        provider_kind = provider_kind_for(provider_name)
                         messages = action.metadata.get("messages") or [
                             {"role": "user", "content": action.goal},
                         ]
+                        if provider_kind != PROVIDER_LOCAL:
+                            # B-19/F05: same binding as the canonical
+                            # proposal path — a missing manifest refuses
+                            # rather than skipping the gate.
+                            binding = bind_remote_payload(
+                                manifest,
+                                provider_kind=provider_kind,
+                                task_id=task_id,
+                                payload=messages,
+                            )
+                            if not binding.allowed:
+                                logger.info(
+                                    "remote_disclosure_refused",
+                                    provider_kind=provider_kind,
+                                    reasons=[r for r, _ in binding.refused],
+                                    payload_digest=binding.payload_digest,
+                                )
+                                raise RemoteDisclosureRefusedError(
+                                    provider_kind=provider_kind,
+                                    refused=binding.refused,
+                                )
                         model_result = await self._execute_model(selection, messages) or {}
                 except RemoteDisclosureRefusedError:
                     raise
