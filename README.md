@@ -15,12 +15,15 @@ deterministic stand-in, while explicit read/list/write commands can use the
 workspace-scoped local filesystem executor after Policy and exact approval.
 
 The SX clean-revision gate is `VERIFIED` on commit `f3ad4ef`. E0 (the
-deterministic fixture-validation baseline) is `VERIFIED`. E1 (the
-source-context benchmark track) is `VERIFIED` with 37/37 core items + 13/13
-backlog items complete (~1188 tests pass; ruff clean). E1-23/24/25 contract
-tests are written but re-opened pending real measurement against E0 cases.
-E2 (evidence-backed research gate and selective local/cloud reasoning) is
-`READY`; the first item is `E2-01` (audit ModelRouter inputs/outputs/callers).
+deterministic fixture-validation baseline) is `VERIFIED` — that is
+*fixture-validation*, not an agent-quality gate. E1's production measurement
+gate (E1-27) is `VERIFIED` on clean revision `8d01d90` (`min_recall=1.00`,
+12/12 samples), but the **E1 track qualification is not established** — a
+verified measurement gate is not a qualified track — so E2/E3/BETA remain
+blocked at track level. E2's prerequisite contract (E2-25..28, E2-45..47) is
+`RATIFIED`. The single current status table, with the scope of each verdict,
+is in [`docs/README.md`](docs/README.md); the older phase-by-phase summary
+below is historical.
 
 The recorded post-stabilization direction is an engineering agent in which
 local state, project context, memory and evaluated narrow inference reduce

@@ -1,5 +1,91 @@
 # PAW core architecture
 
+## Local web boundary — recorded target 2026-10-05
+
+**`[RATIFIED TARGET]`** The user-requested web surface is an adapter, not a
+new orchestration authority: browser → HTTP security/DTO boundary → application
+services → canonical Task/decision/Plan/proposal → Policy/Autonomy → ports →
+observation/verification → existing durable stores. CLI/TUI retain the same
+services. Core cannot import the transport. Stream tokens are provisional;
+committed Task/ledger/operation state determines completion and resume.
+
+**`[RATIFIED TARGET]`** HTTP admission (local authentication, exact Host/Origin,
+CSRF, bounds, configured workspace and request identity) is separate from PAW
+Policy. Passing either cannot bypass the other. Database transaction ownership
+must distinguish independent async tasks, including rollback and cancellation.
+Intake retries and approval double-clicks retain durable work/operation identity.
+See `BETA_LIMITATIONS.md` for the target diagram, case rules and threat boundary.
+
+**`[CURRENT]`** At `9fb893e` no tracked web adapter exists. The initial F01/F02
+streaming/transaction failures have working-tree repairs. Model dispatch now
+rejects missing routes/providers instead of silently changing provider, and
+model errors stop downstream execution; fresh proof is in the implementation
+map. Durable readiness/discovery/payload controls remain outstanding.
+Historical CURRENT annotations below have their stated scope;
+they do not certify a web-ready or current integrated product.
+
+**`[CURRENT]`** B-18 snapshot persistence (2026-10-06) is owned by Database:
+additive schema v5 stores canonical DecisionVersion under a readiness record
+bound to a durable Task/session and nonempty revision/constraints. Version and
+bound parent are immutable, including SQL REPLACE; identical save retries are
+no-ops and conflicting identities fail. Validation/insert is transactional.
+This layer is evidence storage only: FINAL does not attest review, current head,
+server-owned freshness or runtime admission. Lifecycle and Plan binding were
+subsequently added in v6/v7 below; executable-unit admission remains missing.
+
+**`[CURRENT]`** Schema v6 adds append-only lifecycle publications in Database.
+Initial publication must be DRAFT. Canonical transitions are DRAFT→DRAFT/FINAL,
+FINAL→STALE/SUPERSEDED, STALE→SUPERSEDED; SUPERSEDED is terminal. Exact expected
+head is checked transactionally; publication and snapshot commit/rollback together.
+Unique initial/predecessor constraints prevent forks; immutable publication edges
+retain history. Current head is the leaf of this chain, never newest timestamp or
+an orphan FINAL. An actor is required but is not an authorization/review artifact.
+Lifecycle selection alone still cannot authorize Plan or executor dispatch.
+
+**`[RATIFIED TARGET]`** Admission freshness uses a server-owned bounded relevant-
+input content snapshot and canonical hard constraints, including dirty files;
+HEAD/manual strings alone are insufficient. A project mutation invalidates
+remaining unexecuted proposals unless a new reviewed decision admits them.
+Completed operations replay committed results without repeating effects; prepared
+effect reconciliation keeps the original intent/idempotency. Input-set completeness
+and the shared runtime/Planner binding must be proven before enabling admission.
+
+**`[CURRENT]`** The scanner has opt-in complete bounded mode for freshness:
+eligible symlink/read-error/depth/file/entry-limit inputs refuse rather than
+truncate. The checksum owner hashes root/filter/content, including dirty files,
+with a byte budget and observed-change checks. It is not an atomic filesystem
+lock. Normal context scanning retains its existing partial-list semantics.
+
+**`[CURRENT]`** Schema v7 binds Plan to decision version/revision/constraints.
+Planner defaults to research decomposition. Explicit implementation creation
+requires current FINAL READY for the same durable Task/session, an exact human
+review approval over the snapshot/binding, and fresh trusted application root/
+filter/hard constraints. Policy admits planning read scope before snapshot IO;
+private save rechecks binding inside its transaction. Review evidence acceptance
+does not override execution ASK or attest engineering verification/benchmark
+quality. Legacy unbound Plan rows keep their historical purpose and are not
+authority. Raw runtime readiness strings are diagnostics, not authority.
+
+**`[CURRENT]`** Runtime admission repair (2026-10-07): shared `_execute_unit`
+checks capability-declared project mutation and unscoped mutating callbacks.
+It requires a persisted matching implementation Plan, current reviewed decision,
+trusted constraints and fresh bounded content. Policy evaluates declared root
+read and effect scopes once before snapshot IO. Internal executor admission is
+scoped to the current async task; callers/child tasks cannot mint it. Private
+mutating executor calls without shared-unit admission refuse. `isolated` never
+disables observed cost accounting or exact approval consumption.
+
+**`[CURRENT]`** Prepared recovery matches original Plan binding/action fingerprint/
+intent/root, under Policy and recorded review, then calls only the known local
+filesystem read-only reconciliation method. No model, arbitrary callback,
+prepare, execute or ambiguous-write fallback occurs. Original review may be
+historical during recovery because no new effect is admitted. Completed replay
+is unchanged; failure retains intent/binding. CLI/stream structured writes first
+request bounded FAST decision review, then exact effect approval. Neither
+automatically approves the other. Plan/session action refs commit together.
+Unstructured mutation has no invented implementation path. Snapshot is not a
+writer lock; this repair does not supply B-20 verification or web release.
+
 This document defines the target contract for PAW Core. It is intentionally
 stable and independent of the current file layout. See
 `IMPLEMENTATION_MAP.md` for what the repository actually implements today.

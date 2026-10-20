@@ -27,8 +27,21 @@ you> /exit
 
 Yêu cầu có cấu trúc trên được `LocalFilesystemExecutor` thực hiện thật. File chưa
 tồn tại trước approval; traversal ra ngoài `--workspace` bị chặn và operation đã
-consume không chạy lại khi resume. Yêu cầu legacy không có nội dung như “hãy tạo
-file demo.txt” vẫn chỉ chạy mock và không sửa workspace.
+consume không chạy lại khi resume. Yêu cầu legacy không có nội dung như "hãy tạo
+file demo.txt" vẫn chỉ chạy mock và không sửa workspace.
+
+**Hai approval cho một structured write.** Một structured write cần hai quyết
+định của con người, và cái này không thay thế cái kia:
+
+1. **Decision review** — người dùng chấp nhận bằng chứng implementation-readiness
+   cho một snapshot `DecisionVersion` cụ thể (`ApprovalStore.request_decision_review`).
+   Cái này cấp *chấp nhận bằng chứng*; không cấp quyền thực thi.
+2. **Effect approval** — phê duyệt đúng operation được đề xuất (`/approve`).
+
+Review mà không có effect approval thì không thực thi; effect approval mà
+không có decision review tương ứng thì cũng không thực thi. Approval thô không
+phải implementation authority. Luồng CLI/stream yêu cầu decision review FAST
+có giới hạn trước, rồi mới đến effect approval chính xác.
 
 Để approve từ process khác, dùng cùng workspace:
 

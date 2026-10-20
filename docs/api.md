@@ -14,7 +14,7 @@ pipeline: Policy → Autonomy → Capability/Model routing → execution → obs
 not duplicate the safety or side-effect pipeline.
 
 - `await runtime.run(task_id, task_goal=..., step_fn=..., initial_context=None, available_skills=None, resume_from_checkpoint=None)` runs a typed `ProposedAction` → Policy/Autonomy gate → `ExecutionObservation` loop.
-- `await runtime.run_agent(task_id, task_goal=..., session_id=..., brain_fn=None, resume_from_checkpoint=None)` uses the integrated context/skill/model path. Construct the runtime with `context_compiler`, `model_router`, and `model_executor`. Proposal is side-effect free; routing and model inference happen only after the gate.
+- `await runtime.run_agent(task_id, task_goal=..., session_id=..., brain_fn=None, resume_from_checkpoint=None)` uses the integrated context/skill/model path. Construct the runtime with `context_compiler`, `model_router`, and `model_executor`. Proposal is side-effect free. **Routing and provider discovery happen during proposal, before the gate** — `ModelRouter.route()` calls `ensure_providers_ready()`, which may initialize and discover models. The gate governs *execution* (the step function, the provider call, and any side effect), not routing. Provider init/discovery before the gate is tracked as release blocker **F04** in `BETA_LIMITATIONS.md`; on the remote path, the manifest checked by `gate_remote_disclosure` is not yet bound to the exact outbound payload — tracked as **F05**.
 - `await runtime.run_graph(task_id, nodes=[...], task_goal=..., task_scheduler=..., resume_from_checkpoint=None)` executes a validated DAG. A failed node marks the task failed and prevents dependents from running.
 
 The result is `RuntimeOutcome`. Terminal success is
@@ -49,6 +49,25 @@ assembly; `ContextBuilder` is only a compatibility facade.
 `await Planner().plan(task_id)` requires an existing durable Task and derives
 the Plan goal/session from that Task; it never creates or replaces Task
 identity. Its `StructuredReasoner` (`paw.core.decomposition`) is a pure strategy.
+The default is research decomposition, not implementation authorization. For
+implementation, configure Planner with trusted `workspace_root`, structured
+`hard_constraints`, optional `repo_filter` and `policy_guard`; call
+`plan(task_id, purpose="implementation", decision_version_id=...)`. It requires
+a current FINAL READY snapshot, same Task/session, exact recorded human review
+and fresh content/constraints. Version/revision/constraint refs survive reopen.
+`ApprovalStore.request_decision_review(version_id)` creates a pending review;
+the existing explicit `approve`/`deny` APIs decide it. No automatic review occurs,
+and decision review does not substitute for executor ASK. Runtime admission now
+revalidates the persisted Plan at the shared executable unit, not caller READY.
+Configure runtime `project_root`, `hard_constraints`, optional `repo_filter` and
+a real PolicyGuard; pass the persisted `plan` or `metadata["plan_id"]`. The
+proposal includes freshness read scope before exact effect approval. Prepared
+local filesystem recovery only reconciles original intent; it never repeats
+execution. Private mutating `_execute_action` calls are not a supported bypass.
+CLI/stream structured writes need two `/approve` steps: decision review then
+operation approval. Approval alone cannot complete unstructured mutation via mock.
+Default complete snapshot bounds can refuse a large/deep project; no automatic
+bound increase occurs. PAW's own configured state is excluded, not arbitrary DBs.
 Runtime proposer strategies create `ProposedAction`; `TaskScheduler`
 (`paw.core.task_scheduler`) only owns DAG readiness and node state.
 

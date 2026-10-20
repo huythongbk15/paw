@@ -1,5 +1,194 @@
 # PAW execution checklist
 
+## Evidence-reliability repair — 2026-10-20
+
+- [x] Ledger usage accounting: `commit_operation` now writes the canonical
+  `ResourceUsage.to_ledger_dict()` (includes `provider_calls`); the duplicate
+  STEP_EXECUTED write in `_execute_unit` is removed, so one operation yields
+  one event. `get_model_call_count` was returning 0 for every runtime task and
+  `assert_model_calls_monotonic` was vacuous.
+  — RESOLVED. `tests/test_ledger_usage_accounting_contract.py` 6 passed;
+  fail-positive proven (5/6 fail with the defects restored); focused sweep
+  57 passed; broader sweep 287 passed; Ruff clean.
+- [x] Checkpoint operation counter: `TaskCheckpoint.operations_completed` with
+  an additive `task_checkpoints.operations_completed` column
+  (`SCHEMA_VERSION` 7 → 8), `CheckpointManager.get_latest()`, and
+  `TaskCheckpoint.status` alias.
+  — RESOLVED. `tests/test_phase_d_recovery.py` 12 passed (was 9 failed).
+- [x] Document status synchronization: one current-status table in
+  `docs/README.md` + `docs/vi/README.md`; Roadmap files point there instead of
+  restating a verdict; the EN/VI 2026-09-09 contradiction and the divergent
+  "current track" claims are resolved; `PROJECT_MAP.md` blanket VERIFIED claim
+  and its phantom READINESS CHECK replaced; `api.md` routing-after-gate claim
+  corrected; `examples.md` now states the two-approval structured write.
+  — RESOLVED. `tests/test_productization_document_contract.py` 2 passed.
+- [x] Benchmark oracle attribution: the baseline oracle is measured on the
+  pristine repository before any write; the "after" oracle measures the files
+  PAW actually produced (no `git checkout`, no direct `write_text()`); the exit
+  code now reflects an explicit verdict, and `FAIL` is returned when PAW did
+  not write the files or the oracle gained failures.
+  — RESOLVED. `benchmarks/runtime/run_e2e.py`.
+- [ ] The runtime e2e harness still proposes a write with no persisted
+  implementation Plan / root binding / reviewed decision, so the runtime refuses
+  it under the current admission contract. The benchmark now reports that as
+  `FAIL` (a negative control) rather than certifying a direct write.
+  — OPEN. Wiring the harness to a real reviewed Plan + binding is required
+  before it can be cited as an end-to-end engineering proof.
+- [ ] Personal skill lifecycle has no version guarantee. Verified in source:
+  the in-memory index is keyed by name (`self._manifest_index[manifest.name]`),
+  persistence uses the name as the row id with `INSERT OR REPLACE`, so a new
+  candidate with the same name replaces the previous manifest in the index
+  itself. `rollback_skill` searches that same index
+  (`[m for m in self._manifest_index.values() if m.name == name]`), which can
+  only ever hold one entry, so rolling back to a *prior* version is
+  structurally impossible. `review_skill` / `approve_skill` bind only a name,
+  not the exact version, replay evidence or content hash.
+  — OPEN. "Learn a personal skill, then roll back safely" must not be claimed
+  as complete until versions are addressed independently of the name.
+- [ ] The end-to-end engineering inference path is not wired. Verified in
+  source: the default proposer builds `model_result = {}`, `_build_messages()`
+  is defined but never called, the proposal carries only a summary of the
+  compiled context, and `ChatService` runs each turn with `max_iterations=1`
+  and `done=True`. The research → choose → change → verify chain is therefore
+  not demonstrated end to end.
+  — OPEN. This is the largest gap to the agreed product goal and should be
+  the target of the next proved workflow (analyze/review first, then one small
+  change with a declared verification, a failure and a restart).
+- [ ] E1-27 measurement report is gitignored
+  (`benchmarks/e1/e1_production_report.md`), so that `VERIFIED` verdict rests
+  on documentation rather than a tracked artifact.
+  — OPEN. Re-tracking the report (or regenerating it on a clean revision) is a
+  release prerequisite. Recorded as an evidence caveat in the status table.
+- [ ] Final executor-side usage still derives from `estimated_cost`, not a
+  provider receipt.
+  — OPEN. Per-provider token/cost measurement stays approximate; router
+  efficiency and cloud savings must not be concluded from ledger numbers yet.
+- [ ] B-19 F04/F05 remain open: provider discovery before the gate, and the
+  outbound payload not bound to the reviewed manifest.
+  — OPEN, next safe action. Unchanged by this repair.
+
+## Current B-18 runtime packet — 2026-10-07
+
+Shared-unit implementation/known read-only prepared recovery and explicit
+CLI/stream decision-review then effect-approval are implemented. Four callback
+xfails are now passing zero-call regressions. Focused: 154 passed in 129.30s;
+full Ruff/diff/locked sync, 83-file wheel parity and installed CLI real-write/
+reopen/dirty-refusal smoke pass. Final working-tree D3: 2262 passed, 3 skipped
+in 1264.19s, exit 0; corrected routing/SQLite controls: 13 passed.
+B-18 bounded acceptance is satisfied; next is B-19 F04/F05.
+Handoff/product remain PARTIAL, not clean-release VERIFIED.
+Older counts/statuses below are historical.
+Optional cookiecutter fixtures are skipped, not silently certified. No HTTP
+implementation is enabled and B-19/B-20 prerequisites remain distinct.
+
+## Active BETA productization handoff — 2026-10-05
+
+Source baseline `9fb893e` + preserved user `knowledge/index.py` change.
+Product result `PARTIAL`; initial F01/F02 controls were `FAIL`. Read
+[BETA audit/web contract](BETA_LIMITATIONS.md) and Roadmap dependency order.
+This is a repair/client-surface extension of BETA, not another phase.
+Existing checkmarks below record historical item proofs, not current release.
+
+Repair handoff: B-16 shared admission and stream persistence, plus B-17
+task-owned transactions/savepoints/cancellation/helper rollback are implemented
+in the working tree. Final focused proof: 47 passed in 52.71s; document proof:
+7 passed in 6.24s; Ruff/diff checks and isolated installed-wheel smoke passed.
+Full working-tree D3: 2150 passed, 3 skipped in 1173.83s, exit 0;
+no clean-release checkbox is promoted. B-18/B-19 remain
+mandatory before B-23; stream disconnect lifecycle remains B-26.
+
+B-19/F06 scoped repair: explicit-local only; unavailable/invalid routes,
+backend absence and provider exception/error envelopes stop downstream execution.
+100 focused tests passed in 107.05s; full working-tree D3: 2182 passed,
+3 skipped in 1500.12s, exit 0 (not clean-release certification). New wheel matches
+83 source files, installs offline and passes outside-repo local chat/stream and
+missing-provider complete/stream refusals. Discovery/payload and failed usage
+receipts remain outstanding; B-19 stays `PARTIAL`. B-15 now links every group
+to source/test targets in BETA_LIMITATIONS, not installed-feature certification.
+B-18 migration options and ordered negative matrix are recorded in the map.
+B-18 snapshot subproof: DecisionVersion now recursively snapshots JSON-shaped
+evidence and validates state/payload; 25 contract/document tests passed in 9.45s,
+full Ruff/diff passed. No durable lifecycle or runtime admission yet. This change
+postdates the F06 D3/wheel; integrated B-18 qualification remains outstanding.
+
+B-18 persistence subproof (2026-10-06): additive schema v5 + typed immutable
+save/load under a durable bound readiness parent, SQL UPDATE/DELETE/REPLACE
+refusal, identical retry/conflicting-ID and rollback/reopen/legacy-upgrade proof.
+64 focused tests passed in 25.68s; Ruff/diff/locked sync and offline wheel byte
+parity/install/reopen smoke passed. Current-schema full D3 is pending. Lifecycle,
+current-head/freshness, Plan and shared-unit admission remain missing; B-18 PARTIAL.
+
+B-18 lifecycle subproof (2026-10-06): additive v6, append-only publication chain,
+canonical transitions, expected-head CAS, retry/conflict, orphan FINAL refusal,
+terminal-state refusal, competing publication, rollback/reopen and v5 upgrade.
+76 focused tests passed in 57.77s; full Ruff/diff/locked sync and installed v6
+wheel parity/lifecycle smoke passed. Freshness/Plan/shared-unit admission and
+current D3 remain outstanding; B-18 stays PARTIAL.
+
+B-18 freshness/reviewed-Plan subproof (2026-10-06): strict bounded scanner,
+content/constraint digest, pending exact decision review and additive schema v7
+Plan binding are implemented. Final focused command in Implementation Map:
+122 passed in 49.04s; affected planning callers: 79 passed in 89.20s;
+affected CLI/executor/storage integration: 60 passed in 62.25s (earlier snapshot).
+Offline v7 wheel matches 83 Python source files; outside-repo installed smoke
+proves unreviewed refusal, explicit reviewed creation and database reopen.
+These are scoped proofs, not runtime admission or clean-release certification.
+Shared-unit admission, safe prepared-effect recovery and current D3 remain open.
+Shared-unit diagnostic: 3 passed, 4 explicit xfailed in 5.12s. The four
+write-callback controls reproduce missing durable admission; not safety PASS.
+Runtime migration is DEEP / SPIKE_REQUIRED as recorded in Implementation Map.
+Current v7 full-suite check: 2238 passed, 3 skipped, 4 xfailed in 1020.17s,
+exit 0; locked sync/full Ruff/diff checks passed. The explicit four admission
+gaps keep B-18/product PARTIAL; no clean-release checkbox is promoted. Runtime
+production was unchanged during this verification. The older D3 counts above
+remain historical and do not override the current open controls.
+
+Each packet requires an owner, fresh READY decision, files/callers/invariant,
+a reproduced negative control, focused command evidence and a review handoff.
+Packets larger than 4 focused hours must be split into independently reviewed
+subchanges; safety gates remain required before enabling dependent endpoints.
+
+| Packet | Primary owner / files | Required output and acceptance | Budget / proof |
+|---|---|---|---|
+| B-15 | Docs + application inventory | Classify every parity row as supported/library/experimental; pin source entry, test, revision and missing bridge; reconcile F09 historical claims. | 3h / D0 |
+| B-16 | `application/chat.py` | Shared intake for send/stream. Separate subproofs: cancelled; pending/approved approval; empty/bounded input; stream finalization. No new Task/effect for refused intake. | 4h / D2 |
+| B-17 | `core/storage.py` | First ADR compare task-owned lock vs connection-per-transaction. Then regression overlapping A rollback/B success; then cancellation/nested/direct-write cases. Serialization covers all DB writers, not just HTTP. Close/reopen proof. | 3 × 3h / D3 trigger |
+| B-18 | Runtime/Planner/existing decision store | Reproduce default READY bypass; bind mutation to durable FINAL same Task/revision/constraints. Split admission proof from freshness/resume integration. No duplicate readiness authority. | 2 × 4h / D3 trigger |
+| B-19 | Runtime/router/privacy/model executor | Separate subchanges F04 discovery gate, F05 actual complete/stream payload binding, F06 no silent stand-in success. Each needs zero-call negatives, typed errors and owner/call-site review. | 3 × 4h / D3 trigger |
+| B-20 | Existing application/runtime/profile owners | Replace demo-only claims with real analyze/idea/review and one bounded change case on a reviewed foreign project. Split service/profile bridge, decision/Plan, required verification, inspect/restart. Cloud opt-in evaluated separately. | 4 × 4h / D2 + integrated D3 |
+| B-21 | KnowledgeIndex/ContextCompiler | Finish retrieval diagnosis without overwriting user edits; held-out foreign positives + negative control. Keep thresholds/config fixed, expose misses and clarify if evidence insufficient. | 4h initial diagnosis / D2 |
+| B-22 | SkillFabric/governance/storage | Split exact version retention, replay eligibility, approval hash, rollback close/reopen. Failed/absent negative replay cannot activate; direct lifecycle helpers cannot bypass. | 4 × 3h / D3 trigger if persisted contract |
+| B-23 | HTTP adapter spike | After B-15..B-19: disposable local spike, compare selected lightweight stack with CLI-only/minimal alternative; record READY ADR, threat/asset lifecycle and rollback. No production promotion of spike. | 4h / D2 |
+| B-24 | Packaging + web adapter | Optional web extra/uv.lock, foreground command and packaged static assets; wheel works outside repo; no new core export or frontend runtime dependency in default install. | 4h / D3 trigger |
+| B-25 | Transport security | Separate auth/bootstrap and exact Host/Origin/CSRF, then body/path/redaction/CSP/XSS negatives. Loopback-only and no wildcard CORS; GET health/read endpoints never execute effects. | 2 × 4h / D2 |
+| B-26 | HTTP/application lifecycle | Startup/shutdown/provider ownership, global write strategy, request dedup and disconnect/reconnect contract. Split replay/retry proof from cancellation/lifecycle proof; no orphan running task. | 2 × 4h / D2; D3 if schema |
+| B-27 | Web sessions/chat | List/create/reopen/history cursor, typed send/stream/status, keyboard/UTF-8/error/empty states, persisted reload. Reuse B-16 intake; show stand-in diagnostic badge. | 2 × 4h / D2 |
+| B-28 | Web approvals/recovery | Exact diff/fingerprint/cost/privacy preview, approve/reject/resume/cancel; double-click/retry/version mismatch/foreign-session negatives; crash after effect reconciles once. | 2 × 4h / D2 |
+| B-29 | Project/context service + UI | Configured workspace selection, bounded gated index/refresh, source/symbol/test/change/freshness views; context include/exclude/hash/privacy/token; no arbitrary client path. | 2 × 4h / D2 |
+| B-30 | Research/plan/verification service + UI | Depth/options/contrary/readiness/clarification, true Plan/DAG vs last-action preview, required check status and artifact viewer; missing records honest, failed DAG not success. | 3 × 4h / D2 |
+| B-31 | Inspect projections + UI | Paginated ledger/checkpoint/why/policy/routing/usage; typed stop reasons; redacted output; stream completion tied to commit, not last token. | 4h / D2 |
+| B-32 | Memory/SkillFabric services + UI | Scoped search/read first; then audited correction/retention and exact-version lifecycle commands after B-22. Confirmation for destructive intent, provenance retained. | 3 × 4h / D2 |
+| B-33 | Config/model/evaluation UI | Redacted setup/diagnostics/profiles, cached model roles/eligibility/budget, gated health refresh; experimental dataset/training reports read-only, no training button/provider expansion. | 2 × 4h / D2 |
+| B-34 | Release/CLI/storage | Split backup (SQLite-consistent, includes relevant assets/config without secret leakage), restore, supported schema upgrade/rollback fixtures and offline install guide EN/VI. Never copy an actively changing DB naively. | 3 × 4h / D2 + D3 trigger |
+| B-35 | Integration/release owner | Execute supported parity table via installed wheel outside repo; browser auth/security/retry/stream/restart controls; real engineering case, failure and insufficient evidence. Package tests not optional demo screenshots. | 2 × 4h / D2 |
+| B-36 | Release owner + docs | Freeze clean reviewed candidate only after user changes resolved by owner; run one scheduled full D3, asset inspection/install/upgrade/restore and parity pack. Record exact revision/commands/verdict/known limitations; do not infer PASS from old counts. | 1d / D3 |
+
+Unchecked release work:
+
+- [ ] B-15..B-19 baseline and safety prerequisites.
+- [ ] B-20..B-22 integrated engineering/retrieval/skills.
+- [ ] B-23..B-26 local transport spike/foundation.
+- [ ] B-27..B-33 supported-feature parity.
+- [ ] B-34..B-36 operability and clean product candidate.
+
+Suggested collaboration ownership is in BETA_LIMITATIONS; agents may work on
+non-overlapping read-only UI/projections once the service DTO contract is fixed.
+No concurrent edits of shared core files; no autonomous agent dispatch assumed.
+A packet handoff names dependency IDs, changed files, failures, next safe step
+and acceptance evidence. Stop/reassess if another commit changes its premises.
+
+## Historical item records
+
 Review — 2026-09-13, source HEAD `3e39ded` (clean + E3-20 + BETA B-01/B-02): **E1 VERIFIED; E2 RATIFIED; E3 COMPLETE; BETA B-01/B-02 PASS**. 77 E3 tests pass + 8 beta profile tests pass.
 E1 measurement gate PASS/VERIFIED on clean revision `8d01d90`: min_recall=1.0,
 12/12 samples at 100% recall with real Ollama embeddings (`nomic-embed-text:latest`),
@@ -511,11 +700,16 @@ A checked item still requires re-review when its dependencies were not accepted,
 its revision changed or its proof covers only an isolated contract. Read the
 Roadmap execution dependency order before choosing the next item.
 
+This table reports **gate-level** results — a measured gate inside its own
+declared scope. The **track-level** (release) results are in the single status
+table in [`docs/README.md`](README.md); the two are different questions and
+must not be substituted for one another.
+
 | Track | Gate result | Evidence scope / next action |
 |---|---|---|
 | SX | `PASS` (historical) | Core freeze `f3ad4ef`; not a current-tree re-verification. |
 | E0 | `PASS` (offline scope) | Reviewed fixture-validation baseline; cloud/agent quality remains separate. |
-| E1 | `VERIFIED` | `8d01d90` clean: min_recall=1.0, 12/12 samples, real Ollama embeddings. |
-| E2 | `RATIFIED` | Prereqs E2-25..28 + E2-45..47 PASS (119 tests). Gate ratified 2026-09-11. |
-| E3 / BETA | `COMPLETE` | E3-01..25 + E3-20 VERIFIED. 69 E3 tests pass. skill_governance module committed. E3-23 integration pack gate PASS. |
-| E4 | `COMPLETE` | E4-01..14 implemented + tested; E4-21 per-version metrics + E4-22 integration pack gate PASS. 42 non-live tests pass. E4-10 cloud teacher baseline BLOCKED (out of scope). E4-15..20 pending (canary, rollback exercises, end-to-end E0 cases with escalation). See `docs/benchmarks/e4/spec.md`. |
+| E1 (measurement gate) | `VERIFIED` | `8d01d90` clean: min_recall=1.0, 12/12 samples, real Ollama embeddings. The E1 **track** qualification is not established by this — see the canonical status table. |
+| E2 (prerequisite gate) | `RATIFIED` | Prereqs E2-25..28 + E2-45..47 PASS (119 tests). Gate ratified 2026-09-11. |
+| E3 / BETA | `BLOCKED` (track level) | E3-01..25 + E3-20 are implemented and green (69 E3 tests, integration pack gate PASS), but track-level release acceptance depends on the E1 track qualification, which is not established. `COMPLETE` is not a status label in the vocabulary. |
+| E4 | `BLOCKED`, optional (track level) | E4-01..14 implemented + tested; E4-21 per-version metrics + E4-22 integration pack gate PASS; 42 non-live tests pass. E4-10 cloud teacher baseline remains out of scope; E4-15..20 pending (canary, rollback exercises, end-to-end E0 cases with escalation). See `docs/benchmarks/e4/spec.md`. |

@@ -1,5 +1,183 @@
 # Checklist thực thi PAW
 
+## Sửa độ tin cậy bằng chứng — 2026-10-20
+
+- [x] Ghi nhận usage vào ledger: `commit_operation` nay ghi
+  `ResourceUsage.to_ledger_dict()` (canonical, có `provider_calls`); lần ghi
+  STEP_EXECUTED thừa trong `_execute_unit` đã bị bỏ, nên một operation chỉ
+  sinh một event. `get_model_call_count` trả 0 cho mọi task do runtime ghi và
+  `assert_model_calls_monotonic` vô nghĩa.
+  — RESOLVED. `tests/test_ledger_usage_accounting_contract.py` 6 passed;
+  chứng minh fail-positive (5/6 fail khi khôi phục lỗi); sweep tập trung
+  57 passed; sweep rộng 287 passed; Ruff sạch.
+- [x] Bộ đếm operation của checkpoint: `TaskCheckpoint.operations_completed` với
+  cột additive `task_checkpoints.operations_completed`
+  (`SCHEMA_VERSION` 7 → 8), `CheckpointManager.get_latest()`, và alias
+  `TaskCheckpoint.status`.
+  — RESOLVED. `tests/test_phase_d_recovery.py` 12 passed (trước đó 9 fail).
+- [x] Đồng bộ trạng thái tài liệu: một bảng trạng thái hiện tại duy nhất trong
+  `docs/README.md` + `docs/vi/README.md`; hai file Roadmap trỏ tới đó thay vì
+  nhắc lại phán quyết; mâu thuẫn EN/VI cho rà soát 2026-09-09 và hai "track
+  hiện tại" khác nhau đã giải quyết; tuyên bố VERIFIED chung của
+  `PROJECT_MAP.md` và READINESS CHECK không tồn tại được thay; tuyên bố
+  routing-sau-gate của `api.md` được sửa; `examples.md` nay nêu structured
+  write cần hai approval.
+  — RESOLVED. `tests/test_productization_document_contract.py` 2 passed.
+- [x] Quy kết oracle của benchmark: oracle baseline đo trên repository nguyên
+  trạng trước mọi lần ghi; oracle "after" đo trên đúng file PAW tạo ra (không
+  `git checkout`, không `write_text()` trực tiếp); exit code nay phản ánh
+  verdict tường minh, và `FAIL` khi PAW không ghi được file hoặc oracle có
+  failure mới.
+  — RESOLVED. `benchmarks/runtime/run_e2e.py`.
+- [ ] Harness runtime e2e vẫn đề xuất một lần ghi mà không có implementation
+  Plan / ràng buộc root / decision đã review, nên runtime từ chối theo hợp
+  đồng admission hiện tại. Benchmark nay báo `FAIL` (negative control) thay vì
+  chứng nhận một lần ghi trực tiếp.
+  — OPEN. Cần nối harness vào Plan + binding đã review thật trước khi được
+  dùng làm bằng chứng end-to-end.
+- [ ] Vòng đời personal skill chưa có bảo đảm phiên bản. Đã xác minh trong
+  source: index trong bộ nhớ được key theo tên
+  (`self._manifest_index[manifest.name]`), persistence dùng tên làm id row với
+  `INSERT OR REPLACE`, nên một candidate mới cùng tên thay thế manifest cũ
+  ngay trong chính index đó. `rollback_skill` tìm trong đúng index đó
+  (`[m for m in self._manifest_index.values() if m.name == name]`), chỉ có thể
+  chứa tối đa một phần tử, nên rollback về *phiên bản trước* là bất khả thi về
+  cấu trúc. `review_skill` / `approve_skill` chỉ gắn theo tên, không gắn
+  phiên bản, replay evidence hay content hash.
+  — OPEN. Không được tuyên bố "học skill cá nhân rồi rollback an toàn" là hoàn
+  thiện cho tới khi phiên bản được xử lý độc lập với tên.
+- [ ] Đường suy luận engineering end-to-end chưa được nối. Đã xác minh trong
+  source: proposer mặc định dựng `model_result = {}`, `_build_messages()` được
+  định nghĩa nhưng không được gọi, proposal chỉ mang tóm tắt compiled context,
+  và `ChatService` chạy mỗi lượt với `max_iterations=1` cùng `done=True`.
+  Chuỗi nghiên cứu → chọn phương án → sửa code → verification vì thế chưa
+  được chứng minh end-to-end.
+  — OPEN. Đây là khoảng cách lớn nhất với sản phẩm mong muốn và nên là mục
+  tiêu của workflow có bằng chứng tiếp theo (analyze/review trước, rồi một
+  thay đổi nhỏ có declared verification, một failure và một restart).
+- [ ] Báo cáo đo E1-27 bị gitignore
+  (`benchmarks/e1/e1_production_report.md`), nên phán quyết `VERIFIED` đó dựa
+  trên tài liệu chứ không phải artifact được track.
+  — OPEN. Track lại báo cáo (hoặc sinh lại trên revision sạch) là tiền đề
+  phát hành. Đã ghi thành caveat bằng chứng trong bảng trạng thái.
+- [ ] Usage cuối đường executor vẫn suy ra từ `estimated_cost`, chưa phải
+  receipt từ provider.
+  — OPEN. Đo token/chi phí theo provider vẫn xấp xỉ; chưa được kết luận về
+  hiệu quả router hay tiết kiệm cloud từ số liệu ledger.
+- [ ] B-19 F04/F05 vẫn mở: provider discovery trước gate, và payload gửi đi
+  chưa được ràng buộc với manifest đã review.
+  — OPEN, next safe action. Sửa đợt này không đụng tới.
+
+## Packet runtime B-18 hiện tại — 2026-10-07
+
+Đã triển khai admission shared unit, prepared recovery chỉ đọc đã biết,
+CLI/stream review decision rồi approval effect riêng. Bốn xfail callback thành
+regression zero-call pass thật. Focused: 154 passed/129.30s; full Ruff/diff/
+locked sync, wheel parity 83 file và CLI installed write/reopen/dirty-refusal
+pass. D3 working tree cuối: 2262 passed, 3 skipped/1264.19s, exit 0;
+control routing/SQLite đã sửa: 13 passed. Acceptance bounded B-18 được đáp ứng;
+tiếp theo B-19 F04/F05. Handoff/product PARTIAL, không VERIFIED clean release.
+Count/status phía dưới là lịch sử. Fixture cookiecutter optional skip, không certify.
+Chưa bật HTTP; B-19/B-20 vẫn là prerequisite riêng.
+
+## Handoff đóng gói BETA đang áp dụng — 2026-10-05
+
+Baseline `9fb893e` + sửa `knowledge/index.py` user được giữ.
+Product `PARTIAL`; control F01/F02 ban đầu `FAIL`. Đọc [audit/web](BETA_LIMITATIONS.md)
+và dependency trong Roadmap. Đây là repair/mở client BETA, không phase mới.
+Checkbox phía dưới chỉ ghi proof item lịch sử, không release hiện tại.
+
+Handoff sửa lỗi: B-16 intake chung/lưu stream và B-17 transaction theo task,
+savepoint/cancellation/helper rollback đã triển khai working tree. Regression
+47 passed trong 52.71s; tài liệu 7 passed trong 6.24s; Ruff/diff và wheel smoke
+riêng pass. D3 working tree: 2150 passed, 3 skipped trong 1173.83s, exit 0;
+chưa nâng checkbox clean release. B-18/B-19 bắt buộc
+trước B-23; disconnect lifecycle của stream còn thuộc B-26.
+
+B-19/F06 sửa theo phạm vi: chỉ local tường minh; route sai/thiếu, backend thiếu,
+exception/error envelope chặn executor. 100 test focused pass trong 107.05s;
+full D3 working tree: 2182 passed, 3 skipped trong 1500.12s, exit 0 (chưa
+certify clean release). Wheel 83 file khớp source, install offline; chat/stream
+local và refusal complete/stream provider thiếu ngoài repo pass. Discovery/
+payload/failed usage receipt còn thiếu; B-19 vẫn `PARTIAL`. B-15 đã nối từng
+nhóm với source/test target trong BETA_LIMITATIONS, chưa certify feature install.
+Map ghi phương án migration và negative matrix B-18 theo thứ tự.
+Subproof snapshot B-18: DecisionVersion snapshot JSON đệ quy và validate state/
+payload; 25 test contract/tài liệu pass trong 9.45s, full Ruff/diff pass. Chưa có
+lifecycle durable hoặc runtime admission. Sửa này sau D3/wheel F06; qualification
+tích hợp B-18 vẫn còn thiếu.
+
+Subproof persistence B-18 (2026-10-06): schema v5 additive, save/load immutable
+dưới readiness parent gắn Task durable; chặn SQL UPDATE/DELETE/REPLACE; proof
+retry/ID conflict/rollback/reopen/upgrade legacy. 64 test focused pass 25.68s;
+Ruff/diff/locked sync và wheel offline byte parity/install/reopen smoke pass.
+Full D3 schema mới còn chờ. Lifecycle/current-head/freshness/Plan/shared-unit
+admission chưa có; B-18 PARTIAL.
+
+B-18 lifecycle subproof (2026-10-06): v6 additive, publication append-only,
+transition canonical, CAS/retry/conflict/orphan FINAL/terminal/concurrency,
+rollback/reopen/upgrade v5. 76 test focused pass 57.77s; full Ruff/diff/locked
+sync và installed wheel v6 parity/lifecycle smoke pass. Freshness/Plan/shared-
+unit admission và D3 hiện tại còn thiếu; B-18 PARTIAL.
+
+B-18 subproof freshness/Plan review (2026-10-06): scanner bounded strict,
+digest nội dung/constraints, review decision exact ở trạng thái pending và
+Plan binding schema v7 additive đã triển khai. Lệnh focused cuối ở Map:
+122 passed trong 49.04s; caller planning: 79 passed trong 89.20s;
+CLI/executor/storage liên quan: 60 passed trong 62.25s (snapshot trước đó).
+Wheel v7 offline khớp 83 file Python; smoke installed ngoài repo chứng minh
+từ chối chưa review, tạo Plan sau review tường minh và reopen DB.
+Đây là proof theo phạm vi, không certify runtime admission hoặc clean release.
+Shared-unit gate, recovery prepared-effect an toàn và D3 hiện tại vẫn còn thiếu.
+Chẩn đoán shared unit: 3 passed, 4 explicit xfailed trong 5.12s; bốn control
+callback write tái hiện thiếu admission durable, không phải safety PASS.
+Migration runtime là DEEP / SPIKE_REQUIRED được ghi trong Implementation Map.
+Full suite v7 hiện tại: 2238 passed, 3 skipped, 4 xfailed trong 1020.17s,
+exit 0; locked sync/full Ruff/diff pass. Bốn gap admission tường minh giữ
+B-18/product PARTIAL, chưa nâng checkbox clean release. Không sửa production
+runtime trong lượt kiểm tra; số D3 cũ phía trên là lịch sử, không xóa control mở.
+
+Mỗi packet phải có owner, READY mới, file/caller/invariant, negative control,
+lệnh proof và handoff. Việc quá 4 giờ chia subchange độc lập; gate safety vẫn
+bắt buộc trước bật endpoint. Bản EN cùng tên ghi mapping file/budget đầy đủ.
+
+| Packet | Owner / đầu ra / nghiệm thu | Budget / proof |
+|---|---|---|
+| B-15 | Docs/application inventory: phân loại từng parity supported/library/experimental, pin entry/test/revision/missing bridge, reconcile F09. | 3h/D0 |
+| B-16 | chat.py: intake send/stream chung; cancel/pending/approved/bounded input/finalization; refused không Task mới/effect. | 4h/D2 |
+| B-17 | storage: ADR task-owned lock hoặc connection-per-transaction; A rollback/B success; cancel/nested/direct writes/reopen. Phủ mọi DB writer. | 3×3h/D3 trigger |
+| B-18 | Runtime/Planner/decision store: reproduce default READY; FINAL đúng Task/revision/constraints; tách admission và freshness/resume. | 2×4h/D3 trigger |
+| B-19 | Runtime/router/privacy/executor: từng subchange discovery gate, actual complete/stream payload binding, typed failure không silent stand-in; zero-call negatives. | 3×4h/D3 trigger |
+| B-20 | Application/profile/runtime: bridge analyze/idea/review thật, decision/Plan, bounded change/required check, inspect/restart repo ngoài; cloud đánh giá riêng opt-in. | 4×4h/D2+milestone D3 |
+| B-21 | KnowledgeIndex/Compiler: diagnosis giữ sửa user, held-out positive/negative, không hạ threshold; missing evidence phải hiện/clarify. | 4h diagnosis/D2 |
+| B-22 | SkillFabric/governance/storage: version retention, replay eligibility, exact approval hash, rollback/reopen; không bypass direct helpers. | 4×3h/D3 nếu persisted |
+| B-23 | Spike HTTP sau B-15..19: disposable, so lightweight stack với minimal/defer; READY ADR/threat/assets/rollback, không promote spike. | 4h/D2 |
+| B-24 | Packaging/web: extra web/uv.lock, foreground command/assets wheel; ngoài repo chạy; default không frontend dependency/core export mới. | 4h/D3 trigger |
+| B-25 | Security: auth/bootstrap/exact Host/Origin/CSRF; bounds/path/redaction/CSP/XSS; loopback, không wildcard, GET không effect. | 2×4h/D2 |
+| B-26 | Lifecycle: startup/shutdown/provider/global write strategy; dedup/retry và disconnect/reconnect/cancel proof; không orphan task. | 2×4h/D2/D3 nếu schema |
+| B-27 | Web session/chat: list/create/reopen/history cursor/send/stream/status, keyboard/UTF-8/empty/error/reload, diagnostic stand-in. | 2×4h/D2 |
+| B-28 | Approval/recovery: exact diff/fingerprint/cost/privacy, approve/reject/resume/cancel, double click/version/session negatives, crash reconcile once. | 2×4h/D2 |
+| B-29 | Project/context: roots configured, ingestion/refresh bounded gated, source/symbol/test/change/freshness/include/exclude/hash/privacy/token; không client arbitrary path. | 2×4h/D2 |
+| B-30 | Research/Plan/verification: depth/options/contrary/readiness/clarification, true Plan/DAG khác last action, required checks/artifacts; missing rõ, failed DAG không success. | 3×4h/D2 |
+| B-31 | Inspect/UI: paginate ledger/checkpoint/why/policy/routing/usage, typed stop, redacted, completion theo commit. | 4h/D2 |
+| B-32 | Memory/Skill services/UI: scoped read trước, audited correction/retention/exact version lifecycle sau B-22; confirm destructive và giữ provenance. | 3×4h/D2 |
+| B-33 | Config/model/eval UI: setup redacted/profiles/cached roles/eligibility/budget, refresh gated, training reports read-only, không training/provider expansion. | 2×4h/D2 |
+| B-34 | Release/storage: consistent SQLite backup+assets/config, restore, supported upgrade/rollback fixtures, install guide EN/VI; không copy DB đang thay đổi đơn giản. | 3×4h/D2+D3 trigger |
+| B-35 | Installed wheel parity ngoài repo, browser auth/security/retry/stream/restart, engineering case/failure/missing evidence; không dùng screenshot làm proof. | 2×4h/D2 |
+| B-36 | Freeze clean do owner resolve user changes; D3 đầy đủ một candidate, assets/install/upgrade/restore/parity; revision/command/verdict/limits rõ. | 1d/D3 |
+
+- [ ] B-15..B-19 baseline/safety.
+- [ ] B-20..B-22 engineering/retrieval/skills.
+- [ ] B-23..B-26 spike/transport.
+- [ ] B-27..B-33 parity.
+- [ ] B-34..B-36 vận hành/release.
+
+Phân owner gợi ý ở audit BETA; UI/projection không overlap có thể làm sau DTO
+chốt. Không đồng sửa core files, không tự dispatch agent. Handoff ghi dependency,
+files, failures/next safe step/evidence. Source đổi premise thì reassess READY.
+
+## Record item lịch sử
+
 Rà soát ngày 2026-09-11, HEAD source `8d01d90` (clean): **E1 VERIFIED; E2 RATIFIED; E3/BETA đang chờ integration**.
 E1 measurement gate PASS/VERIFIED trên revision sạch `8d01d90`: 12/12 samples đạt 100% recall, real Ollama embeddings (`nomic-embed-text:latest`), fixtures_fresh=true, dirty=false. E2 gate RATIFIED: prerequisites E2-25..28 + E2-45..47 all implemented và test (119 E2 contract tests PASS); cloud-baseline boundary được giải quyết qua `InferenceClassification` (E2-09) + `evaluate_local_eligibility` (E2-05).
 E2-06..11 wiring có mặt trong runtime và đã test (440 E2 tests pass).
@@ -460,11 +638,16 @@ Checkbox lưu lịch sử triển khai từng item, không thay thế nghiệm t
 Item đã đánh dấu vẫn cần review lại khi prerequisite chưa đạt, revision đổi
 hoặc bằng chứng chỉ kiểm contract riêng. Chọn việc theo dependency trong Roadmap.
 
+Bảng này báo kết quả ở **mức gate** — một gate đo được trong đúng phạm vi khai
+báo. Kết quả ở **mức track** (phát hành) nằm trong bảng trạng thái duy nhất trong
+[`docs/README.md`](README.md); đây là hai câu hỏi khác nhau, không thay thế
+nhau.
+
 | Track | Kết quả gate | Phạm vi bằng chứng / việc tiếp theo |
 |---|---|---|
 | SX | `PASS` (lịch sử) | Freeze Core `f3ad4ef`, không phải xác minh cây hiện tại. |
 | E0 | `PASS` (offline) | Fixture-validation; cloud/agent quality tách riêng. |
-| E1 | `VERIFIED` | `8d01d90`: min_recall=1.0, 12/12 samples, real Ollama embeddings, measurement_gate=PASS. |
-| E2 | `RATIFIED` | Prereq E2-25..28 + E2-45..47 PASS (119 tests). Cloud-baseline boundary resolved. |
-| E3 | `IN PROGRESS` | E3-01/02/03/04/08/09/10/11/05/06/07/12/13/14/15/16/17/18/19/21/22/24/25 DONE. E3-20 PENDING. 56+ E3 tests pass. skill_governance module committed. |
-| E4 | `BLOCKED`, tùy chon | Cần E0-E3, dataset verified; không bắt buộc cho BETA. |
+| E1 (gate đo) | `VERIFIED` | `8d01d90`: min_recall=1.0, 12/12 samples, real Ollama embeddings, measurement_gate=PASS. **Qualification track E1 chưa được thiết lập** bởi bằng chứng này — xem bảng trạng thái canonical. |
+| E2 (gate prereq) | `RATIFIED` | Prereq E2-25..28 + E2-45..47 PASS (119 tests). Cloud-baseline boundary resolved. |
+| E3 / BETA | `BLOCKED` (mức track) | E3-01..25 + E3-20 đã hiện thực và xanh (69 E3 test, integration pack gate PASS), nhưng nghiệm thu phát hành ở mức track phụ thuộc qualification track E1, chưa thiết lập. `COMPLETE` không phải nhãn trạng thái trong từ vựng. |
+| E4 | `BLOCKED`, tùy chọn (mức track) | E4-01..14 implemented + tested; E4-21 per-version metrics + E4-22 integration pack gate PASS; 42 non-live tests pass. E4-10 cloud teacher baseline còn ngoài phạm vi; E4-15..20 pending (canary, rollback exercises, end-to-end E0 cases with escalation). See `docs/benchmarks/e4/spec.md`. |

@@ -1,6 +1,17 @@
 # PAW Project Map & Capability Diagram
 
-> **Status**: VERIFIED on clean revision after all phases.
+> **Status**: architectural map. It describes how the pieces fit together; it is
+> **not** a release verdict. The current gate and track verdicts live in the
+> single status table in [`docs/README.md`](README.md) — read that for "what
+> may ship", this file for "what exists and how it connects".
+>
+> The map was written against an earlier runtime. Where it previously described
+> a "READINESS CHECK" (`readiness != READY → reject`) as a gate inside
+> `_execute_action`, that check does not exist in that form: readiness is now
+> carried by a `DecisionVersion` (FINAL/READY) bound to a persisted Plan, and
+> enforced by the shared implementation-admission unit. The replacement is
+> marked in place below.
+>
 > This document is a human-readable map of the PAW codebase — what exists, what each piece does, and how everything connects.
 
 ## 1. Repository Layout
@@ -184,10 +195,15 @@ When the gate passes (policy ALLOW + autonomy CONTINUE), `_execute_action` runs:
 │                    _execute_action (the "do" stage)                 │
 └─────────────────────────────────────────────────────────────────────┘
 
-  1. READINESS CHECK
-     If action.is_mutating:
-       - readiness != READY → reject (unless research/spike/clarification)
-       - readiness_revision != current_revision → reject (stale)
+  1. IMPLEMENTATION ADMISSION (capability-declared mutation only)
+     Shared unit `_execute_unit` runs this before the step function:
+     ├─ Requires a persisted matching implementation Plan
+     ├─ Plan must bind a current FINAL READY decision for the same
+     │  durable Task/session, with exact recorded human review
+     ├─ Target path must be inside the trusted project root and pass
+     │  the repository filter
+     ├─ Project revision must equal the reviewed revision (fresh)
+     └─ Any mismatch → `implementation_admission_refused`, step not called
 
   2. RESEARCH BUDGET CHECK (E2-30)
      If task_signals.research_budget set → check_research_budget()

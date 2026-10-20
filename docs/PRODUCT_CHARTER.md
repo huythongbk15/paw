@@ -1,5 +1,16 @@
 # PAW product charter
 
+## Recorded scope decision — local web product surface (2026-10-05)
+
+The user explicitly requests productization and a web interface covering existing
+capabilities. This admits a single-user loopback-only, foreground HTTP/static
+presentation adapter over PAW application services after its safety prerequisites
+pass. It expands the client surface, dependency/packaging and threat model;
+it does not authorize hosted access, tenancy, provider expansion, a daemon,
+a second runtime or training. Existing gates remain distinct from code presence.
+The productization contract and parity acceptance are in `BETA_LIMITATIONS.md`;
+implementation order is the existing BETA hardening sequence in `ROADMAP.md`.
+
 ## Product statement
 
 PAW is a local-first engineering agent runtime for researching, understanding,

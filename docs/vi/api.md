@@ -12,7 +12,7 @@ routing → execution → observation → operation record. `run_graph` chỉ s�
 dependency và node-state, không có pipeline side effect thứ hai.
 
 - `await runtime.run(task_id, task_goal=..., step_fn=..., initial_context=None, available_skills=None, resume_from_checkpoint=None)` chạy loop có kiểu `ProposedAction` → Policy/Autonomy gate → `ExecutionObservation`;
-- `await runtime.run_agent(task_id, task_goal=..., session_id=..., brain_fn=None, resume_from_checkpoint=None)` dùng context/skill/model tích hợp. Tạo runtime với `context_compiler`, `model_router`, `model_executor`. Proposer không side effect; route và inference chỉ sau gate;
+- `await runtime.run_agent(task_id, task_goal=..., session_id=..., brain_fn=None, resume_from_checkpoint=None)` dùng context/skill/model tích hợp. Tạo runtime với `context_compiler`, `model_router`, `model_executor`. Proposer không side effect. **Routing và provider discovery diễn ra trong lúc đề xuất, trước gate** — `ModelRouter.route()` gọi `ensure_providers_ready()`, có thể khởi tạo và discover model. Gate kiểm soát *thực thi* (step function, lệnh gọi provider, side effect), không kiểm soát routing. Provider init/discovery trước gate được ghi là release blocker **F04** trong `BETA_LIMITATIONS.md`; trên đường remote, manifest được `gate_remote_disclosure` kiểm tra chưa được ràng buộc với đúng payload gửi đi — ghi là **F05**.
 - `await runtime.run_graph(task_id, nodes=[...], task_goal=..., task_scheduler=..., resume_from_checkpoint=None)` chạy DAG đã validate. Node lỗi đánh dấu task failed và chặn dependent.
 
 Kết quả là `RuntimeOutcome`. Thành công cuối có
@@ -45,6 +45,23 @@ completion commit bị ngắt.
 `Planner` (`paw.core.planner`) là factory/store duy nhất cho `Plan`/`TaskNode`.
 `await Planner().plan(task_id)` yêu cầu Task bền vững đã tồn tại và lấy goal/
 session từ Task đó; Planner không tạo hoặc thay Task identity.
+Default là research decomposition, không quyền implementation. Implementation
+cần Planner cấu hình trusted `workspace_root`, `hard_constraints` structured,
+`repo_filter`/`policy_guard` optional; gọi
+`plan(task_id, purpose="implementation", decision_version_id=...)`. Yêu cầu
+current FINAL READY, Task/session đúng, human review exact, content/constraints
+fresh; ref version/revision/constraints sống qua reopen.
+`ApprovalStore.request_decision_review(version_id)` tạo review pending; API
+`approve`/`deny` hiện có quyết định explicit. Không auto-review; review decision
+không thay executor ASK. Runtime revalidate Plan persisted ở shared unit, không
+tin raw READY. Cấu hình `project_root`, `hard_constraints`, `repo_filter` optional
+và PolicyGuard thật; truyền Plan persisted hoặc `metadata["plan_id"]`. Proposal
+có scope read freshness trước approval effect exact. Recovery filesystem local
+chỉ đối soát intent gốc, không lặp execute; private `_execute_action` mutating
+không phải bypass hỗ trợ. CLI/stream write structured cần hai `/approve`: review
+decision rồi approval operation. Approval đơn lẻ không cho mutation tự do báo
+hoàn thành qua mock. Snapshot default có thể refuse project lớn/sâu, không tự
+nâng bound; chỉ loại state PAW cấu hình, không loại mọi database.
 `StructuredReasoner` (`paw.core.decomposition`) chỉ là strategy thuần. Runtime
 proposer tạo `ProposedAction`; `TaskScheduler` (`paw.core.task_scheduler`) chỉ
 sở hữu DAG readiness và node state.

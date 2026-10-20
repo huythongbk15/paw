@@ -1,5 +1,14 @@
 # Tuyên ngôn sản phẩm PAW
 
+## Quyết định phạm vi — giao diện web local, 2026-10-05
+
+User yêu cầu đóng gói và web bao phủ năng lực hiện có: chấp nhận presentation
+adapter HTTP/static, foreground, loopback, một người dùng, trên application
+services sau prerequisite safety đạt. Thay đổi mở client/dependency/packaging/
+threat model; không cấp quyền hosting/tenancy/provider mới/daemon/runtime thứ
+hai/training. Gate nghiệm thu khác code presence. Contract/parity ở
+`BETA_LIMITATIONS.md`, thứ tự BETA hardening ở `ROADMAP.md`.
+
 ## Tuyên bố sản phẩm
 
 PAW là runtime engineering agent ưu tiên chạy cục bộ, chuyên nghiên cứu, hiểu,

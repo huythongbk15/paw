@@ -1,8 +1,38 @@
 # Lộ trình Core Stabilization của PAW
 
+## Thứ tự đóng gói đang áp dụng — 2026-10-05
+
+Product release `PARTIAL` trên `9fb893e` và sửa index user được giữ.
+Control F01/F02 ban đầu đã sửa working tree; F06 dispatch có proof theo phạm vi.
+Cập nhật 2026-10-07: B-18 admission/recovery bounded và CLI hai approval pass
+D3 working tree (2262 passed, 3 skipped), không certify clean release.
+E1 lịch sử giữ phạm vi
+corpus/revision; checkbox/code presence không certify E2/E3/BETA/E4 hiện tại.
+Web local là mở presentation surface theo Charter, không phase mới hoặc
+quyền hạ gate. [Audit BETA/web](BETA_LIMITATIONS.md) ghi findings/parity/case.
+
+| Thứ tự phụ thuộc | Packet | Gate |
+|---|---|---|
+| Baseline/service | B-15..B-16 | Inventory/evidence hiện tại, intake dùng chung và regression. |
+| Safety trước HTTP execution | B-17..B-19 | Isolation/readiness/discovery/payload/failure, zero P0. |
+| Engineering thật | B-20..B-22 | Trace project thật, recall repo ngoài, exact skill governance. |
+| Spike/HTTP nền | B-23..B-26 | READY ADR, deps/assets, Host/Origin/auth/CSRF/bounds/lifecycle/retry/reconnect. |
+| Parity | B-27..B-33 | Session/approval/project/decision/DAG/inspect/memory/skills/models/experimental qua service chung. |
+| Release candidate | B-34..B-36 | Install/upgrade/backup/restore/docs/parity; D3 clean và verdict rõ. |
+
+Việc an toàn tiếp theo: đóng B-19 discovery/payload và usage receipt lỗi còn thiếu.
+Inventory B-15 và migration bounded B-18 có proof theo phạm vi; không mở lại
+kiến trúc hoặc promote HTTP phụ thuộc. B-16/B-17 có proof sửa theo phạm vi,
+không phải clean release. F06 sửa độc lập cùng nhóm safety trước HTTP.
+Giữ việc ranking chưa xong,
+không tự bật training/provider mới. D0/D1/D2 theo packet; D3 khi core trigger
+và candidate. Sequence/count phía dưới là record lịch sử; review này và
+bằng chứng thực tế quyết định hiện trạng khi có mâu thuẫn.
+
+## Record ổn định hóa và post-core lịch sử
+
 Rà soát ngày 2026-09-09, HEAD source `fd8a8c8` và thay đổi router chưa
-commit có sẵn: **E1 VERIFIED; gate nghiệm thu E2 RATIFIED**.
-Báo cáo tracked `benchmarks/e1/real_measurement_local.json` ghi
+commit có sẵn. Báo cáo tracked `benchmarks/e1/real_measurement_local.json` ghi
 **chỉ phép đo** PASS/VERIFIED trên revision sạch `649ded9`: 71 file source,
 839.006 byte, recall 1,0, giảm context warm ước tính 0,9847.
 Báo cáo tự loại trừ qualification toàn E1. Đây là bằng chứng đo lịch sử,
@@ -12,20 +42,25 @@ ghi nhận OBSERVED, chưa đồng nghĩa đã đạt điều kiện nghiệm th
 Giữ code để rà soát, không tự mở rộng. Xem quyết định 2026-09-09 trong
 `IMPLEMENTATION_MAP.md`.
 
-Đây là work sequence duy nhất đang hoạt động. Các phase được đánh số trong lịch
-sử mô tả cách repository phình lên; chúng không quyết định việc phải xây tiếp.
+Bản Roadmap tiếng Anh và tiếng Việt mô tả **cùng** rà soát 2026-09-09. Trước
+đây hai bên nêu phán quyết *ngược nhau* ("E1 PARTIAL; E2–E3/BETA BLOCKED" và
+"E1 VERIFIED; E2 RATIFIED"). Nay cả hai nói cùng một điều: có bằng chứng chỉ
+phép đo tại các revision nêu trên; **qualification track E1 chưa được thiết lập**
+bởi bằng chứng đó. Phán quyết gate và track hiện tại nằm trong bảng trạng thái
+duy nhất trong [`README.md`](README.md) — file này không nhắc lại.
 
-Track hiện tại: **E2 — integration selective inference (tiến tới E3/BETA)**.
-E0–E2 đều VERIFIED; E2 RATIFIED; E3/BETA chờ integration E2.
+Các phase được đánh số trong lịch sử mô tả cách repository phình lên; chúng
+không quyết định việc phải xây tiếp. Work sequence đang hoạt động là thứ tự
+productization packet ở trên.
 
-| Phạm vi | Kết quả hiện tại | Ý nghĩa |
+| Phạm vi | Kết quả tại record này | Ý nghĩa |
 |---|---|---|
 | Core Stabilization | `VERIFIED` trên `f3ad4ef` | Freeze S0-S6 vẫn là baseline lõi. |
 | E0 | `VERIFIED` cho fixture-validation deterministic | Không phải agent-quality hoặc cloud baseline. |
-| E1 | `VERIFIED` | `8d01d90`: min_recall=1.0, 12/12 samples, real Ollama embeddings. Cloud-baseline = offline qualification, cloud token → E2-21/24. |
-| E2 | `RATIFIED` | Prereq E2-25..28 + E2-45..47 DONE (119 tests PASS). Cloud-baseline boundary resolved. |
-| E2-E3 và BETA | `E3/BETA BLOCKED` | Chờ E2 integration (rows 3-4). |
-| E4 controlled adaptation | `COMPLETE` | E4-01..22 đã hiện thực. E4-10 (cloud teacher baseline) **đã gỡ chặn 2026-10-03**: nhãn `BLOCKED` từng hiểu sai charter — charter giao cho cloud một vai trò suy luận và bắt buộc benchmark phải đo cloud token/chi phí/độ trễ. **Chưa chạy**. |
+| E1 | `PARTIAL` | Chỉ có bằng chứng đo; **qualification track chưa thiết lập**. `649ded9` verify metric source đại diện lịch sử. Gate đo E1-27 production sau đó được verify trên revision sạch `8d01d90` (`min_recall=1.00`, 12/12 samples) — đó là gate *đo*, không phải qualification track. Acceptance privacy/quality/D3 cùng revision cho track vẫn cần được chứng minh hoặc giải quyết tường minh. |
+| E2 | `RATIFIED` ở mức gate | Prereq E2-25..28 + E2-45..47 DONE (119 tests PASS). Cloud-baseline boundary resolved. |
+| E2-E3 và BETA | `BLOCKED` ở mức track | Source wiring đi trước điều kiện nghiệm thu; source presence không phải gate authorization. |
+| E4 controlled adaptation | `BLOCKED`, tùy chọn (mức track) | E4-01..22 đã hiện thực. E4-10 (cloud teacher baseline) **đã gỡ chặn 2026-10-03**: nhãn `BLOCKED` từng hiểu sai charter — charter giao cho cloud một vai trò suy luận và bắt buộc benchmark phải đo cloud token/chi phí/độ trễ. **Chưa chạy**. Track vẫn cần E0–E3 được nghiệm thu và dataset đã verify. |
 
 Hướng engineering intelligence ngày 2026-09-01 đã được ghi trong Product
 Charter và Architecture. Đây là ràng buộc thiết kế, không phải bằng chứng rằng

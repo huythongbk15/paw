@@ -1,10 +1,46 @@
 # PAW Core Stabilization roadmap
 
+## Active productization sequence — 2026-10-05
+
+Product release: `PARTIAL` at `9fb893e` plus preserved user index changes.
+Initial streaming/concurrent controls F01/F02 have working-tree repairs;
+Follow-up 2026-10-07: B-18 bounded admission/recovery and two-approval CLI have
+working-tree D3 proof (2262 passed, 3 skipped). F06 has scoped dispatch proof.
+Historical
+E1 qualification stays scoped to its reviewed corpus/revision; source presence
+or later-track checkboxes do not certify current E2/E3/BETA/E4 acceptance.
+The user's local web request is a recorded client-surface expansion in Charter,
+not a new phase. It may not weaken the existing engineering/safety gates.
+
+The [BETA audit and web contract](BETA_LIMITATIONS.md) supplies F01..F12,
+parity, diagrams, cases and acceptance. Execute existing BETA hardening in this
+order, preserving unfinished E1 ranking work and without enabling training:
+
+| Dependency order | Packets | Gate |
+|---|---|---|
+| Baseline and service parity | B-15..B-16 | Current support/evidence inventory and one intake contract, regressions recorded. |
+| Safety before HTTP execution | B-17..B-19 | Transaction isolation, durable readiness, discovery/payload/failure controls; zero unresolved P0. |
+| Complete engineering workflows | B-20..B-22 | Real project decision/change/verification trace, foreign evidence adequacy and governed exact skill versions. |
+| Local transport spike and foundation | B-23..B-26 | READY ADR, optional dependencies/assets, Host/Origin/auth/CSRF/bounds/lifecycle, request/reconnect semantics. No unsafe execution endpoints before prior gates. |
+| Feature parity | B-27..B-33 | Sessions/chat, approvals, project/context, decision/DAG, inspect, memory/skills, model/experimental views through shared services. |
+| Product candidate | B-34..B-36 | Install/upgrade/backup/restore and documentation; browser/CLI parity; one clean-revision D3 + explicit release verdict. |
+
+Next safe action: close B-19 discovery/payload controls and remaining failure
+usage receipts. B-15 inventory and B-18 bounded migration have scoped evidence;
+do not reopen their architecture or promote dependent HTTP. B-16/B-17
+have scoped repair evidence in the implementation map, not a clean release.
+F06 is independent repair within the same pre-HTTP safety group; no dependent
+HTTP execution or automatic provider/training expansion is authorized.
+D0/D1/D2 per packet; D3 at high-risk core boundaries and final candidate.
+The older sequence and counts below are retained as dated historical records;
+where they disagree on current status, this review and actual evidence govern.
+
+## Historical stabilization and post-core records
+
 Review — 2026-09-09, source HEAD `fd8a8c8` with an existing uncommitted
-router change: **E1 PARTIAL; E2–E3/BETA BLOCKED at the acceptance gate**.
-The tracked report `benchmarks/e1/real_measurement_local.json` records
-a clean **measurement-only** PASS/VERIFIED at `649ded9`: 71 source files,
-839,006 bytes, recall 1.0, estimated warm-context reduction 0.9847.
+router change. The tracked report `benchmarks/e1/real_measurement_local.json`
+records a clean **measurement-only** PASS/VERIFIED at `649ded9`: 71 source
+files, 839,006 bytes, recall 1.0, estimated warm-context reduction 0.9847.
 Its scope explicitly excludes overall E1 qualification. It is historical
 measurement evidence, not a current-revision D3, engineering-quality or
 provider-token claim. E2-06..11 code is already present, including runtime
@@ -12,10 +48,18 @@ routing/reconnaissance wiring; this is OBSERVED implementation ahead of
 accepted prerequisites, not permission to expand. Preserve it for review.
 See the 2026-09-09 decision in `IMPLEMENTATION_MAP.md`.
 
-This is the only active work sequence. Historical numbered phases describe how
-the repository grew; they do not determine what should be built next.
+The English and Vietnamese Roadmap files describe the same 2026-09-09 review.
+They previously stated *opposite* verdicts for it ("E1 PARTIAL; E2–E3/BETA
+BLOCKED" versus "E1 VERIFIED; E2 RATIFIED"). Both now state the same thing:
+measurement-only evidence exists at the revisions named above; **E1 track
+qualification was not established by it**. The current gate and track verdicts
+are in the single status table in [`README.md`](README.md) — this file does not
+restate them.
 
-Current track: **E1 — representative clean-revision qualification**.
+Historical numbered phases describe how the repository grew; they do not
+determine what should be built next. The active sequence is the
+productization packet order above.
+
 Core Stabilization is `VERIFIED` on the frozen revision
 `f3ad4ef` (SX-14 verdict, 685/685 tests pass, D3 release check
 green, 8/8 minimum cases produce `SUCCESS` with
@@ -24,18 +68,16 @@ green, 8/8 minimum cases produce `SUCCESS` with
 `ENGINEERING_RULES` analog), the case-manifest contract
 (`paw.bench`), 14 minimum + research-decision cases with
 reviewed evidence, the deterministic evidence runner, and
-the E0-27 integration pack record. E0 is closed. Historical E1 checklist items
-exist, but current acceptance depends on representative measurement,
-privacy/quality regression proof and a clean revision. The read-only E2-01 audit
+the E0-27 integration pack record. E0 is closed. The read-only E2-01 audit
 is provisional input and does not activate E2.
 
-| Scope | Current result | Meaning |
+| Scope | Result at this record | Meaning |
 |---|---|---|
 | Core Stabilization | `VERIFIED` on `f3ad4ef` | All S0–S6 acceptance items passed the clean-revision D3 gate; the `f3ad4ef` freeze commit is the canonical evidence. |
 | E0 (Engineering benchmark and feature subtraction) | `VERIFIED` for the deterministic offline fixture-validation baseline on `f3ad4ef` | The contract, the 13-case set (8 minimum E0-08..15 + 5 research-decision E0-28..35), the deterministic evidence runner (`shell=False` for `command_exit`), and the integration-pack record are in place. The 13/13 SUCCESS line in `docs/benchmarks/e0/integration_pack_run.md` is **fixture-validation** evidence, not an agent-quality gate; the runtime-driven agent-quality tier is post-gate work (E0-40). The cloud baseline was previously marked deferred per the charter; that reading was wrong and is corrected on 2026-10-03 (see `IMPLEMENTATION_MAP.md`). |
-| E1 | `PARTIAL` | `649ded9` verifies historical representative-source metrics only. Same-revision privacy/quality/D3 and cloud-baseline acceptance remain to be evidenced or explicitly resolved. |
+| E1 | `PARTIAL` | Measurement-only evidence exists; **track qualification not established**. `649ded9` verifies historical representative-source metrics only. The later E1-27 production measurement gate was verified on clean revision `8d01d90` (`min_recall=1.00`, 12/12 samples) — that is the *measurement* gate, not the track qualification. Same-revision privacy/quality/D3 and cloud-baseline acceptance for the track remain to be evidenced or explicitly resolved. |
 | E2–E3 and BETA | `BLOCKED` | E2-06..11 source includes runtime wiring ahead of accepted prerequisites. Preserve and audit it; source presence is not gate authorization. |
-| E4 controlled adaptation | `COMPLETE` | E4-01..22 implemented; 42 non-live tests pass (1 live test is opt-in via `PAW_E4_LIVE_TESTS=1` and skipped by default, so a verification run never spends money or fails on a provider 429). E4-01..10 VERIFIED (18 tests). E4-11..14 OPERATIONAL (provider adapter + graceful degradation). E4-21 per-version metrics PASS. E4-22 integration pack gate PASS. E4-10 cloud teacher baseline is unblocked as of 2026-10-03: the charter assigns cloud a reasoning role and requires the benchmark to measure cloud tokens/cost/latency, so the previous `BLOCKED` label misread it. |
+| E4 controlled adaptation | `BLOCKED`, optional (track level) | E4-01..22 implemented; 42 non-live tests pass (1 live test is opt-in via `PAW_E4_LIVE_TESTS=1` and skipped by default, so a verification run never spends money or fails on a provider 429). E4-01..10 VERIFIED (18 tests). E4-11..14 OPERATIONAL (provider adapter + graceful degradation). E4-21 per-version metrics PASS. E4-22 integration pack gate PASS. E4-10 cloud teacher baseline is unblocked as of 2026-10-03: the charter assigns cloud a reasoning role and requires the benchmark to measure cloud tokens/cost/latency, so the previous `BLOCKED` label misread it. The **track** still requires E0–E3 acceptance and a verified dataset. |
 
 The engineering-intelligence direction dated 2026-09-01 is recorded in the
 Product Charter and Architecture. It is a design constraint, not proof that a

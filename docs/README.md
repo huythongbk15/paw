@@ -1,16 +1,64 @@
 # PAW system documents
 
+## Current status — single source of truth (2026-10-20)
+
+This section is the **only** place in the canonical set that states current
+status. Other documents must link here instead of restating a verdict; the
+historical records below are dated evidence, not current status.
+
+Two different things have historically been called "E1/E2 VERIFIED". They are
+separated below, because conflating them is the main source of contradiction
+between the English and Vietnamese documents.
+
+**Gate-level results** — a measured gate inside its own declared scope:
+
+| Gate | Result | Scope and evidence |
+|---|---|---|
+| Core Stabilization | **`VERIFIED`** on `f3ad4ef` | S0–S6 acceptance passed the clean-revision D3 gate; the freeze commit is the tracked canonical evidence. |
+| E0 fixture-validation baseline | **`VERIFIED`** for deterministic offline | 13 cases (8 minimum + 5 research-decision), deterministic runner, integration-pack record. 13/13 SUCCESS is **fixture-validation**, not an agent-quality gate. The runtime-driven agent-quality tier is post-gate work (E0-40). |
+| E1-27 production measurement | **`VERIFIED`** | Clean revision `8d01d90`; `min_recall=1.00`, 12/12 samples (6 cases x cold/warm), real Ollama embeddings. **Evidence caveat:** the measurement report `benchmarks/e1/e1_production_report.md` is *gitignored*, so this verdict rests on the recorded documentation, not on a tracked artifact. Re-tracking it is a release prerequisite. |
+| E2 prerequisite contract | **`RATIFIED`** on `8d01d90` | E2-25..28 and E2-45..47 implemented and passing (119 E2 contract tests). The cloud-baseline boundary is resolved by `InferenceClassification` / `evaluate_local_eligibility`. |
+
+**Track-level (release) results** — whether a track may ship:
+
+| Track | Result | Why |
+|---|---|---|
+| E1 (Local project intelligence) | **`PARTIAL`** | The E1-27 *measurement* gate is verified; the E1 *track* qualification is not. Quality, privacy and release acceptance for the track were never linked to the qualification revision. A verified measurement gate is not a qualified track. |
+| E2, E3, BETA | **`BLOCKED`** | Their gate-level contracts exist, but the track-level release acceptance depends on E1 track qualification. Source wiring ahead of accepted prerequisites is `OBSERVED` implementation, not permission to expand. |
+| E4 (controlled adaptation) | **`BLOCKED`**, optional | Requires E0–E3 and a verified dataset; not required for BETA. |
+
+**Product release: `PARTIAL`.** The productization review is dated **2026-10-05**
+(source `9fb893e` plus the preserved user index change), with a 2026-10-07
+follow-up. B-18 shared-unit admission/recovery and two-approval CLI work carries
+integrated working-tree D3 evidence (2026-10-07, 2262 passed, 3 skipped). That
+evidence is **working-tree**, not clean-revision certification, and no clean
+current-revision release is claimed. B-19 discovery/payload controls remain
+outstanding. The
+[productization audit and web contract](BETA_LIMITATIONS.md) records F01..F12,
+feature parity, security, cases and acceptance; read it after the seven core
+documents before taking B-15..B-36. The [Roadmap](ROADMAP.md) remains the
+sequence authority. Web is a user-requested local presentation adapter, not a
+new agent core. Training stays out of scope.
+
+Vietnamese version: [đóng gói và web](vi/BETA_LIMITATIONS.md).
+
+### Historical records (dated evidence — not current status)
+
 Review — 2026-09-09, source HEAD `fd8a8c8` with an existing uncommitted
-router change: **E1 PARTIAL; E2–E3/BETA BLOCKED at the acceptance gate**.
-The tracked report `benchmarks/e1/real_measurement_local.json` records
-a clean **measurement-only** PASS/VERIFIED at `649ded9`: 71 source files,
-839,006 bytes, recall 1.0, estimated warm-context reduction 0.9847.
+router change. The tracked report `benchmarks/e1/real_measurement_local.json`
+records a clean **measurement-only** PASS/VERIFIED at `649ded9`: 71 source
+files, 839,006 bytes, recall 1.0, estimated warm-context reduction 0.9847.
 Its scope explicitly excludes overall E1 qualification. It is historical
 measurement evidence, not a current-revision D3, engineering-quality or
 provider-token claim. E2-06..11 code is already present, including runtime
 routing/reconnaissance wiring; this is OBSERVED implementation ahead of
 accepted prerequisites, not permission to expand. Preserve it for review.
 See the 2026-09-09 decision in `IMPLEMENTATION_MAP.md`.
+
+The English and Vietnamese Roadmap files describe the same 2026-09-09 review.
+They previously stated *opposite* verdicts for it. Both now say the same
+thing: measurement-only evidence at the stated revisions, E1 track
+qualification not established.
 
 This directory is the canonical documentation set for PAW. It exists to keep
 the product boundary, architecture, implementation reality and work sequence
@@ -20,22 +68,7 @@ The recorded post-stabilization direction specializes PAW in code, systems and
 software architecture: local control/context/memory supports selectively gated
 cloud reasoning, and bounded source-backed research must produce a readiness
 decision before implementation planning. This is a documented target, not
-implemented status; Core Stabilization has a verified freeze, E0 has shipped
-its fixture-validation baseline, E1 qualification is active, and E2–E4 / BETA
-remain gated by the ordered roadmap.
-
-Current gate result:
-
-| Track | Result | Meaning |
-|---|---|---|
-| Core Stabilization | **`VERIFIED`** on `f3ad4ef` | S0–S6 acceptance passed the clean-revision D3 gate; the freeze commit is the canonical evidence. |
-| E0 (fixture-validation baseline) | **`VERIFIED`** for deterministic offline | The contract, 13 cases (8 minimum + 5 research-decision), the deterministic evidence runner, and the integration-pack record are in place. The 13/13 SUCCESS line is **fixture-validation**, not an agent-quality gate; the runtime-driven agent-quality tier is post-gate work (E0-40). |
-| E1 (Local project intelligence) | `PARTIAL` | Historical source measurement at `649ded9` passes its own scope. Remaining quality/privacy/release acceptance must be linked on the qualification revision. |
-| E2, E3, BETA | `BLOCKED` | E2 source wiring exists ahead of accepted prerequisites; no overall E1 gate evidence is established by the measurement report. |
-| E4 (controlled adaptation) | `BLOCKED`, optional | Requires E0–E3 and a verified dataset; not required for BETA. |
-
-Audit baseline: historical Core freeze `f3ad4ef`; source review `fd8a8c8`
-on 2026-09-09. Historical counts are not current gate evidence.
+implemented status; the current gate and track results are the tables above.
 
 Vietnamese readers: see the synchronized [bộ tài liệu tiếng Việt](vi/README.md).
 The English files remain the canonical contract text; the source code and tests

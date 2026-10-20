@@ -34,8 +34,21 @@ you> /exit
 The structured write above is performed by `LocalFilesystemExecutor`. It is
 confined to `--workspace`; the file is absent before approval, path traversal
 is rejected, and a consumed operation is not repeated on resume. Unstructured
-legacy requests such as “hãy tạo file demo.txt” remain a mock demonstration and
+legacy requests such as "hãy tạo file demo.txt" remain a mock demonstration and
 do not mutate the workspace.
+
+**Two approvals for a structured write.** A structured write needs two distinct
+human decisions, and neither substitutes for the other:
+
+1. **Decision review** — a human accepts the implementation-readiness evidence
+   for an exact `DecisionVersion` snapshot (`ApprovalStore.request_decision_review`).
+   This grants *evidence acceptance*; it does not authorize execution.
+2. **Effect approval** — the exact proposed operation is approved (`/approve`).
+
+Review without effect approval does not execute; effect approval without a
+matching reviewed decision does not execute either. A raw approval is not
+implementation authority. The CLI/stream flow requests the bounded FAST
+decision review first, then the exact effect approval.
 
 To approve from another process, copy the session ID and use the same workspace:
 

@@ -1,5 +1,79 @@
 # Kiến trúc lõi PAW
 
+## Biên web local — target ghi nhận 2026-10-05
+
+**`[RATIFIED TARGET]`** Browser → HTTP security/DTO → application services →
+Task/decision/Plan/proposal canonical → Policy/Autonomy → ports → observation/
+verification → durable stores. CLI/TUI dùng cùng service, core không import
+HTTP. Token stream provisional; Task/ledger/operation committed là authority.
+
+**`[RATIFIED TARGET]`** Auth local, exact Host/Origin, CSRF, bounds, workspace
+và request identity là HTTP admission riêng với Policy. Một gate không thay
+được gate còn lại. Transaction phải phân biệt async task độc lập, rollback và
+cancel. Retry/approval double click giữ durable identity. Sơ đồ/case/security
+ở `BETA_LIMITATIONS.md`.
+
+**`[CURRENT]`** Source `9fb893e` chưa có web adapter; F01/F02 ban đầu đã sửa
+working tree. Dispatch từ chối route/provider thiếu, không âm thầm đổi provider;
+lỗi model chặn executor tiếp theo. Proof mới nằm ở Implementation Map.
+Readiness durable/discovery/payload vẫn thiếu. CURRENT lịch sử phía dưới
+không certify toàn sản phẩm hiện tại hoặc khả năng chạy web.
+
+**`[CURRENT]`** Persistence snapshot B-18 (2026-10-06) thuộc Database hiện có:
+schema v5 additive lưu DecisionVersion dưới readiness record gắn Task/session
+durable và revision/constraints không rỗng. Version/parent bất biến, cả SQL
+REPLACE; retry giống nhau no-op, ID conflict bị từ chối; validate/insert chung
+transaction. Đây chỉ là evidence storage: FINAL chưa chứng minh review, current
+head, freshness do server tính hay runtime admission. Lifecycle/Plan binding
+đã thêm sau đó ở v6/v7 bên dưới; executable-unit admission vẫn chưa triển khai.
+
+**`[CURRENT]`** Schema v6 thêm publication lifecycle append-only trong Database.
+Khởi đầu DRAFT; DRAFT→DRAFT/FINAL, FINAL→STALE/SUPERSEDED, STALE→SUPERSEDED;
+SUPERSEDED terminal. Expected head kiểm tra trong transaction; publication/
+snapshot commit hoặc rollback cùng nhau. Unique initial/predecessor chặn nhánh
+fork; edge publication bất biến giữ lịch sử. Current head là leaf chuỗi, không
+timestamp mới nhất hoặc FINAL orphan. Actor không thay artifact review/approval.
+Lifecycle selection chưa cấp quyền Plan hoặc executor dispatch.
+
+**`[RATIFIED TARGET]`** Freshness admission dùng snapshot nội dung relevant-input
+bounded và hard constraints canonical do server tính, gồm dirty file; HEAD/raw
+string không đủ. Mutation làm stale proposal chưa chạy trừ khi decision review
+mới cho phép. Operation completed replay committed result không lặp effect;
+prepared-effect reconciliation giữ intent/idempotency gốc. Cần proof input-set
+đầy đủ và shared runtime/Planner binding trước bật admission.
+
+**`[CURRENT]`** Scanner có complete bounded mode opt-in cho freshness: eligible
+symlink/read error/depth/file/entry limit bị từ chối, không truncate. Checksum
+owner hash root/filter/content gồm dirty file, byte budget và observed-change
+check; không phải filesystem lock atomic. Context scan partial giữ semantics cũ.
+
+**`[CURRENT]`** Schema v7 gắn Plan với decision version/revision/constraints.
+Planner default research decomposition; implementation tường minh cần current
+FINAL READY cùng Task/session durable, human review exact snapshot/binding và
+root/filter/hard constraints trusted app còn fresh. Policy trước snapshot IO;
+private save recheck binding trong transaction. Review decision không override
+execution ASK hay chứng minh engineering verification/benchmark quality. Plan
+legacy unbound giữ purpose lịch sử, không là authority. String readiness runtime
+chỉ chẩn đoán, không cấp quyền thực thi.
+
+**`[CURRENT]`** Sửa admission (2026-10-07): `_execute_unit` check mutation theo
+capability và callback mutating không scope; cần Plan implementation persisted
+đúng Task/session/goal, decision current đã review, constraints trusted và snapshot
+bounded fresh. Policy xét scope đọc root/effect một lần trước IO. Quyền executor
+nội bộ chỉ ở async task hiện tại; caller/task con không tự tạo được. Private
+executor mutating không qua shared unit phải refuse. Flag isolated không bỏ
+chi phí đã quan sát hoặc consume approval exact.
+
+**`[CURRENT]`** Recovery prepared vẫn qua Policy/review đã lưu, so binding
+Plan/action fingerprint/intent/root gốc rồi chỉ gọi method reconciliation chỉ
+đọc của LocalFilesystemExecutor đã biết. Không model/callback tùy ý/prepare/
+execute/fallback write khi ambiguous. Review gốc có thể historical ở đây vì
+không effect mới. Replay completed giữ nguyên; failure vẫn giữ intent/binding.
+CLI/stream write local structured review decision FAST bounded rồi approval
+effect exact, không tự approve bước kia. Plan và ref action session commit cùng
+transaction. Mutation tự do không được bịa implementation. Snapshot không khóa
+writer; repair chưa cung cấp verification B-20 hoặc web release.
+
 Tài liệu này định nghĩa contract đích của PAW Core. Nó ổn định và độc lập với
 cách sắp xếp file hiện tại; xem [bản đồ triển khai](IMPLEMENTATION_MAP.md) để
 biết mã nguồn thực tế đang làm được gì.

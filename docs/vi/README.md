@@ -1,8 +1,47 @@
 # Tài liệu hệ thống PAW — tiếng Việt
 
+## Hiện trạng — nguồn sự thật duy nhất (2026-10-20)
+
+Phần này là **nơi duy nhất** trong bộ tài liệu canonical nêu trạng thái hiện tại.
+Tài liệu khác phải trỏ tới đây thay vì nhắc lại một phán quyết; các mục lịch sử
+bên dưới là bằng chứng có ngày, không phải trạng thái hiện tại.
+
+Trước đây có **hai thứ khác nhau** cùng được gọi là "E1/E2 VERIFIED". Dưới đây
+tách riêng, vì nhập nhằng đó là nguồn mâu thuẫn chính giữa bản tiếng Anh và
+tiếng Việt.
+
+**Kết quả ở mức gate** — một gate đo được, trong đúng phạm vi khai báo:
+
+| Gate | Kết quả | Phạm vi và bằng chứng |
+|---|---|---|
+| Core Stabilization | **`VERIFIED`** trên `f3ad4ef` | S0–S6 qua D3 trên revision sạch; commit freeze là bằng chứng canonical được track. |
+| E0 fixture-validation baseline | **`VERIFIED`** cho offline tất định | 13 case (8 minimum + 5 research-decision), runner tất định, integration-pack record. 13/13 SUCCESS là **fixture-validation**, không phải gate chất lượng agent. Tầng agent-quality do runtime dẫn là việc sau gate (E0-40). |
+| E1-27 production measurement | **`VERIFIED`** | Revision sạch `8d01d90`; `min_recall=1.00`, 12/12 mẫu (6 case x cold/warm), embedding Ollama thật. **Caveat bằng chứng:** báo cáo đo `benchmarks/e1/e1_production_report.md` bị *gitignore*, nên phán quyết này dựa trên tài liệu ghi nhận chứ không dựa trên artifact được track. Track lại file đó là tiền đề phát hành. |
+| E2 prerequisite contract | **`RATIFIED`** trên `8d01d90` | E2-25..28 và E2-45..47 đã triển khai và pass (119 test contract E2). Ranh giới cloud-baseline được giải quyết bằng `InferenceClassification` / `evaluate_local_eligibility`. |
+
+**Kết quả ở mức track (phát hành)** — track có được ship hay không:
+
+| Track | Kết quả | Lý do |
+|---|---|---|
+| E1 (Local project intelligence) | **`PARTIAL`** | Gate *đo* E1-27 đã verify; *qualification* track E1 thì chưa. Chấp nhận chất lượng, privacy và release của track chưa từng được gắn vào revision qualification. Gate đo đã verify không phải track đã qualify. |
+| E2, E3, BETA | **`BLOCKED`** | Hợp đồng ở mức gate đã có, nhưng nghiệm thu phát hành ở mức track phụ thuộc qualification của track E1. Source wiring đi trước điều kiện nghiệm thu là implementation `OBSERVED`, không phải quyền mở rộng. |
+| E4 (controlled adaptation) | **`BLOCKED`**, tùy chọn | Cần E0–E3 và dataset đã verify; không bắt buộc cho BETA. |
+
+**Product release: `PARTIAL`.** Rà soát đóng gói có ngày **2026-10-05** (source
+`9fb893e` và sửa index của user được giữ nguyên), có cập nhật 2026-10-07.
+B-18 shared-unit admission/recovery và CLI hai approval có bằng chứng D3 trên
+working tree (2026-10-07, 2262 passed, 3 skipped). Bằng chứng đó là **working tree**, không phải certification clean
+revision, và không tuyên bố release clean revision hiện tại. B-19
+discovery/payload vẫn còn thiếu. Đọc [rà soát và web](BETA_LIMITATIONS.md)
+sau bảy tài liệu core: F01..F12, parity, security, case và acceptance.
+[Roadmap](ROADMAP.md) vẫn là authority thứ tự; B-15..B-36 là work packet bổ
+sung cho BETA. Web theo yêu cầu user là presentation adapter local, không phải
+agent core mới. Training vẫn ngoài phạm vi.
+
+### Lịch sử (bằng chứng có ngày — không phải trạng thái hiện tại)
+
 Rà soát ngày 2026-09-09, HEAD source `fd8a8c8` và thay đổi router chưa
-commit có sẵn: **E1 PARTIAL; gate nghiệm thu E2–E3/BETA BLOCKED**.
-Báo cáo tracked `benchmarks/e1/real_measurement_local.json` ghi
+commit có sẵn. Báo cáo tracked `benchmarks/e1/real_measurement_local.json` ghi
 **chỉ phép đo** PASS/VERIFIED trên revision sạch `649ded9`: 71 file source,
 839.006 byte, recall 1,0, giảm context warm ước tính 0,9847.
 Báo cáo tự loại trừ qualification toàn E1. Đây là bằng chứng đo lịch sử,
@@ -11,6 +50,11 @@ Source E2-06..11 đã tồn tại, gồm wiring routing/reconnaissance trong run
 ghi nhận OBSERVED, chưa đồng nghĩa đã đạt điều kiện nghiệm thu.
 Giữ code để rà soát, không tự mở rộng. Xem quyết định 2026-09-09 trong
 `IMPLEMENTATION_MAP.md`.
+
+Bản Roadmap tiếng Anh và tiếng Việt mô tả **cùng** rà soát 2026-09-09. Trước
+đây hai bên nêu phán quyết *ngược nhau* cho cùng một rà soát. Nay cả hai nói
+cùng một điều: bằng chứng chỉ phép đo tại các revision nêu trên, qualification
+track E1 chưa được thiết lập.
 
 Đây là bộ tài liệu tiếng Việt tương ứng với bộ tài liệu hệ thống PAW hiện tại.
 Mỗi tài liệu trong thư mục này bám theo tài liệu tiếng Anh cùng tên ở thư mục
@@ -21,9 +65,9 @@ Hướng sau ổn định hóa đã ghi nhận chuyên PAW vào code, hệ thố
 phần mềm: control/context/memory ở local hỗ trợ suy luận cloud được gate có chọn
 lọc, và nghiên cứu có nguồn, có giới hạn phải tạo readiness decision trước kế
 hoạch triển khai. Đây là đích đã ghi trong tài liệu, chưa phải trạng thái đã
-triển khai; E1 qualification là track nghiệm thu đang hoạt động.
+triển khai; kết quả gate và track hiện tại nằm ở hai bảng phía trên.
 
-Kết quả và số đo hiện tại nằm trong phần rà soát đầu tài liệu; không suy ra
+Kết quả và số đo hiện tại nằm trong phần hiện trạng đầu tài liệu; không suy ra
 trạng thái gate từ checkbox hay lịch sử test. Setup dùng lock riêng của PAW:
 
 ```bash
