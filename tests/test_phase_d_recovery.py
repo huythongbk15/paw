@@ -49,6 +49,7 @@ from jinja2.exceptions import UndefinedError
 from paw.core.models import (
     AutonomyDecision,
     Capability,
+    PolicyDecision,
     ExecutionObservation,
     ProposedAction,
     ResourceUsage,
@@ -62,6 +63,7 @@ from paw.core.ledger import TaskLedger
 from paw.core.runtime_persistence import RuntimePersistence
 from paw.core.checkpoint import OperationRecordStore
 from paw.core.storage import get_db, set_db_path
+from paw.core.task import TaskManager
 
 
 # ── Fixtures ───────────────────────────────────────────────────────────
@@ -134,7 +136,7 @@ class FileGenerationProposer(ActionProposer):
             goal = "All files generated"
         return ProposedAction(
             goal=goal,
-            capabilities=[],
+            capabilities=[Capability.FILESYSTEM_WRITE],
             context={},
             metadata={"file_index": file_index, "project_name": self._project_name},
             operation_id=f"file_gen_{file_index}",
@@ -288,13 +290,50 @@ async def _make_runtime(db_path: str, proposer, step_fn, task_id: str = "test-ta
         (task_id, None, session_id, None, task_goal, "running",
          "[]", "[]", None, None, None, None, now, now, None),
     )
-    autonomy = AutonomyController(budget=AutonomyBudget(max_iterations=100))
+    # This is explicit simulated human review in fixture setup, not an agent
+    # self-review path. Every unfinished write gets new evidence after prior
+    # writes; completed operations are still skipped by the real runtime loop.
+    from paw.core.approval import ApprovalStore
+    from paw.core.planner import Planner
+    from paw.core.policy import PolicyGuard
+    from paw.core.reasoning_contracts import DecisionVersion
+    from paw.core.repo_filter import RepoFilter
+    from paw.knowledge.checksum import compute_constraint_fingerprint, compute_repo_revision
+    import uuid
+
+    workspace = step_fn._output_dir
+    workspace.mkdir(parents=True, exist_ok=True)
+    constraints = {"cookiecutter_fixture_only": True}
+    guard = PolicyGuard(interactive=False)
+    guard._default_decisions[Capability.FILESYSTEM_WRITE] = PolicyDecision.ALLOW
+    autonomy = AutonomyController(budget=AutonomyBudget(max_iterations=100), policy_guard=guard)
+    class ReviewedFixtureRuntime(PawRuntime):
+        async def _execute_unit(self, tid, proposed, **kwargs):
+            stored_task = await TaskManager.get(tid)
+            parent = await db.record_decision(
+                "readiness", "ready", task_id=tid, session_id=stored_task.session_id,
+                project_revision=compute_repo_revision(workspace, RepoFilter.safe_default()),
+                constraint_fingerprint=compute_constraint_fingerprint(constraints),
+            )
+            identity = uuid.uuid4().hex
+            draft = DecisionVersion(identity + "-draft", parent, "draft", {"readiness": "ready"}, now, "fixture")
+            final = DecisionVersion(identity, parent, "final", draft.payload, now, "fixture")
+            await db.advance_decision_version(draft, expected_version_id=None)
+            await db.advance_decision_version(final, expected_version_id=draft.version_id)
+            review = await ApprovalStore.request_decision_review(final.version_id)
+            await ApprovalStore.approve(review.id, "fixture-human")
+            plan = await Planner(workspace_root=workspace, hard_constraints=constraints).plan(
+                tid, purpose="implementation", decision_version_id=final.version_id,
+            )
+            proposed = proposed.model_copy(update={"metadata": {**proposed.metadata, "plan_id": plan.id}})
+            return await super()._execute_unit(tid, proposed, **kwargs)
     ckpt_mgr = CheckpointManager()
-    runtime = PawRuntime(
+    runtime = ReviewedFixtureRuntime(
         autonomy=autonomy,
         proposer=proposer,
         checkpoint_mgr=ckpt_mgr,
         auto_checkpoint=True,
+        project_root=str(workspace), hard_constraints=constraints,
     )
     return runtime
 
@@ -752,6 +791,7 @@ class TestD10AlreadyCompleted:
 
             # Run normally for 4 files, then check operation records
             step_fn = FileGenerationStepFn(TEMPLATE_DIR, output_dir, context)
+            step_fn._num_limit = 4  # Stop after 4 files
             proposer = FileGenerationProposer(template_files, context["cookiecutter"]["project_name"])
             runtime = await _make_runtime(db_path, proposer, step_fn, task_id="d10_skip", task_goal='Generate 4 files')
 
