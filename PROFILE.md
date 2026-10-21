@@ -1255,10 +1255,26 @@ every acknowledged row is present, the database is not corrupted, a
 blocked writer fails loudly within the bound, and a second process can
 open the database while the first holds the write lock.
 
+### F02, closed in all three parts (2026-10-21)
+
+The last half was the awkward one. Under SQLite's one-writer rule a
+whole independent *transaction* inside another is impossible — the owner
+holds the write lock while it awaits the writer. A *statement* can be
+deferred: `write_independent()` is applied on its own connection once the
+enclosing transaction has released the lock, and committed independently of
+its outcome. A convenience `write()` still joins the enclosing unit of
+work, so the caller's atomicity is intact.
+
+A failure to apply is raised **by the transaction that queued it** — the
+writer has already returned, so the party that owns the transaction is
+the one that learns.
+
+7 contract tests, fail-positive proven.
+
 ### Still open (tracked)
 
-the write-queue half of F02 · the mutation routes (which wait on the
-storage concurrency question) · the gitignored E1-27 measurement report.
+the mutation routes (the last thing before the surface can write
+anything) · the gitignored E1-27 measurement report.
 
 ---
 
@@ -1282,6 +1298,6 @@ storage concurrency question) · the gitignored E1-27 measurement report.
 | **B-27** | ✅ DELIVERED | A minimal ASGI transport with no framework and a fixed eight-route read-only surface; the projections own the bounding and the redaction; proved without a server. 15 contract tests, fail-positive proven. |
 | **B-28** | ✅ DELIVERED | The packaged shell and its asset policy: traversal, absolute path, null byte and an escaping symlink are all refused; the shell is UTF-8 Vietnamese, keyboard operable, contrast-checked, responsive, and holds no credential. 42 web contract tests, fail-positive proven. |
 | **F02** | ✅ CLOSED (one half open) | The transaction scope is per task and the depth is per transaction; an independent write in another task survives the owner's rollback. 9 contract tests, fail-positive proven. The nested-write half needs a write queue. |
-| **F02** | ✅ CLOSED (one half open) | The transaction scope is per task and the depth per transaction; and the cross-process model is explicit - a bounded busy timeout on every connection, and opening an up-to-date database takes no write lock. 14 contract tests, fail-positive proven. The nested-write half needs a write queue. |
-| **Next** | the write-queue half of F02 | then the mutation routes — not the other way round |
+| **F02** | ✅ CLOSED | All three parts: the transaction scope is per task and the depth per transaction; the cross-process model is explicit - a bounded busy timeout on every connection, and opening an up-to-date database takes no write lock; and a write that must outlive its transaction has a form that works (`write_independent`). 21 contract tests, fail-positive proven. |
+| **Next** | the mutation routes | the last thing before the surface can write anything |
 
