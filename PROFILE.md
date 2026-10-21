@@ -1168,11 +1168,35 @@ database fix). `src/paw/web/requests.py` owns the request semantics.
 weakened); the layering is checked mechanically — `paw.core` imports no
 HTTP type and no `paw.web` module.
 
+### The read-only web surface (2026-10-21)
+
+**The transport is a minimal ASGI application with no framework.** The
+measured requirement is eight read-only routes with path parameters,
+query parsing, a bounded body and stable error codes — it needs no
+validation framework, no dependency injection, no OpenAPI document and
+no ORM. The *server* is the only dependency and it is an **optional**
+extra, so the core install keeps zero web dependencies. The surface is
+proved by driving the ASGI callable directly: no server, no socket, no
+test client, no network.
+
+`src/paw/web/routes.py` is a fixed table of eight `GET` routes under
+`/api/v1` — capabilities, health, sessions, a session, its messages, a
+task, its events, an inspect view. There is **no mutating route**, so a
+mutation has nothing to reach; the write admission stays process-wide
+and F02 stays open.
+`src/paw/application/web_projection.py` owns the substance: a clamped
+limit, a redacted credential, a typed refusal for an unknown id, and a
+closed allowlist of inspect kinds. Every response carries the CSP,
+nosniff, DENY, no-referrer and no-store.
+
+15 contract tests, fail-positive proven (5/15 fail with the boundary
+skipped or the headers dropped).
+
 ### Still open (tracked)
 
-the HTTP transport, the packaged assets and their CSP, and the API
-surface shape (the next packet — read-only surface first, mutations off
-until F02 is settled) · the gitignored E1-27 measurement report.
+the packaged static assets and their CSP, the mutation routes and the
+browser shell (the next packet) · the gitignored E1-27 measurement
+report.
 
 ---
 
@@ -1193,5 +1217,6 @@ until F02 is settled) · the gitignored E1-27 measurement report.
 | **Proofs** | ✅ REAL | The workflow is verified against a real `pytest` suite; the e2e harness has a reviewed Plan and a declared verification; the ledger records provider-issued usage receipts; the shell boundary is a checked invariant. |
 | **Cost units** | ✅ RECONCILED | Weights and role ceilings are both in USD; a declared estimate is possible again. 8 contract tests, fail-positive proven. |
 | **B-23..B-26** | ✅ DELIVERED | The local web decision (an ADR) and a transport-agnostic safety boundary: loopback, exact Host/Origin, CSRF, bounds, no credential in query, process-wide write admission; the request key reuses the durable operation identity. 58 contract tests, fail-positive proven. |
-| **Next** | choose the HTTP transport | then the read-only surface; mutations wait for F02 |
+| **B-27** | ✅ DELIVERED | A minimal ASGI transport with no framework and a fixed eight-route read-only surface; the projections own the bounding and the redaction; proved without a server. 15 contract tests, fail-positive proven. |
+| **Next** | the packaged assets and the browser shell | then the mutation routes, which wait for F02 |
 
