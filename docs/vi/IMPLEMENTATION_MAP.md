@@ -672,6 +672,47 @@ transaction, và connection phải được đóng tường minh. Không làm v�
 có thể treo lúc thoát trong khi driver rollback. Cả CLI lẫn web adapter đều
 đóng khi shutdown; một script chạy PAW trong process của nó phải làm tương tự.
 
+### F02, nửa cuối: một lần ghi sống lâu hơn transaction của nó — 2026-10-21, STANDARD / READY
+
+**"Độc lập" nghĩa là gì dưới SQLite.** Chỉ một writer, và chủ sở hữu một
+transaction giữ write lock trong lúc nó await writer. Nên cả một **transaction
+độc lập** bên trong transaction khác không phải là vấn đề cấu hình — nó là bất
+khả thi: writer không thể lấy lock, cũng không thể commit. Nhưng một
+*statement* thì có thể trì hoãn: nó được áp dụng trên connection riêng sau khi
+chủ sở hữu đã nhả lock, và được commit độc lập với kết quả của chủ sở hữu.
+
+**Vì vậy hợp đồng không phải là "lần ghi lồng trở thành độc lập"** — làm vậy sẽ
+phá tính nguyên tử của caller và để lại row mồ côi. Nó là:
+
+* `write()` **thuộc về** unit of work bao quanh nó. Một lần ghi tiện lợi bị xóa
+  cùng transaction của nó, vì đó là nghĩa của một rollback, và bên rollback là
+  bên sở hữu kết quả, mà caller của chính nó có quan sát thấy.
+* `write_independent()` là dạng **tường minh**: lần ghi phải sống lâu hơn
+  transaction đã queue nó — một audit row, một receipt, bản ghi rằng sự cố đã
+  xảy ra. Nó được áp dụng trên connection riêng khi transaction bao quanh kết
+  thúc, và được commit độc lập.
+
+**Lỗi được báo cho đúng bên.** Writer đã trả về rồi — nó không thể biết kết
+quả, vì lần ghi được áp dụng sau khi nó trả về. Nên lỗi khi áp dụng được raise
+**bởi transaction bao quanh**, khi nó kết thúc. Bên sở hữu transaction là bên
+biết được.
+
+**Bằng chứng.** `tests/test_f02_deferred_write_contract.py` (7 test): một lần ghi
+độc lập sống sót rollback của transaction đã queue nó; một lần ghi tiện lợi bị
+xóa cùng transaction nó thuộc về; một lần ghi độc lập cũng sống sót một lần
+commit, vì nó độc lập với *kết quả*; ngoài transaction nó là một lần ghi bền vững
+thông thường và báo row count thật; bên trong thì count chưa biết nên trả về 0;
+lỗi khi áp dụng được raise bởi transaction sở hữu; và lần ghi trì hoãn được áp
+dụng trên một connection riêng, nên kết quả của chủ sở hữu không với tới nó.
+
+*Chứng minh fail-positive.* Bỏ phần trì hoãn làm fail 2/7 — lần ghi độc lập bị
+xóa cùng transaction, và row count bị báo như thể đã áp dụng.
+
+**F02 nay đã đóng trọn cả ba phần**: scope của transaction là của từng task
+và depth là của từng transaction; mô hình đa process tường minh (busy timeout có
+trần, và mở một database đã đúng phiên bản không lấy write lock); và một lần ghi
+phải sống lâu hơn transaction của nó nay có một hình thức thực sự chạy được.
+
 ### Bộ đếm operation của checkpoint (code)
 
 `TaskCheckpoint` giờ mang `operations_completed`, lưu trong cột mới

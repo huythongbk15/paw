@@ -25,12 +25,12 @@ order, preserving unfinished E1 ranking work and without enabling training:
 | Feature parity | B-27..B-33 | Sessions/chat, approvals, project/context, decision/DAG, inspect, memory/skills, model/experimental views through shared services. |
 | Product candidate | B-34..B-36 | Install/upgrade/backup/restore and documentation; browser/CLI parity; one clean-revision D3 + explicit release verdict. |
 
-Next safe action: **the write-queue half of F02** - a write made by a
-coroutine awaited inside another coroutine's transaction is a nested write, and
-the owner's rollback discards it. Making it independently committed needs a
-write queue on the storage owner. Then the **mutation routes** and the shell's
-mutating affordances, which stay off until that question is settled - and it
-is the question that is next, not the routes.
+Next safe action: the **mutation routes** and the shell's mutating
+affordances. The storage concurrency question is settled: F02 is closed in all
+three parts - the transaction scope is per task, the cross-process model is
+explicit and bounded, and a write that must outlive its transaction has a
+form that works (`write_independent`). The mutations are the last thing
+before the surface can write anything.
 
 What was delivered on 2026-10-20 and 2026-10-21, with the evidence in the
 implementation map (B-20 record):

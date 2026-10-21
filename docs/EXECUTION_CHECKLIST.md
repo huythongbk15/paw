@@ -191,16 +191,19 @@
   — RESOLVED. `tests/test_f02_cross_process_contract.py` 5 passed, using real
   subprocesses; fail-positive proven (removing the explicit timeout fails
   `test_the_bound_is_explicit` with `assert 5000 == 1234`); ruff check clean.
-- [ ] F02, the open half: a write made by a coroutine **awaited inside**
-  another coroutine's transaction is a nested write, and the owner's
-  rollback discards it. Making it independently committed needs a second
-  connection, and SQLite allows one writer at a time, so the owner's write
-  lock would have to be released first - which it cannot do while it is
-  awaiting the writer. The party that rolls back owns the unit of work and
-  its caller observes the rollback, so nothing is lost unobserved; turning
-  it into a deferred, independently committed write is a larger change (a
-  write queue on the storage owner).
-  — OPEN. Recorded in the implementation map.
+- [x] F02, the last half: a write that must outlive its transaction.
+  `write_independent()` is the explicit form - the write is applied on its
+  own connection once the enclosing transaction has released the write lock,
+  and committed independently of its outcome. A *convenience* write still
+  joins the enclosing unit of work, so the caller's atomicity is intact.
+  A whole independent transaction inside another one is impossible under
+  SQLite's one-writer rule, and that is why the form is a statement and
+  not a transaction.
+  — RESOLVED. `tests/test_f02_deferred_write_contract.py` 7 passed,
+  fail-positive proven (removing the deferral fails 2 of the 7); a failure
+  to apply is raised by the transaction that queued it, so the party that
+  owns the transaction is the one that learns; ruff check clean.
+  **F02 is now closed in all three parts.**
 - [x] B-19/F04: provider discovery is an explicit, Policy-admitted operation.
   `ModelRouter.route()` is cache-only; `discover_providers()` is the explicit
   operation; the runtime performs it only after Policy admits

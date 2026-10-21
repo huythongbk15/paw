@@ -20,12 +20,12 @@ quyền hạ gate. [Audit BETA/web](BETA_LIMITATIONS.md) ghi findings/parity/cas
 | Parity | B-27..B-33 | Session/approval/project/decision/DAG/inspect/memory/skills/models/experimental qua service chung. |
 | Release candidate | B-34..B-36 | Install/upgrade/backup/restore/docs/parity; D3 clean và verdict rõ. |
 
-Việc an toàn tiếp theo: **nửa còn mở của F02** — một lần ghi do coroutine
-được await bên trong transaction của coroutine khác là lần ghi lồng, và rollback
-của chủ sở hữu sẽ xóa nó. Muốn nó commit độc lập thì cần một write queue trên
-storage owner. Sau đó mới tới **các route mutation** và affordance ghi của shell,
-vốn tắt cho tới khi câu hỏi đó được giải quyết — và chính câu hỏi đó là thứ
-tiếp theo, không phải các route.
+Việc an toàn tiếp theo: **các route mutation** và affordance ghi của shell.
+Câu hỏi concurrency của lưu trữ đã được giải quyết: F02 đã đóng trọn cả ba
+phần — scope của transaction là của từng task, mô hình đa process tường minh và
+có trần, và một lần ghi phải sống lâu hơn transaction của nó nay có một hình
+thức chạy được (`write_independent`). Mutation là thứ cuối trước khi bề mặt có
+thể ghi bất cứ thứ gì.
 
 Những gì đã giao ngày 2026-10-20 và 2026-10-21, kèm bằng chứng trong
 implementation map (record B-20):

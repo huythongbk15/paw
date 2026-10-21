@@ -737,6 +737,53 @@ that, the process can hang on exit while the driver rolls back. The CLI and
 the web adapter both close on shutdown; a script that runs PAW in-process has
 to do the same.
 
+### F02, the last half: a write that outlives its transaction — 2026-10-21, STANDARD / READY
+
+**What "independent" can mean under SQLite.** There is one writer, and the
+owner of a transaction holds the write lock while it is awaiting the writer.
+So a whole **independent transaction** inside another one is not a
+configuration problem - it is impossible: the writer could neither take the
+lock nor commit. A **statement**, though, can be deferred: it is applied on
+its own connection once the owner has released the lock, and it is committed
+independently of the owner's outcome.
+
+**The contract is therefore not "a nested write becomes independent"** - that
+would break the caller's atomicity and leave orphan rows. It is:
+
+* `write()` **joins** the enclosing unit of work. A convenience write is
+  discarded with the transaction it belongs to, because that is what a
+  rollback means, and the party that rolled back owns the outcome and its
+  own caller observes it.
+* `write_independent()` is the **explicit** form: the write must outlive
+  the transaction that queued it - an audit row, a receipt, the record
+  that the attempt happened at all. It is applied on its own connection
+  when the enclosing transaction ends, and it is committed independently.
+
+**The failure is reported to the right party.** The writer has already
+returned - it cannot know the outcome, because the write is applied after
+it returns. So a failure to apply is raised **by the enclosing
+transaction**, when it ends. The party that owns the transaction is the
+one that learns about it.
+
+**Evidence.** `tests/test_f02_deferred_write_contract.py` (7 tests): an
+independent write survives the rollback of the transaction that queued it; a
+convenience write is discarded with the transaction it joined; an
+independent write survives a commit too, because it is independent of the
+*outcome*; outside a transaction it is an ordinary durable write and
+reports its real row count; inside one the count is not known yet, so the
+return value is 0; a failure to apply is raised by the owning transaction;
+and the deferred write is applied on a separate connection, so the owner's
+outcome cannot reach it.
+
+*Fail-positive proven.* Removing the deferral fails 2 of the 7 - the
+independent write is discarded with the transaction, and the row count is
+reported as if it had been applied.
+
+**F02 is now closed in all three parts**: the transaction scope is per task
+and its depth per transaction; the cross-process model is explicit (a
+bounded busy timeout, and opening an up-to-date database takes no write
+lock); and a write that must outlive its transaction has a form that works.
+
 ### Checkpoint operation counter (code)
 
 `TaskCheckpoint` now carries `operations_completed`, persisted in a new

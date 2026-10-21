@@ -185,15 +185,17 @@
   — RESOLVED. `tests/test_f02_cross_process_contract.py` 5 passed, dùng subprocess
   thật; có chứng minh fail-positive (bỏ timeout tường minh làm fail
   `test_the_bound_is_explicit` với `assert 5000 == 1234`); ruff check clean.
-- [ ] F02, nửa còn mở: một lần ghi do coroutine **được await bên trong**
-  transaction của coroutine khác là lần ghi lồng, và rollback của chủ sở hữu sẽ
-  xóa nó. Muốn nó commit độc lập thì cần connection thứ hai, mà SQLite chỉ cho
-  một writer, nên write lock đang mở của chủ sở hữu phải được nhả trước — điều
-  mà nó không thể làm khi vẫn đang await writer. Bên rollback là bên sở hữu unit
-  of work và caller của chính nó quan sát thấy rollback, nên không có gì mất đi
-  mà không ai thấy được; biến nó thành lần ghi trì hoãn, commit độc lập, là một
-  thay đổi lớn hơn (một write queue trên storage owner).
-  — OPEN. Đã ghi trong implementation map.
+- [x] F02, nửa cuối: một lần ghi phải sống lâu hơn transaction của nó.
+  `write_independent()` là dạng tường minh — lần ghi được áp dụng trên connection
+  riêng sau khi transaction bao quanh đã nhả write lock, và commit độc lập với kết
+  quả của nó. Một lần ghi *tiện lợi* vẫn thuộc về unit of work bao quanh, nên
+  tính nguyên tử của caller được giữ. Cả một transaction độc lập bên trong
+  transaction khác là bất khả thi dưới quy tắc một writer của SQLite, và đó là
+  lý do hình thức này là một statement chứ không phải một transaction.
+  — RESOLVED. `tests/test_f02_deferred_write_contract.py` 7 passed, có chứng minh
+  fail-positive (bỏ phần trì hoãn làm fail 2/7); lỗi khi áp dụng được raise bởi
+  transaction đã queue nó, nên bên sở hữu transaction là bên biết được; ruff
+  check clean. **F02 nay đã đóng trọn cả ba phần.**
 - [x] B-19/F04: provider discovery là thao tác tường minh, do Policy cho phép.
   `ModelRouter.route()` chỉ dùng cache; `discover_providers()` là thao tác tường
   minh; runtime chỉ thực hiện sau khi Policy cho phép `Capability.NETWORK_HTTP`;
