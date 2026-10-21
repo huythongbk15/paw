@@ -648,6 +648,52 @@ of the tree.
 affordances. The shell says so in its own text: the surface is read-only
 until the storage concurrency question (F02) is settled.
 
+### F02: a transaction belongs to a task, and its depth is its own — 2026-10-21, STANDARD / READY
+
+**The defect.** `Database.transaction` used one connection and a
+**process-wide** `_transaction_depth`, so a transaction's nesting was a
+global flag rather than a property of the transaction. The audit's proof:
+*B returns success; A rolls back; B's row is absent* — an acknowledged
+write discarded by somebody else's rollback.
+
+**The fix, in two parts.**
+
+* The open transaction's **scope** is a context variable. It is inherited
+  by a coroutine awaited from inside the transaction, and it is *not*
+  inherited by another task. A task's transaction is therefore
+  structurally invisible to another task, and a rollback cannot reach
+  across a task boundary.
+* The **depth** lives on that scope, so it counts the nesting of *this*
+  transaction rather than of the process. The shared counter is gone.
+
+The common path is unchanged: a convenience write inside an open
+transaction still joins that unit of work, so the caller's atomicity is
+intact, and the ambient lock still serialises the writes.
+
+**Evidence.** `tests/test_f02_transaction_ownership_contract.py` (9 tests):
+a transaction in one task is invisible to another; an awaited coroutine
+inherits the scope; the depth is per transaction; there is no process-wide
+depth; an independent write in another task **survives** the owner's
+rollback; a helper's write joins the caller's unit of work and the
+caller's rollback discards it; cancellation rolls back and releases the
+scope; and close/reopen preserve the acknowledged rows.
+
+*Fail-positive proven.* Making the scope a global flag (the shared-flag
+behaviour) fails `test_b_survives_a_rollback` with "B's acknowledged write
+was discarded".
+
+**The residual, stated rather than papered over.** A write made by a
+coroutine **awaited inside** another coroutine's transaction is a *nested*
+write: it belongs to that unit of work, and the owner's rollback discards
+it. Making it independent would need a second connection, and SQLite
+allows one writer at a time — the owner's open write lock would have to be
+released first, which the owner cannot do while it is awaiting the
+writer. The party that rolls back is the party that owns the unit of
+work, and its own caller observes the rollback, so nothing is lost
+without anybody being able to see it. Turning the nested write into a
+deferred, independently committed write is a larger change (a write queue
+on the storage owner) and is recorded as the open half of F02.
+
 ### Checkpoint operation counter (code)
 
 `TaskCheckpoint` now carries `operations_completed`, persisted in a new

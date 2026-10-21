@@ -172,6 +172,26 @@
   states this in its own text: the surface is read-only until the storage
   concurrency question (F02) is settled.
   — OPEN. The next packet.
+- [x] F02: a transaction belongs to a task, and its depth is its own. The
+  open transaction's scope is a context variable - inherited by an awaited
+  coroutine, invisible to another task - and the nesting depth lives on
+  that scope, so the process-wide counter is gone. An independent write in
+  another task now survives the owner's rollback.
+  — RESOLVED. `tests/test_f02_transaction_ownership_contract.py` 9 passed,
+  fail-positive proven (a global scope fails `test_b_survives_a_rollback`);
+  the common path is unchanged (a convenience write still joins the
+  caller's unit of work, and the ambient lock still serialises the
+  writes); ruff check clean.
+- [ ] F02, the open half: a write made by a coroutine **awaited inside**
+  another coroutine's transaction is a nested write, and the owner's
+  rollback discards it. Making it independently committed needs a second
+  connection, and SQLite allows one writer at a time, so the owner's write
+  lock would have to be released first - which it cannot do while it is
+  awaiting the writer. The party that rolls back owns the unit of work and
+  its caller observes the rollback, so nothing is lost unobserved; turning
+  it into a deferred, independently committed write is a larger change (a
+  write queue on the storage owner).
+  — OPEN. Recorded in the implementation map.
 - [x] B-19/F04: provider discovery is an explicit, Policy-admitted operation.
   `ModelRouter.route()` is cache-only; `discover_providers()` is the explicit
   operation; the runtime performs it only after Policy admits

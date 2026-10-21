@@ -166,6 +166,25 @@
 - [ ] Các route mutation và affordance ghi của shell. Shell tự nói điều đó: bề mặt
   là chỉ đọc cho tới khi câu hỏi lưu trữ đồng thời (F02) được giải quyết.
   — OPEN. Packet tiếp theo.
+- [x] F02: transaction thuộc về một task, và depth là của chính nó. Scope của
+  transaction đang mở là một context variable — được thừa kế bởi coroutine được
+  await, vô hình với task khác — và nesting depth nằm trên scope đó, nên bộ đếm
+  toàn process đã biến mất. Một lần ghi độc lập ở task khác nay sống sót
+  rollback của chủ sở hữu.
+  — RESOLVED. `tests/test_f02_transaction_ownership_contract.py` 9 passed, có
+  chứng minh fail-positive (một scope toàn cục làm fail
+  `test_b_survives_a_rollback`); đường đi thông thường không đổi (một lần ghi
+  tiện lợi vẫn thuộc unit of work của caller, và ambient lock vẫn tuần tự hóa
+  các lần ghi); ruff check clean.
+- [ ] F02, nửa còn mở: một lần ghi do coroutine **được await bên trong**
+  transaction của coroutine khác là lần ghi lồng, và rollback của chủ sở hữu sẽ
+  xóa nó. Muốn nó commit độc lập thì cần connection thứ hai, mà SQLite chỉ cho
+  một writer, nên write lock đang mở của chủ sở hữu phải được nhả trước — điều
+  mà nó không thể làm khi vẫn đang await writer. Bên rollback là bên sở hữu unit
+  of work và caller của chính nó quan sát thấy rollback, nên không có gì mất đi
+  mà không ai thấy được; biến nó thành lần ghi trì hoãn, commit độc lập, là một
+  thay đổi lớn hơn (một write queue trên storage owner).
+  — OPEN. Đã ghi trong implementation map.
 - [x] B-19/F04: provider discovery là thao tác tường minh, do Policy cho phép.
   `ModelRouter.route()` chỉ dùng cache; `discover_providers()` là thao tác tường
   minh; runtime chỉ thực hiện sau khi Policy cho phép `Capability.NETWORK_HTTP`;

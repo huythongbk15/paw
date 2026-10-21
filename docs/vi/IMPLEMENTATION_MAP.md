@@ -589,6 +589,49 @@ fail 2/22 — null byte và symlink trỏ ra ngoài.
 điều đó: bề mặt là chỉ đọc cho tới khi câu hỏi lưu trữ đồng thời (F02) được
 giải quyết.
 
+### F02: transaction thuộc về một task, và depth là của chính nó — 2026-10-21, STANDARD / READY
+
+**Lỗi.** `Database.transaction` dùng một connection và một `_transaction_depth`
+**toàn process**, nên việc lồng nhau của một transaction là một cờ toàn cục chứ
+không phải thuộc tính của transaction. Bằng chứng của audit: *B trả về
+success; A rollback; row của B biến mất* — một lần ghi đã được xác nhận bị
+xóa bởi rollback của người khác.
+
+**Sửa, gồm hai phần.**
+
+* **Scope** của transaction đang mở là một context variable. Nó được thừa kế bởi
+  một coroutine được await từ bên trong transaction, và **không** được thừa kế
+  bởi task khác. Nên transaction của một task về mặt kỹ thuật là vô hình với
+  task khác, và rollback không thể với tới qua ranh giới task.
+* **Depth** nằm trên scope đó, nên nó đếm việc lồng của *transaction này* chứ
+  không phải của cả process. Bộ đếm dùng chung đã biến mất.
+
+Đường đi thông thường không đổi: một lần ghi tiện lợi bên trong transaction
+đang mở vẫn thuộc về unit of work đó, nên tính nguyên tử của caller được giữ,
+và ambient lock vẫn tuần tự hóa các lần ghi.
+
+**Bằng chứng.** `tests/test_f02_transaction_ownership_contract.py` (9 test):
+transaction của một task vô hình với task khác; một coroutine được await thừa
+kế scope; depth là của từng transaction; không còn depth toàn process; một lần
+ghi độc lập ở task khác **sống sót** rollback của chủ sở hữu; lần ghi của
+helper thuộc về unit of work của caller và bị rollback của caller xóa; hủy thì
+rollback và giải phóng scope; đóng/mở lại giữ các row đã được xác nhận.
+
+*Chứng minh fail-positive.* Biến scope thành một cờ toàn cục (hành vi cờ dùng
+chung) làm fail `test_b_survives_a_rollback` với "B's acknowledged write was
+discarded".
+
+**Phần còn lại, nói thẳng thay vì che đi.** Một lần ghi do một coroutine
+**được await bên trong** transaction của coroutine khác là một lần ghi *lồng*:
+nó thuộc về unit of work đó, và rollback của chủ sở hữu sẽ xóa nó. Muốn nó
+độc lập thì cần một connection thứ hai, mà SQLite chỉ cho một writer — write
+lock đang mở của chủ sở hữu phải được nhả trước, điều mà chủ sở hữu không
+thể làm khi vẫn đang await writer. Bên rollback là bên sở hữu unit of work, và
+caller của chính nó quan sát thấy rollback, nên không có gì mất đi mà không ai
+thấy được. Biến lần ghi lồng thành lần ghi trì hoãn, commit độc lập, là một
+thay đổi lớn hơn (một write queue trên storage owner) và được ghi lại là nửa
+còn mở của F02.
+
 ### Bộ đếm operation của checkpoint (code)
 
 `TaskCheckpoint` giờ mang `operations_completed`, lưu trong cột mới
