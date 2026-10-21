@@ -59,10 +59,15 @@ from paw.core.autonomy import AutonomyBudget, AutonomyController  # noqa: E402
 from paw.core.context import ContextBudget  # noqa: E402
 from paw.core.context_compiler import ContextCompiler  # noqa: E402
 from paw.core.executor import CapabilityRouter, ExecutorRegistry  # noqa: E402
-from paw.core.ledger import TaskLedger  # noqa: E402
+from paw.core.ledger import TaskLedger, log_verification_recorded  # noqa: E402
 from paw.core.model_executor import ModelExecutor  # noqa: E402
 from paw.core.model_router import ModelRouter, ProviderRegistry  # noqa: E402
-from paw.core.models import Capability, ProposedAction, ResourceUsage  # noqa: E402
+from paw.core.models import (  # noqa: E402
+    Capability,
+    ProposedAction,
+    ResourceUsage,
+    VerificationRecord,
+)
 from paw.core.policy import PolicyGuard  # noqa: E402
 from paw.core.runtime import PawRuntime  # noqa: E402
 from paw.core.storage import db, set_db_path  # noqa: E402
@@ -216,17 +221,63 @@ async def ingest(corpus: pathlib.Path) -> int:
     return total
 
 
+CONSTRAINTS = {"workspace_only": True, "no_network": True}
+
+
+async def reviewed_plan(task_id: str, session_id: str, corpus: pathlib.Path) -> str:
+    """Record a decision, review it, and bind an implementation Plan to it.
+
+    A write is only admitted when a *reviewed* Plan says it may be. The
+    harness therefore has to produce the same evidence a real engineering
+    session would: a FINAL READY decision, a human review over that exact
+    snapshot, and an implementation Plan bound to it.
+    """
+    from paw.core.planner import Planner
+    from paw.core.reasoning_contracts import DecisionVersion
+    from paw.core.repo_scanner import RepoFilter
+    from paw.knowledge.checksum import compute_repo_revision
+
+    constraint_hash = hashlib.sha256(json.dumps(
+        CONSTRAINTS, sort_keys=True, separators=(",", ":"), allow_nan=False,
+    ).encode()).hexdigest()
+    parent = await db.record_decision(
+        "readiness", "ready", task_id=task_id, session_id=session_id,
+        project_revision=compute_repo_revision(corpus, RepoFilter.safe_default()),
+        constraint_fingerprint=constraint_hash,
+    )
+    draft = DecisionVersion("draft", parent, "draft", {"readiness": "ready"},
+                            "2026-10-20", "harness")
+    final = DecisionVersion("final", parent, "final", {"readiness": "ready"},
+                            "2026-10-20", "harness")
+    await db.advance_decision_version(draft, expected_version_id=None)
+    await db.advance_decision_version(final, expected_version_id="draft")
+    review = await ApprovalStore.request_decision_review(final.version_id)
+    await ApprovalStore.approve(review.id, "harness-human")
+    plan = await Planner(
+        workspace_root=corpus, hard_constraints=CONSTRAINTS,
+    ).plan(task_id, purpose="implementation", decision_version_id=final.version_id)
+    return plan.id
+
+
 async def paw_write(task_id: str, session_id: str, corpus: pathlib.Path,
                     rel: str, content: str, operation: str) -> dict:
-    """One write through the full gate: propose -> ASK -> approve -> execute."""
+    """One write through the full gate: propose -> ASK -> approve -> execute.
+
+    The write is admitted the way a real engineering write is: a reviewed
+    implementation Plan binds a decision to this project revision, and the
+    runtime revalidates that binding before the executor is allowed to
+    touch the workspace.
+    """
     executor_registry = ExecutorRegistry()
     executor_registry.register(LocalFilesystemExecutor(corpus))
     provider_registry = ProviderRegistry()
+    plan_id = await reviewed_plan(task_id, session_id, corpus)
     action = ProposedAction(
         goal=GOAL, capabilities=[Capability.FILESYSTEM_WRITE], context={},
         metadata={"filesystem": {"operation": "write", "path": rel,
                                  "content": content, "mode": "replace"},
-                  "preferred_executor": "local-filesystem", "model_required": False},
+                  "preferred_executor": "local-filesystem", "model_required": False,
+                  "plan_id": plan_id},
         operation_id=operation, idempotency_key=f"e2e:{operation}",
         estimated_cost=ResourceUsage(),
     )
@@ -238,8 +289,10 @@ async def paw_write(task_id: str, session_id: str, corpus: pathlib.Path,
         approval_store=ApprovalStore,
         model_router=ModelRouter(providers=provider_registry),
         model_executor=ModelExecutor(provider_registry=provider_registry),
+        project_root=str(corpus), hard_constraints=CONSTRAINTS,
         max_iterations=1, checkpoint_interval=1,
     )
+    action = runtime._scope_implementation(action)
 
     async def brain(_t, _g, _c, _l):
         return action
@@ -373,6 +426,29 @@ async def main() -> int:
     unwritten = [entry["path"] for entry in writes if not entry["written"]]
     report["paw_performed_all_writes"] = not unwritten
     report["unwritten_paths"] = unwritten
+
+    # The declared verification: the target repository's own test suite,
+    # run after the change. This is the artifact that says the work is
+    # right - the executor's observation only says the write happened.
+    verification = VerificationRecord(
+        operation_id="op-runtime-tokens",
+        method="target_test_suite",
+        passed=not report["oracle"]["new_failures"],
+        summary=(
+            "the target suite did not regress"
+            if not report["oracle"]["new_failures"]
+            else f"new failures: {report['oracle']['new_failures']}"
+        ),
+        evidence=(
+            f"baseline {baseline_failed} failed / {baseline_passed} passed; "
+            f"after {after_failed} failed / {after_passed} passed"
+        ),
+        command="pytest tests/ --ignore=tests/test_external.py --hypothesis-seed=12345",
+        declared_by="harness",
+    )
+    await log_verification_recorded(task.id, verification)
+    report["verification"] = verification.to_dict()
+
     verdict = "PASS"
     if unwritten:
         verdict = "FAIL"
@@ -381,7 +457,7 @@ async def main() -> int:
         verdict = "FAIL"
         log(f"VERDICT: FAIL - new test failures: {report['oracle']['new_failures']}")
     else:
-        log("VERDICT: PASS - PAW performed the change and the oracle did not regress")
+        log("VERDICT: PASS - PAW performed the change and the verification passed")
     report["verdict"] = verdict
 
     await db.close()
