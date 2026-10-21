@@ -1114,12 +1114,29 @@ to the exact version + hash + `SkillReplayEvidence`, and a rollback that
 finds a prior version and survives a reopen. 10 contract tests, fail-positive
 proven.
 
+### The proofs got real (2026-10-21)
+
+* **A real test harness in the verification port.** The demo now runs the
+  target project's own `pytest` suite as the declared verification: the
+  first pass fails, the human fixes the environment, the restart passes
+  without repeating the change. The harness lives in the *application*,
+  because PAW's runtime layers must never spawn a process — that charter
+  boundary is now a **mechanically checked invariant**
+  (`tests/test_no_shell_execution_in_runtime.py`), not prose.
+* **The runtime e2e harness is a real proof.** It records a decision,
+  reviews it, binds an implementation Plan to it, and declares a
+  verification (the target repository's own suite) bound to the operation.
+  The verdict needs both the writes performed by PAW *and* the
+  verification passed.
+* **Provider-issued usage receipts.** The ledger records what the
+  provider actually reported, not the estimate; a provider that issues no
+  receipt leaves the estimate in place. The Ollama adapter now issues one.
+
 ### Still open (tracked)
 
-plugging a real test harness into the verification port · supplying the
-skill replay evidence from the application · provider-issued usage receipts ·
-the gitignored E1-27 measurement report · the runtime e2e harness's
-reviewed Plan.
+reconciling the cost units (`total_cost()` and the role ceilings are in
+different units) · supplying the skill replay evidence from the
+application · the gitignored E1-27 measurement report · the web adapter.
 
 ---
 
@@ -1137,5 +1154,6 @@ reviewed Plan.
 | **Product release** | `PARTIAL` | Working tree clean, commits pushed, D3 green. No clean-release verdict claimed. |
 | **B-20** | ✅ PROVED | The engineering workflow: research → choose → change → declared verification, with a failure and a restart. 8 contract tests, fail-positive proven, runnable demo. |
 | **Skill versioning** | ✅ FIXED | Version history, one row per version, review/approval bound to version + content hash + replay, rollback finds a prior version. 10 contract tests, fail-positive proven. |
-| **Next** | plug a real test harness into the verification port | so the chain is proved against a real project's own suite |
+| **Proofs** | ✅ REAL | The workflow is verified against a real `pytest` suite; the e2e harness has a reviewed Plan and a declared verification; the ledger records provider-issued usage receipts; the shell boundary is a checked invariant. |
+| **Next** | reconcile the cost units, then supply the skill replay evidence | then the web adapter on a workflow that is already proved |
 
