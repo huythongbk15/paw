@@ -7,11 +7,13 @@ Uses aiosqlite for async operations. Schema is defined in SQL for clarity and co
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import contextvars
 import json
 import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -586,6 +588,10 @@ class _TxScope:
 
     conn: aiosqlite.Connection
     depth: int = 1
+    #: Statements that must survive this transaction's rollback. They are
+    #: applied on their own connection once this transaction has released
+    #: the write lock.
+    deferred: list[tuple[str, tuple]] = dataclass_field(default_factory=list)
 
 
 class Database:
@@ -683,6 +689,45 @@ class Database:
             await self._conn.commit()
         self._initialized = True
         logger.info("database_initialized", schema_version=version)
+
+    async def _apply_deferred(self, scope: _TxScope) -> None:
+        """Apply the statements that must survive this transaction.
+
+        They are applied on their own connection and committed
+        independently: the transaction that queued them has already
+        committed or rolled back, and its outcome does not reach them.
+        """
+        if not scope.deferred:
+            return
+        pending = list(scope.deferred)
+        scope.deferred.clear()
+        conn = await self._open_independent_connection()
+        try:
+            await conn.execute("BEGIN")
+            for sql, params in pending:
+                await conn.execute(sql, params)
+            await conn.commit()
+        except BaseException:
+            with contextlib.suppress(Exception):
+                await conn.rollback()
+            raise
+        finally:
+            with contextlib.suppress(Exception):
+                await conn.close()
+
+    async def _open_independent_connection(self) -> aiosqlite.Connection:
+        """A separate connection for a write that must not join a transaction.
+
+        It does not take the ambient lock: the owner of the transaction
+        holds it, and taking it would make the two wait for each other.
+        """
+        conn = await aiosqlite.connect(self.db_path)
+        conn.row_factory = aiosqlite.Row
+        await conn.execute(f"PRAGMA busy_timeout = {self.busy_timeout_ms}")
+        await conn.execute("PRAGMA foreign_keys = ON")
+        await conn.execute("PRAGMA journal_mode = WAL")
+        await conn.execute("PRAGMA synchronous = NORMAL")
+        return conn
 
     async def _schema_version(self) -> int:
         """The database's schema version, without writing anything."""
@@ -888,6 +933,9 @@ class Database:
                 raise
             finally:
                 self._tx_scope.reset(token)
+                # The lock is released by now, so the deferred statements
+                # can be applied and committed on their own.
+                await self._apply_deferred(state)
 
     # --- Explicit Storage Mutation Contract (Part A6) ---
     # Read operations - no mutation, safe to call without transaction
@@ -927,6 +975,36 @@ class Database:
         async with self.transaction():
             cursor = await self._conn.execute(sql, params)
             return cursor.rowcount
+
+    async def write_independent(self, sql: str, params: tuple = ()) -> int:
+        """A write that must **survive** the enclosing transaction's rollback.
+
+        This is the one form of independence SQLite allows. A whole
+        independent transaction cannot be opened inside another one: the
+        owner holds the database's single write lock while it is awaiting
+        the writer, so the writer could neither take the lock nor commit.
+        A *statement*, though, can be deferred: it is applied on its own
+        connection once the owner has released the lock, and it is
+        committed independently of the owner's outcome.
+
+        Use it for the writes that must not disappear with the work they
+        accompany - an audit row, a receipt, a record that the attempt
+        happened at all. Use ``write()`` for everything else: it joins the
+        enclosing unit of work, so the caller's atomicity is intact.
+
+        Outside a transaction it is an ordinary durable write. Inside one it
+        is applied when that transaction ends, so the row count is not
+        known at call time and the return value is 0. A failure to apply
+        it is raised by the enclosing transaction when it ends, so the
+        party that owns the transaction is the one that learns about it.
+        """
+        scope = self._tx_scope.get()
+        if scope is None:
+            async with self.transaction() as conn:
+                cursor = await conn.execute(sql, params)
+                return cursor.rowcount
+        scope.deferred.append((sql, params))
+        return 0
 
     async def write_many(self, sql: str, params_list: list[tuple]) -> int:
         """Execute multiple INSERT/UPDATE/DELETE statements.
