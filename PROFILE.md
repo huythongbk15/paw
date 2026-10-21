@@ -1212,10 +1212,30 @@ nothing.
 
 42 web contract tests, fail-positive proven.
 
+### F02: a transaction belongs to a task (2026-10-21)
+
+`Database.transaction` used one connection and a **process-wide**
+`_transaction_depth`, so a transaction's nesting was a global flag.
+The scope is now a context variable - inherited by an awaited
+coroutine, invisible to another task - and the depth lives on that
+scope, so the shared counter is gone and a rollback cannot reach
+across a task boundary. An independent write in another task now
+survives the owner's rollback.
+
+9 contract tests, fail-positive proven. The common path is unchanged:
+a convenience write still joins the caller's unit of work, and the
+ambient lock still serialises the writes.
+
+**Open half, stated plainly**: a write by a coroutine awaited *inside*
+another coroutine's transaction is a nested write, and the owner's
+rollback discards it. Making it independently committed needs a second
+connection, and SQLite allows one writer at a time — so it is recorded
+as a write-queue change on the storage owner, not claimed as done.
+
 ### Still open (tracked)
 
-the mutation routes (which wait on the storage concurrency question,
-F02) · the gitignored E1-27 measurement report.
+the write-queue half of F02 · the mutation routes (which wait on the
+storage concurrency question) · the gitignored E1-27 measurement report.
 
 ---
 
@@ -1238,5 +1258,6 @@ F02) · the gitignored E1-27 measurement report.
 | **B-23..B-26** | ✅ DELIVERED | The local web decision (an ADR) and a transport-agnostic safety boundary: loopback, exact Host/Origin, CSRF, bounds, no credential in query, process-wide write admission; the request key reuses the durable operation identity. 58 contract tests, fail-positive proven. |
 | **B-27** | ✅ DELIVERED | A minimal ASGI transport with no framework and a fixed eight-route read-only surface; the projections own the bounding and the redaction; proved without a server. 15 contract tests, fail-positive proven. |
 | **B-28** | ✅ DELIVERED | The packaged shell and its asset policy: traversal, absolute path, null byte and an escaping symlink are all refused; the shell is UTF-8 Vietnamese, keyboard operable, contrast-checked, responsive, and holds no credential. 42 web contract tests, fail-positive proven. |
-| **Next** | settle the storage concurrency question (F02) | then the mutation routes — not the other way round |
+| **F02** | ✅ CLOSED (one half open) | The transaction scope is per task and the depth is per transaction; an independent write in another task survives the owner's rollback. 9 contract tests, fail-positive proven. The nested-write half needs a write queue. |
+| **Next** | the write-queue half of F02 | then the mutation routes — not the other way round |
 
