@@ -170,6 +170,32 @@ flowchart TB
 - Crash sau effect: reconcile prepared intent; ambiguous thì block, không rerun.
 - Required DAG node fail: block dependents và không báo graph success.
 
+## Ranh giới local web — đã quyết định và có nền tảng (2026-10-21)
+
+Packet B-23..B-26 được giao dưới dạng một quyết định và một nền tảng an toàn,
+không phải HTTP handler. `docs/adr/0001-local-web-adapter.md` là quyết định;
+`src/paw/web/security.py` và `src/paw/web/requests.py` là ranh giới và ngữ nghĩa
+request. Chúng transport-agnostic, nên các control chứng minh được mà không cần
+dựng server, và HTTP framework vẫn là một quyết định còn mở.
+
+Ranh giới nay enforce điều gì, và chứng minh ở đâu:
+
+| Control | Ở đâu | Bằng chứng |
+|---|---|---|
+| chỉ bind loopback | `LocalWebGuard.check_bind` | `test_local_web_security_contract.py` |
+| allowlist `Host` chính xác | `check_host` | same |
+| `Origin` chính xác, không wildcard CORS | `check_origin` | same |
+| CSRF token cục bộ cho mutation | `check_csrf` | same |
+| giới hạn body / history / stream | `check_body_size`, `check_history`, `check_stream_buffer` | same |
+| không mang credential trong query string | `check_query` | same |
+| write admission toàn process | `write_lock` | same |
+| request key tái dùng durable operation identity | `RequestKeyPolicy.operation_identity` | `test_local_web_request_contract.py` |
+| disconnect được kiểm tra, không phải hoàn thành hay huỷ | `ReconnectPolicy` | same |
+| core không import HTTP type và không import `paw.web` | layering | same |
+
+HTTP framework, static asset đóng gói và CSP, cùng hình dạng bề mặt API vẫn
+còn mở — chúng là packet tiếp theo, và hợp đồng bên dưới vẫn chi phối chúng.
+
 ## HTTP contract để spike — chưa có trong source
 
 Transport đề xuất ở `src/paw/web/`; service/projection ở application;

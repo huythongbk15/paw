@@ -20,9 +20,14 @@ quyền hạ gate. [Audit BETA/web](BETA_LIMITATIONS.md) ghi findings/parity/cas
 | Parity | B-27..B-33 | Session/approval/project/decision/DAG/inspect/memory/skills/models/experimental qua service chung. |
 | Release candidate | B-34..B-36 | Install/upgrade/backup/restore/docs/parity; D3 clean và verdict rõ. |
 
-Việc an toàn tiếp theo: web adapter, trên workflow đã được chứng minh — và
-chỉ như một presentation adapter trên các service sẵn có, với các control
-Host/Origin/CSRF/boundary mà hợp đồng B-23..B-26 nêu. **Ngày 2026-10-21 các đơn
+Việc an toàn tiếp theo: chọn HTTP transport và chính sách asset đóng gói theo
+yêu cầu đo được, rồi mở bề mặt **chỉ đọc** (`/capabilities`, `/health`, lịch
+sử session, trạng thái task và các projection inspect có giới hạn) trên các
+application service sẵn có. Ranh giới an toàn và ngữ nghĩa request đã có sẵn, nên
+packet này là transport, không phải phán đoán. **B-23..B-26 đã được giao ngày
+2026-10-21** dưới dạng `docs/adr/0001-local-web-adapter.md` cùng một ranh giới
+transport-agnostic — xem record B-20 trong implementation map. Mutation vẫn tắt
+cho tới khi câu hỏi concurrency (F02) được giải quyết. **Ngày 2026-10-21 các đơn
 vị chi phí đã được hoà giải** (trần theo role và `ResourceUsage.total_cost()` nay
 cùng là USD, nên khai báo estimate lại khả thi) **và seam replay của skill đã
 thành một khái niệm** (một E3 `ReplayResult` dùng làm approval evidence trực

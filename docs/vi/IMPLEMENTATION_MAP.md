@@ -461,6 +461,52 @@ fail-closed, và replay result sẵn có dùng được nguyên trạng.
 result dùng làm approval evidence trực tiếp, và một result kích hoạt ở case
 negative thì không activate được skill.
 
+### B-23..B-26: quyết định và nền tảng an toàn cho local web adapter — 2026-10-21, STANDARD / READY
+
+Web surface là một **presentation adapter** trên các application service sẵn có,
+và charter cấp phạm vi này với điều kiện: nó mở rộng bề mặt client, dependency
+và threat model, và không cấp quyền hosted access, tenancy, provider expansion,
+daemon, runtime thứ hai hay training.
+
+**Quyết định** nằm ở `docs/adr/0001-local-web-adapter.md` (một decision record
+có ngày, để bộ tài liệu canonical không mọc thêm mục "decisions" thứ hai trộn
+record với hiện trạng). Nó chốt năm điều:
+
+* adapter là một projection — không thêm step, không thêm gate, không thêm store;
+  `paw.core` không import HTTP type và không import module `paw.web`, và điều đó
+  được kiểm bằng cơ học;
+* ranh giới an toàn đến trước và **transport-agnostic**, nên chứng minh được mà
+  không cần dựng server, và HTTP framework vẫn là một quyết định còn mở;
+* request key **tái dùng durable operation identity** mà runtime đã ghi — không
+  có store dedup mới, và không có map in-memory nào dám claim restart safety mà nó
+  không có;
+* disconnect không phải hoàn thành cũng không phải huỷ;
+* không thêm runtime dependency, và **chưa viết HTTP handler** — thứ tự trong hợp
+  đồng nói rõ: unsafe execution endpoints chờ các gate trước.
+
+**Ranh giới an toàn** là `src/paw/web/security.py`: chỉ bind loopback, allowlist
+`Host` **chính xác**, `Origin` **chính xác** (wildcard CORS không thể biểu diễn),
+CSRF token cục bộ cho mutation so sánh bằng constant time, giới hạn buffer
+body/history/stream, không mang credential trong query string, và ghi tuần tự
+**toàn process** (session lock không phải là fix database). Mọi từ chối có mã ổn
+định và message an toàn.
+
+**Ngữ nghĩa request** là `src/paw/web/requests.py`: một request key sinh ra một
+operation identity ổn định, và reconnect thì *kiểm tra* durable task. Chỉ task
+đã failed mới retry được, và chỉ với cùng request key.
+
+**Bằng chứng.** `tests/test_local_web_security_contract.py` (36 test) và
+`tests/test_local_web_request_contract.py` (22 test).
+
+*Chứng minh fail-positive.* Tắt kiểm tra bind, hạ allowlist `Host` xuống thành
+so khớp hậu tố, tắt kiểm tra CSRF, biến disconnect thành hoàn thành, cho phép
+mọi thứ retry, và làm operation identity ngẫu nhiên — cộng lại làm fail 14/58.
+
+**Còn mở.** HTTP framework, static asset đóng gói và CSP của nó, và hình dạng bề
+mặt API — các packet tiếp theo, với hợp đồng trong `docs/BETA_LIMITATIONS.md`.
+Surface là local và single-user cho release này; triển khai shared hoặc hosted cần
+threat model và một quyết định khác.
+
 ### Bộ đếm operation của checkpoint (code)
 
 `TaskCheckpoint` giờ mang `operations_completed`, lưu trong cột mới

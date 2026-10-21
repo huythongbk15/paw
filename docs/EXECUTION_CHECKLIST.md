@@ -130,6 +130,23 @@
   not. `tests/test_cost_unit_reconciliation_contract.py` 8 passed, fail-positive
   proven (3/8 fail with the old units). The pinned arithmetic in
   `tests/test_e2_33_step_usage_receipt.py` was updated to name its unit.
+- [x] B-23..B-26: the local web adapter's decision and safety foundation.
+  The decision is a dated ADR; the boundary is transport-agnostic and
+  provable without a server: a loopback bind, an exact Host allowlist, an
+  exact Origin, a local CSRF token for mutations, bounded buffers, no
+  credential in a query string, and process-wide write admission. The
+  request key reuses the durable operation identity, and a disconnect is
+  inspected rather than treated as completion or cancellation.
+  — RESOLVED. `docs/adr/0001-local-web-adapter.md`;
+  `tests/test_local_web_security_contract.py` 36 passed and
+  `tests/test_local_web_request_contract.py` 22 passed, fail-positive
+  proven (14/58 fail with the controls weakened); `paw/web` ships in the
+  wheel; ruff check clean.
+- [ ] The HTTP framework, the packaged static assets and their CSP, and
+  the API surface shape are not chosen yet. The boundary is
+  transport-agnostic precisely so the choice can be made against a
+  measured requirement.
+  — OPEN. The next packet.
 - [x] B-19/F04: provider discovery is an explicit, Policy-admitted operation.
   `ModelRouter.route()` is cache-only; `discover_providers()` is the explicit
   operation; the runtime performs it only after Policy admits

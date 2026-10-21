@@ -25,9 +25,15 @@ order, preserving unfinished E1 ranking work and without enabling training:
 | Feature parity | B-27..B-33 | Sessions/chat, approvals, project/context, decision/DAG, inspect, memory/skills, model/experimental views through shared services. |
 | Product candidate | B-34..B-36 | Install/upgrade/backup/restore and documentation; browser/CLI parity; one clean-revision D3 + explicit release verdict. |
 
-Next safe action: the web adapter, on the workflow that is now proved - and
-only as a presentation adapter over the existing services, with the Host/Origin/
-CSRF/boundary controls the B-23..B-26 contract names. **On 2026-10-21 the cost
+Next safe action: choose the HTTP transport and the packaged asset policy
+against the measured requirement, then expose the **read-only** surface
+(`/capabilities`, `/health`, session history, task state and the bounded
+inspect projections) over the existing application services. The safety
+boundary and the request semantics are already in place, so this packet is
+transport, not judgement. **B-23..B-26 were delivered on 2026-10-21** as
+`docs/adr/0001-local-web-adapter.md` plus a transport-agnostic boundary - see
+the B-20 record in the implementation map. Mutations stay off until the
+concurrency question (F02) is settled. **On 2026-10-21 the cost
 units were reconciled** (the role ceilings and `ResourceUsage.total_cost()` are
 now both in US dollars, so a declared estimate is possible again) **and the skill
 replay seam was made one notion** (an E3 `ReplayResult` is directly usable as

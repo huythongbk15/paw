@@ -128,6 +128,21 @@
   8 passed, có chứng minh fail-positive (3/8 fail với đơn vị cũ). Phép tính
   được ghim trong `tests/test_e2_33_step_usage_receipt.py` được cập nhật để ghi
   rõ đơn vị.
+- [x] B-23..B-26: quyết định và nền tảng an toàn cho local web adapter.
+  Quyết định là một ADR có ngày; ranh giới transport-agnostic và chứng minh được
+  mà không cần server: chỉ bind loopback, allowlist `Host` chính xác, `Origin` chính
+  xác, CSRF token cục bộ cho mutation, buffer có giới hạn, không mang credential
+  trong query string, và write admission toàn process. Request key tái dùng durable
+  operation identity, còn disconnect được kiểm tra chứ không coi là hoàn thành
+  hay huỷ.
+  — RESOLVED. `docs/adr/0001-local-web-adapter.md`;
+  `tests/test_local_web_security_contract.py` 36 passed và
+  `tests/test_local_web_request_contract.py` 22 passed, có chứng minh fail-positive
+  (14/58 fail khi làm yếu các control); `paw/web` có trong wheel; ruff check clean.
+- [ ] HTTP framework, static asset đóng gói và CSP, và hình dạng bề mặt API chưa
+  được chọn. Ranh giới transport-agnostic chính là để lựa chọn đó dựa trên yêu
+  cầu đo được.
+  — OPEN. Packet tiếp theo.
 - [x] B-19/F04: provider discovery là thao tác tường minh, do Policy cho phép.
   `ModelRouter.route()` chỉ dùng cache; `discover_providers()` là thao tác tường
   minh; runtime chỉ thực hiện sau khi Policy cho phép `Capability.NETWORK_HTTP`;

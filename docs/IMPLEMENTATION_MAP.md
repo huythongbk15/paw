@@ -502,6 +502,60 @@ and the existing replay result is usable as-is.
 E3 replay result is directly usable as approval evidence, and a result
 that fired on the negative case cannot activate a skill.
 
+### B-23..B-26: the local web adapter's decision and safety foundation — 2026-10-21, STANDARD / READY
+
+The web surface is a **presentation adapter** over the existing
+application services, and the charter admits it as a scope expansion
+with conditions: it expands the client surface, the dependency and the
+threat model, and it does not authorize hosted access, tenancy, provider
+expansion, a daemon, a second runtime or training.
+
+**The decision** is `docs/adr/0001-local-web-adapter.md` (a dated
+decision record, so the canonical documents do not grow a second
+"decisions" section that mixes records with current state). It fixes
+five things:
+
+* the adapter is a projection - it adds no step, no gate and no store;
+  `paw.core` imports no HTTP type and no `paw.web` module, and that is
+  checked mechanically;
+* the safety boundary comes first and is **transport-agnostic**, so it
+  is provable without standing up a server and the HTTP framework stays
+  an open decision;
+* the request key **reuses the durable operation identity** the runtime
+  already records - no new dedup store, and no in-memory map claiming
+  restart safety it cannot have;
+* a disconnect is neither a completion nor a cancellation;
+* no new runtime dependency, and **no HTTP handler yet** - the contract's
+  order is explicit that unsafe execution endpoints wait for the prior
+  gates.
+
+**The safety boundary** is `src/paw/web/security.py`: a loopback bind
+only, an **exact** Host allowlist, an **exact** Origin (a wildcard CORS
+is not representable), a local CSRF token for mutations compared in
+constant time, bounded body/history/stream buffers, no credential in a
+query string, and writes serialised **process-wide** (a session lock is
+not a database fix). Every refusal has a stable code and a safe
+message.
+
+**The request semantics** are `src/paw/web/requests.py`: a request key
+derives a stable operation identity, and a reconnect *inspects* the
+durable task. Only a failed task may be retried, and only with the
+same request key.
+
+**Evidence.** `tests/test_local_web_security_contract.py` (36 tests) and
+`tests/test_local_web_request_contract.py` (22 tests).
+
+*Fail-positive proven.* Disabling the bind check, weakening the Host
+allowlist to a suffix match, disabling the CSRF check, making a
+disconnect count as completion, letting anything be retried, and making
+the operation identity random together fail 14 of the 58.
+
+**Still open.** The HTTP framework, the packaged static assets and their
+CSP, and the API surface shape - the next packets, with the contract
+in `docs/BETA_LIMITATIONS.md`. The surface is local and single-user for
+this release; a shared or hosted deployment needs a different threat
+model and a different decision.
+
 ### Checkpoint operation counter (code)
 
 `TaskCheckpoint` now carries `operations_completed`, persisted in a new

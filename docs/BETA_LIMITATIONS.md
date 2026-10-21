@@ -182,6 +182,34 @@ flowchart TB
 | Crash after effect / restart | Prepared intent reconciles via existing adapter; ambiguous effect is blocked, never blindly rerun. |
 | Failed required DAG node | Dependents blocked; graph cannot display successful completion. |
 
+### Local web boundary — decided and founded (2026-10-21)
+
+The B-23..B-26 packet is delivered as a decision and a safety
+foundation, not as HTTP handlers. `docs/adr/0001-local-web-adapter.md`
+is the decision; `src/paw/web/security.py` and
+`src/paw/web/requests.py` are the boundary and the request semantics.
+They are transport-agnostic, so the controls are provable without a
+server and the HTTP framework stays an open decision.
+
+What the boundary now enforces, and where it is proved:
+
+| Control | Where | Proof |
+|---|---|---|
+| loopback bind only | `LocalWebGuard.check_bind` | `test_local_web_security_contract.py` |
+| exact Host allowlist | `check_host` | same |
+| exact Origin, no wildcard CORS | `check_origin` | same |
+| local CSRF token for mutations | `check_csrf` | same |
+| bounded body / history / stream | `check_body_size`, `check_history`, `check_stream_buffer` | same |
+| no credential in a query string | `check_query` | same |
+| process-wide write admission | `write_lock` | same |
+| request key reuses the durable operation identity | `RequestKeyPolicy.operation_identity` | `test_local_web_request_contract.py` |
+| a disconnect is inspected, not completed or cancelled | `ReconnectPolicy` | same |
+| core imports no HTTP type and no `paw.web` | layering | same |
+
+The HTTP framework, the packaged static assets and their CSP, and the
+API surface shape remain open - they are the next packet, and the
+contract above still governs them.
+
 ### HTTP contract for the spike (target, not existing API)
 
 Transport lives in proposed `src/paw/web/`; application projection/command
