@@ -566,6 +566,17 @@ class CapabilityScore(BaseModel):
 
 # --- Phase 19: Runtime Loop Types ---
 
+# The cost weights, in US dollars. They are the single unit shared by
+# ``ResourceUsage.total_cost()`` and the per-role cost ceilings, so a
+# declared estimate and a ceiling can finally be compared.
+COST_PER_MODEL_CALL_USD = 0.001
+COST_PER_TOOL_CALL_USD = 0.0005
+COST_PER_TOKEN_USD = 0.000001
+COST_PER_MILLISECOND_USD = 0.0000001
+COST_PER_NETWORK_BYTE_USD = 0.000000001
+COST_PER_DESTRUCTIVE_OP_USD = 0.01
+
+
 class ResourceUsage(BaseModel):
     """Fine-grained resource usage for a single step/observation."""
     model_calls: int = 0
@@ -608,14 +619,35 @@ class ResourceUsage(BaseModel):
         return {**self.model_dump(), **self.to_receipt()}
 
     def total_cost(self) -> float:
-        """Weighted total for budget accounting."""
+        """The cost of this step, in **US dollars**.
+
+        The weights are dollars, and they are compared against the per-role
+        cost ceilings (``ROLE_CEILINGS[...].max_cost_usd``, which are
+        0.01-0.20 dollars). They used to be arbitrary relative units - a
+        model call counted as 1.0 and a thousand tokens as 1.0 - which is
+        a hundred to a thousand times over every ceiling, so any action
+        that *declared* an estimate was refused by the role ceiling
+        before the call was made. The unit is now one thing on both
+        sides of the comparison.
+
+        The weights are deliberately conservative for a local model and
+        roughly a good hosted model's price for tokens:
+
+        * a model call: one tenth of a cent;
+        * a tool call: half a tenth of a cent;
+        * a token: a millionth of a dollar;
+        * a millisecond of wall clock: a ten-millionth of a dollar;
+        * a network byte: a billionth of a dollar;
+        * a destructive operation: a cent, so it needs a bigger role
+          than a fast one.
+        """
         return (
-            self.model_calls * 1.0
-            + self.tool_calls * 0.5
-            + self.tokens * 0.001
-            + self.wall_time_ms * 0.0001
-            + self.network_bytes * 0.000001
-            + self.destructive_ops * 10.0
+            self.model_calls * COST_PER_MODEL_CALL_USD
+            + self.tool_calls * COST_PER_TOOL_CALL_USD
+            + self.tokens * COST_PER_TOKEN_USD
+            + self.wall_time_ms * COST_PER_MILLISECOND_USD
+            + self.network_bytes * COST_PER_NETWORK_BYTE_USD
+            + self.destructive_ops * COST_PER_DESTRUCTIVE_OP_USD
         )
 
     def __add__(self, other: ResourceUsage) -> ResourceUsage:

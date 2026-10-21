@@ -35,7 +35,11 @@ class TestInvariantReceipt:
         receipt = r.to_receipt()
         assert receipt["provider_calls"] == 2
         assert receipt["total_tokens"] == 100
-        assert receipt["total_cost_usd"] == 2.1  # 2*1.0 + 100*0.001
+        # The cost is in US dollars, and the weights are the ones the role
+        # ceilings are compared against. These used to be arbitrary relative
+        # units (2*1.0 + 100*0.001 = 2.1), which made every declared
+        # estimate exceed every per-role ceiling.
+        assert receipt["total_cost_usd"] == 2 * 0.001 + 100 * 0.000001
 
     def test_inv5_defaults_zero(self):
         r = ResourceUsage()
@@ -104,7 +108,7 @@ class TestMeasurableExport:
 
     def test_measure2_cost_formula(self):
         r = ResourceUsage(model_calls=10, tool_calls=5, tokens=1000)
-        expected = 10.0 * 1.0 + 5.0 * 0.5 + 1000.0 * 0.001
+        expected = 10 * 0.001 + 5 * 0.0005 + 1000 * 0.000001  # US dollars
         assert r.to_receipt()["total_cost_usd"] == expected
 
     def test_measure3_receipt_summable(self):
