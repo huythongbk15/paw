@@ -1192,11 +1192,30 @@ nosniff, DENY, no-referrer and no-store.
 15 contract tests, fail-positive proven (5/15 fail with the boundary
 skipped or the headers dropped).
 
+### The packaged shell (2026-10-21)
+
+The shell travels **inside the wheel**, so an installed PAW serves the
+same surface a source checkout does. That makes the asset directory a
+place where a path mistake would be a file disclosure, so the policy is
+explicit: a traversal, an absolute path, a null byte and a symlink out
+of the tree are all refused, only known file types are served, a
+directory is never listed.
+
+The shell itself is the three-region layout the contract names, with
+UTF-8 Vietnamese text, keyboard operability, a visible focus ring, a
+responsive narrow layout and the four distinct states. It renders every
+value as text, so a value from the API cannot become markup. And it
+holds **no credential** — the read-only surface needs no token, so the
+browser stores none: no `localStorage`, no cookie, no token in a query
+string. It reads durable state, so a reload or a reconnect loses
+nothing.
+
+42 web contract tests, fail-positive proven.
+
 ### Still open (tracked)
 
-the packaged static assets and their CSP, the mutation routes and the
-browser shell (the next packet) · the gitignored E1-27 measurement
-report.
+the mutation routes (which wait on the storage concurrency question,
+F02) · the gitignored E1-27 measurement report.
 
 ---
 
@@ -1218,5 +1237,6 @@ report.
 | **Cost units** | ✅ RECONCILED | Weights and role ceilings are both in USD; a declared estimate is possible again. 8 contract tests, fail-positive proven. |
 | **B-23..B-26** | ✅ DELIVERED | The local web decision (an ADR) and a transport-agnostic safety boundary: loopback, exact Host/Origin, CSRF, bounds, no credential in query, process-wide write admission; the request key reuses the durable operation identity. 58 contract tests, fail-positive proven. |
 | **B-27** | ✅ DELIVERED | A minimal ASGI transport with no framework and a fixed eight-route read-only surface; the projections own the bounding and the redaction; proved without a server. 15 contract tests, fail-positive proven. |
-| **Next** | the packaged assets and the browser shell | then the mutation routes, which wait for F02 |
+| **B-28** | ✅ DELIVERED | The packaged shell and its asset policy: traversal, absolute path, null byte and an escaping symlink are all refused; the shell is UTF-8 Vietnamese, keyboard operable, contrast-checked, responsive, and holds no credential. 42 web contract tests, fail-positive proven. |
+| **Next** | settle the storage concurrency question (F02) | then the mutation routes — not the other way round |
 
