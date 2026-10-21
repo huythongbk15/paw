@@ -240,7 +240,9 @@ async def run_demo(work_dir: str | Path | None = None) -> dict:
         target="module.py",
         content=REPLACEMENT,
         decision_version_id=final.version_id,
-        method="file_content",
+        # The declared verification names the check that was actually
+        # performed. A record that mislabels its method is not evidence.
+        method="target_test_suite",
     )
 
     # First pass: the change applies, then the project's own test suite is
