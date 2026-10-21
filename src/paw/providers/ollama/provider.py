@@ -169,6 +169,28 @@ class OllamaProvider:
         endpoint so the conversation history is actually used."""
         return bool(request.get("messages"))
 
+    @staticmethod
+    def _usage_receipt(data: Any) -> dict[str, Any]:
+        """The usage Ollama actually reported, in the provider's own names.
+
+        Ollama counts ``prompt_eval_count`` and ``eval_count``. The runtime
+        normalizes them, so the receipt is issued here rather than
+        estimated at the call site.
+        """
+        if not isinstance(data, dict):
+            return {}
+        prompt = data.get("prompt_eval_count")
+        completion = data.get("eval_count")
+        if not isinstance(prompt, int) and not isinstance(completion, int):
+            return {}
+        prompt = prompt if isinstance(prompt, int) else 0
+        completion = completion if isinstance(completion, int) else 0
+        return {
+            "prompt_eval_count": prompt,
+            "eval_count": completion,
+            "total_tokens": prompt + completion,
+        }
+
     async def complete(self, request: dict[str, Any]) -> dict[str, Any]:
         """Run a completion via Ollama.
 
@@ -189,8 +211,16 @@ class OllamaProvider:
         if use_chat:
             msg = data.get("message") if isinstance(data, dict) else None
             text = msg.get("content", "") if isinstance(msg, dict) else ""
-            return {"response": text, "model": data.get("model"), "done": data.get("done")}
-        return data
+            return {
+                "response": text,
+                "model": data.get("model"),
+                "done": data.get("done"),
+                "usage": self._usage_receipt(data),
+            }
+        result = dict(data) if isinstance(data, dict) else data
+        if isinstance(result, dict):
+            result["usage"] = self._usage_receipt(data)
+        return result
 
     async def stream(self, request: dict[str, Any]) -> AsyncGenerator[dict[str, Any], None]:
         """Stream a completion via Ollama (``/api/chat`` or ``/api/generate``).

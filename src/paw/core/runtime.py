@@ -89,6 +89,7 @@ from .models import (
     ProposedAction,
     ResourceUsage,
     TaskStatus,
+    UsageReceipt,
 )
 from .planner import Planner
 from .policy import RequestVerdict
@@ -2771,7 +2772,17 @@ class PawRuntime:
         resources = action.estimated_cost.model_copy(deep=True)
         resources.tool_calls = max(resources.tool_calls, 1)
         if needs_model and selected_model_name:
-            resources.model_calls = max(resources.model_calls, 1)
+            # Prefer the provider's own receipt over the estimate. The
+            # estimate says what the call was expected to cost; the
+            # receipt says what it cost. A provider that issues no
+            # receipt leaves the estimate in place.
+            receipt = UsageReceipt.from_result(model_result)
+            resources.model_calls = max(resources.model_calls, receipt.model_calls, 1)
+            if receipt.issued:
+                resources.tokens = receipt.total_tokens
+                result["usage_receipt"] = receipt.to_dict()
+            else:
+                result["usage_receipt"] = None
         return ExecutionObservation(
             step_id="",
             action_id=action.operation_id,

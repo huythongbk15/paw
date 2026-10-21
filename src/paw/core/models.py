@@ -729,3 +729,74 @@ class VerificationRecord:
             "declared_by": self.declared_by,
             "declared_at": self.declared_at.isoformat(),
         }
+
+
+# --- Provider-issued usage receipt ----------------------------------------
+
+
+@dataclass(frozen=True)
+class UsageReceipt:
+    """A usage receipt issued by the provider that served the request.
+
+    An *estimate* says what a call was expected to cost. A receipt says
+    what it actually cost. The runtime used to record the estimate and
+    call it usage, which made the ledger's token and cost numbers
+    unusable for deciding where the money goes.
+
+    Providers name their fields differently - OpenAI reports
+    ``prompt_tokens``/``completion_tokens``, Ollama reports
+    ``prompt_eval_count``/``eval_count`` - so this is the one shape the
+    runtime reads. A provider that reports nothing yields a zero receipt,
+    and the estimate is kept; the receipt only ever *replaces* an estimate
+    when the provider actually issued one.
+    """
+
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+    model_calls: int = 0
+
+    @property
+    def issued(self) -> bool:
+        """Whether the provider actually reported usage."""
+        return bool(self.total_tokens or self.prompt_tokens or self.completion_tokens)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "prompt_tokens": self.prompt_tokens,
+            "completion_tokens": self.completion_tokens,
+            "total_tokens": self.total_tokens,
+            "model_calls": self.model_calls,
+        }
+
+    @classmethod
+    def from_result(cls, result: Any) -> UsageReceipt:
+        """Read the receipt out of a provider result, whatever it calls it."""
+        if not isinstance(result, dict):
+            return cls()
+        usage = result.get("usage")
+        if not isinstance(usage, dict):
+            return cls()
+
+        def _int(*names: str) -> int:
+            for name in names:
+                value = usage.get(name)
+                if isinstance(value, bool):
+                    continue
+                if isinstance(value, int) and value >= 0:
+                    return value
+                if isinstance(value, float) and value >= 0:
+                    return int(value)
+            return 0
+
+        prompt = _int("prompt_tokens", "prompt_eval_count", "input_tokens")
+        completion = _int("completion_tokens", "eval_count", "output_tokens")
+        total = _int("total_tokens")
+        if not total:
+            total = prompt + completion
+        return cls(
+            prompt_tokens=prompt,
+            completion_tokens=completion,
+            total_tokens=total,
+            model_calls=1,
+        )
