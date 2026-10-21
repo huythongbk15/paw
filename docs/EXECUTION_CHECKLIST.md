@@ -102,6 +102,31 @@
   run shells, so the proof that a skill actually runs comes from the
   application. The governance module's callers must be updated to supply it.
   — OPEN.
+- [x] A real test harness in the verification port. The demo now runs the
+  target project's own `pytest` suite as the declared verification: the first
+  pass fails, the human fixes the environment, the restart passes without
+  repeating the change.
+  — RESOLVED. `demos/demo_engineering_workflow.py`; the shell boundary is
+  checked mechanically by `tests/test_no_shell_execution_in_runtime.py` (6
+  passed): the runtime's layers may not spawn a process, so the harness
+  belongs to the application, not to PAW.
+- [x] The runtime e2e harness is a real proof: it records a decision, reviews
+  it, binds an implementation Plan to it, and declares a verification (the
+  target repository's own suite) bound to the operation. The verdict needs
+  both the writes performed by PAW and the verification passed.
+  — RESOLVED. `tests/test_runtime_e2e_harness_contract.py` 3 passed against the
+  shipping harness; the unreviewed-write negative control is included.
+- [x] Provider-issued usage receipts: the ledger records what the provider
+  actually reported, not the estimate. A provider that issues no receipt
+  leaves the estimate in place.
+  — RESOLVED. `tests/test_usage_receipt_contract.py` 7 passed, fail-positive
+  proven; the Ollama adapter issues a receipt from the counts it received.
+- [ ] `ResourceUsage.total_cost()` and the per-role cost ceilings are in
+  different units, so an action that declares an estimate containing a model
+  call is refused by the role ceiling before the call. The weights are pinned
+  by `tests/test_e2_33_step_usage_receipt.py`, so they were not changed
+  silently; the units need one decision.
+  — OPEN. Recorded in the implementation map.
 - [x] B-19/F04: provider discovery is an explicit, Policy-admitted operation.
   `ModelRouter.route()` is cache-only; `discover_providers()` is the explicit
   operation; the runtime performs it only after Policy admits

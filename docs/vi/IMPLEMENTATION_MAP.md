@@ -328,6 +328,78 @@ index và "review không cần replay" làm fail 6/10.
 bằng chứng rằng skill thực sự chạy đến từ application. Các caller của
 governance module phải được cập nhật để cung cấp nó.
 
+### Usage receipt từ provider — 2026-10-20, STANDARD / READY
+
+**Lỗi.** Runtime ghi `action.estimated_cost` làm usage của step. Đó là cái một
+lệnh gọi được *dự kiến* tốn bao nhiêu, và nó được gọi là usage. Bản đếm của
+chính provider chưa từng được xét, nên các con số token và chi phí trong ledger
+không dùng được để quyết định tiền đi đâu.
+
+**Sửa.** `UsageReceipt` (`paw/core/models.py`) là một hình dạng duy nhất runtime
+đọc, và nó chuẩn hoá các cách provider báo: OpenAI báo `prompt_tokens`/
+`completion_tokens`, Ollama báo `prompt_eval_count`/`eval_count`. Adapter Ollama
+nay phát hành receipt từ số đếm nó thực sự nhận; adapter OpenAI vốn đã trả
+`usage` của provider. Runtime thay estimate bằng receipt khi có, và **giữ estimate
+khi không có** — thiếu receipt không phải là số 0.
+
+**Bằng chứng.** `tests/test_usage_receipt_contract.py` (7 test): các dialect
+receipt được chuẩn hoá; usage hỏng hoặc vắng mặt bị bỏ qua chứ không bị đếm
+thành 0; receipt quan sát được thay estimate; estimate còn lại khi provider không
+phát hành gì; và receipt tới được ledger, nơi số model call đếm được và số token
+ghi lại khớp nhau.
+
+*Chứng minh fail-positive.* Bỏ qua receipt làm fail 2/7.
+
+**Một phát hiện, ghi nhận chứ không sửa.** `ResourceUsage.total_cost()` quy
+model call là 1.0, tool call là 0.5 và nghìn token là 1.0, trong khi trần chi phí
+theo role là 0.01–0.20 USD. Hai bên khác đơn vị, nên một action *khai báo*
+estimate có model call bị chặn bởi trần role trước cả khi gọi. Trọng số được
+ghim bởi `tests/test_e2_33_step_usage_receipt.py`, nên ở đây không sửa ngầm; các
+đơn vị cần một quyết định (đơn vị tương đối hay USD) trước khi hoà giải được.
+
+### Harness runtime e2e là một bằng chứng thật — 2026-10-20, STANDARD / READY
+
+`benchmarks/runtime/run_e2e.py` tuyên bố chạy một task engineering thật qua
+PAW, nhưng thiếu hai thứ:
+
+* lần ghi được đề xuất mà **không có Plan, không ràng buộc root, không có
+  decision đã review**, nên theo hợp đồng admission của B-18 runtime từ chối —
+  harness không thể chứng nhận một thay đổi PAW chưa từng làm;
+* không có **declared verification**. Oracle là một phép đo, không phải artifact,
+  nên không có gì ghi lại rằng thay đổi đã được kiểm.
+
+Harness nay ghi một decision, review nó, gắn một implementation Plan vào nó, và
+để runtime kiểm lại ràng buộc đó trước khi executor chạm workspace. Sau thay
+đổi, nó khai báo một verification — test suite thật của repo đích, gắn với
+operation — và ghi lại. Verdict đòi cả hai: các lần ghi phải do PAW thực hiện,
+và verification phải pass.
+
+**Bằng chứng.** `tests/test_runtime_e2e_harness_contract.py` (3 test) import
+đúng harness đang ship và chạy write path của nó trên một project tạm thật: Plan
+đã review gắn với một decision FINAL READY đã được review; lần ghi xin phép,
+không đổi byte nào trước khi phép, và đã ghi sau khi phép; và một lần ghi
+**không review** bị từ chối, không bao giờ tới workspace.
+
+**Còn mở.** Harness cần corpus đích và một model local, nên vẫn là opt-in và
+thủ công; contract test phủ write path chứ không phủ toàn bộ thay đổi do model
+sinh ra.
+
+### Ranh giới shell được kiểm chứng, không chỉ khẳng định — 2026-10-20, STANDARD / READY
+
+Charter ghi adapter filesystem local "không cấp quyền shell execution". Đó từng
+là một khẳng định bằng văn xuôi. `tests/test_no_shell_execution_in_runtime.py`
+nay kiểm nó bằng cơ học: các lớp runtime của PAW — `paw/core`, `paw/executors`,
+`paw/application` — không được import `subprocess` hay gọi hàm spawn process của
+`os`, và các module duy nhất trong `paw/` được phép spawn là `knowledge/changes`
+(`git log` chỉ đọc) và tầng `bench`, với `shell=True` được xác minh vắng mặt ở
+mức AST.
+
+Hệ quả là kiến trúc: một verification cần chạy test suite phải do **application**
+cung cấp qua verification port của workflow, không phải do PAW.
+`demos/demo_engineering_workflow.py` minh hoạ tích hợp đó — nó chạy `pytest` của
+chính project đích làm declared verification, fail ở pass đầu, và pass ở lần
+restart.
+
 ### Bộ đếm operation của checkpoint (code)
 
 `TaskCheckpoint` giờ mang `operations_completed`, lưu trong cột mới

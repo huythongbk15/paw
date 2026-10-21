@@ -20,12 +20,15 @@ quyền hạ gate. [Audit BETA/web](BETA_LIMITATIONS.md) ghi findings/parity/cas
 | Parity | B-27..B-33 | Session/approval/project/decision/DAG/inspect/memory/skills/models/experimental qua service chung. |
 | Release candidate | B-34..B-36 | Install/upgrade/backup/restore/docs/parity; D3 clean và verdict rõ. |
 
-Việc an toàn tiếp theo: cắm một test harness thật vào verification port của
-workflow, để chuỗi được chứng minh với test suite thật của một project thay vì
-một thay đổi mô phỏng; rồi đóng các usage receipt lỗi còn thiếu. **Workflow
-engineering đã được chứng minh ngày 2026-10-20** (nghiên cứu -> chọn -> sửa ->
-declared verification, có một failure và một restart) — xem record B-20 trong
-implementation map. **B-19 F04 (discovery là thao tác tường minh, do
+Việc an toàn tiếp theo: hoà giải các đơn vị chi phí (trần theo role và
+`ResourceUsage.total_cost()` khác đơn vị, nên một estimate khai báo có model
+call bị từ chối trước cả khi gọi), rồi cấp replay evidence cho skill từ
+application. **Ngày 2026-10-20 workflow engineering đã được chứng minh**
+(nghiên cứu -> chọn -> sửa -> declared verification, có một failure và một
+restart) với test suite thật của một project; harness runtime e2e trở thành một
+bằng chứng thật với Plan đã review và declared verification; ledger bắt đầu ghi
+usage receipt từ provider; và ranh giới shell trở thành một bất biến được kiểm
+bằng cơ học — xem record B-20 trong implementation map. **B-19 F04 (discovery là thao tác tường minh, do
 Policy cho phép) và F05 (payload gửi đi được ràng buộc với manifest đã review)
 đã đóng ngày 2026-10-20.**
 Inventory B-15 và migration bounded B-18 có proof theo phạm vi; không mở lại

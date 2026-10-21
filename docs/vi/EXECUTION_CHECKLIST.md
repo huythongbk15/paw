@@ -102,6 +102,28 @@
   shell, nên bằng chứng rằng skill thực sự chạy đến từ application. Các caller
   của governance module phải được cập nhật để cung cấp nó.
   — OPEN.
+- [x] Một test harness thật trong verification port. Demo nay chạy `pytest` của
+  chính project đích làm declared verification: pass đầu fail, người sửa môi
+  trường, restart pass mà không lặp lại thay đổi.
+  — RESOLVED. `demos/demo_engineering_workflow.py`; ranh giới shell được kiểm
+  chứng cơ học bởi `tests/test_no_shell_execution_in_runtime.py` (6 passed): các
+  lớp runtime không được spawn process, nên harness thuộc về application, không
+  thuộc về PAW.
+- [x] Harness runtime e2e là một bằng chứng thật: nó ghi decision, review, gắn
+  implementation Plan vào đó, và khai báo một verification (test suite của chính
+  repo đích) gắn với operation. Verdict đòi cả hai: writes do PAW thực hiện và
+  verification pass.
+  — RESOLVED. `tests/test_runtime_e2e_harness_contract.py` 3 passed trên đúng
+  harness đang ship; có negative control cho lần ghi không review.
+- [x] Usage receipt từ provider: ledger ghi cái provider thực sự báo, không
+  phải estimate. Provider không phát hành receipt thì estimate được giữ.
+  — RESOLVED. `tests/test_usage_receipt_contract.py` 7 passed, có chứng minh
+  fail-positive; adapter Ollama phát hành receipt từ số đếm nó nhận được.
+- [ ] `ResourceUsage.total_cost()` và trần chi phí theo role khác đơn vị, nên
+  một action khai báo estimate có model call bị chặn bởi trần role trước cả khi
+  gọi. Trọng số được ghim bởi `tests/test_e2_33_step_usage_receipt.py`, nên không
+  sửa ngầm; các đơn vị cần một quyết định.
+  — OPEN. Đã ghi trong implementation map.
 - [x] B-19/F04: provider discovery là thao tác tường minh, do Policy cho phép.
   `ModelRouter.route()` chỉ dùng cache; `discover_providers()` là thao tác tường
   minh; runtime chỉ thực hiện sau khi Policy cho phép `Capability.NETWORK_HTTP`;

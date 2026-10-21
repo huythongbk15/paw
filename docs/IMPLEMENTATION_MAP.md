@@ -353,6 +353,88 @@ rollback and "review without replay" fails 6 of the 10.
 not run shells, so the evidence that a skill actually runs comes from the
 application. The governance module's callers must be updated to supply it.
 
+### Provider-issued usage receipts — 2026-10-20, STANDARD / READY
+
+**The defect.** The runtime recorded `action.estimated_cost` as the
+step's usage. That is what a call was *expected* to cost, and it was
+called usage. The provider's own count was never consulted, so the
+token and cost numbers in the ledger could not be used to decide where
+the money goes.
+
+**The fix.** `UsageReceipt` (`paw/core/models.py`) is the one shape the
+runtime reads, and it normalizes the provider dialects: OpenAI reports
+`prompt_tokens`/`completion_tokens`, Ollama reports
+`prompt_eval_count`/`eval_count`. The Ollama adapter now issues a
+receipt from the counts it actually received; the OpenAI adapter already
+returned the provider's `usage`. The runtime replaces the estimate with
+the receipt when one was issued, and **keeps the estimate when none
+was** - a missing receipt is not a zero.
+
+**Evidence.** `tests/test_usage_receipt_contract.py` (7 tests): the
+receipt dialects normalize; a malformed or absent usage is ignored
+rather than counted as zero; the observed receipt replaces the estimate;
+the estimate survives when the provider issues nothing; and the receipt
+reaches the ledger, where the counted model calls and the recorded
+tokens agree.
+
+*Fail-positive proven.* Ignoring the receipt fails 2 of the 7.
+
+**A finding, recorded rather than changed.** `ResourceUsage.total_cost()`
+weights a model call at 1.0, a tool call at 0.5 and a thousand tokens at
+1.0, while the per-role ceilings are `0.01`–`0.20` US dollars. The two
+are in different units, so an action that *declares* an estimate
+containing a model call is refused by the role ceiling before the call
+is made. The weights are pinned by `tests/test_e2_33_step_usage_receipt.py`,
+so they are not changed silently here; the units need one decision
+(relative units or dollars) before they can be reconciled.
+
+### The runtime e2e harness is a real proof — 2026-10-20, STANDARD / READY
+
+`benchmarks/runtime/run_e2e.py` claimed to run one real engineering task
+through PAW, but two things were missing:
+
+* the write was proposed with **no Plan, no root binding and no reviewed
+  decision**, so under the B-18 admission contract the runtime refused
+  it - the harness could not certify a change PAW never made;
+* there was **no declared verification**. The oracle was a measurement,
+  not an artifact, so nothing recorded that the change was checked.
+
+The harness now records a decision, reviews it, binds an implementation
+Plan to it, and has the runtime revalidate that binding before the
+executor touches the workspace. After the change it declares a
+verification - the target repository's own test suite, bound to the
+operation - and records it. The verdict requires both: the writes must
+have been performed by PAW, and the verification must have passed.
+
+**Evidence.** `tests/test_runtime_e2e_harness_contract.py` (3 tests)
+imports the shipping harness and drives its write path over a real
+temporary project: the reviewed Plan is bound to a FINAL READY decision
+that was reviewed; the write asks for approval, changes nothing before
+it, and lands after it; and an **unreviewed** write is refused and never
+reaches the workspace.
+
+**Still open.** The harness needs the target corpus and a local model,
+so it remains opt-in and manual; the contract test covers its write path
+rather than the full model-generated change.
+
+### The shell boundary is checked, not asserted — 2026-10-20, STANDARD / READY
+
+The charter records that the local filesystem adapter "does not authorize
+shell execution". That was a claim in prose.
+`tests/test_no_shell_execution_in_runtime.py` now checks it
+mechanically: the runtime's own layers - `paw/core`, `paw/executors`,
+`paw/application` - may not import `subprocess` or call a
+process-spawning `os` function, and the only modules in `paw/` that may
+spawn a process are `knowledge/changes` (read-only `git log`) and the
+`bench` tier, with `shell=True` verified absent at the AST level.
+
+The consequence is architectural: a verification that needs to run a
+test suite is supplied by the **application** through the workflow's
+verification port, not by PAW. `demos/demo_engineering_workflow.py`
+shows that integration - it runs the target project's own `pytest` suite
+as the declared verification, fails on the first pass, and passes on the
+restart.
+
 ### Checkpoint operation counter (code)
 
 `TaskCheckpoint` now carries `operations_completed`, persisted in a new
