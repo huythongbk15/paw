@@ -507,6 +507,47 @@ mặt API — các packet tiếp theo, với hợp đồng trong `docs/BETA_LIMI
 Surface là local và single-user cho release này; triển khai shared hoặc hosted cần
 threat model và một quyết định khác.
 
+### B-27 bề mặt chỉ đọc: đã chọn transport, đã mở route — 2026-10-21, STANDARD / READY
+
+Quyết định transport và bề mặt chỉ đọc đã được làm. Bản sửa đổi trong
+`docs/adr/0001-local-web-adapter.md` ghi lại điều đó.
+
+**Transport là một ứng dụng ASGI tối giản, không framework.**
+`src/paw/web/asgi.py` là bảng route, một body reader có giới hạn, một JSON
+renderer và ranh giới an toàn đứng trước chúng. Yêu cầu đo được là tám route
+chỉ đọc có path parameter, phân tích query, body có giới hạn và mã lỗi ổn định
+— không cần framework validation, không cần dependency injection, không cần tài
+liệu OpenAPI, không cần ORM. **Server** là dependency duy nhất và là extra
+*tùy chọn*: bản cài core giữ **zero** dependency web, như hiện tại.
+
+**Bề mặt chỉ đọc.** `src/paw/web/routes.py` là bảng cố định tám route `GET`
+dưới `/api/v1`: `/capabilities`, `/health`, `/sessions`, `/sessions/{id}`,
+`/sessions/{id}/messages`, `/tasks/{id}`, `/tasks/{id}/events` và
+`/tasks/{id}/inspect/{kind}`. Không có route mutation, nên một mutation không
+có gì để chạm tới — write admission vẫn toàn process và F02 vẫn mở.
+
+**Projection mới là phần cốt lõi.** `src/paw/application/web_projection.py` sở
+hữu các view có giới hạn và đã redact: limit được clamp chứ không tin, field
+hình dạng credential bị redact, đường tuyệt đối không phải việc của
+caller, task/session không tồn tại là từ chối có mã ổn định, và các loại
+inspect đến từ allowlist đóng chứ không phải tên hàm do caller đưa vào.
+
+**Bằng chứng không cần server.** Một ứng dụng ASGI là một callable, nên bề mặt
+được chạy trực tiếp — không socket, không test client, không network, không
+dependency thứ hai. Đó là điều ranh giới transport-agnostic mua được.
+
+**Bằng chứng.** `tests/test_local_web_asgi_contract.py` (15 test): mọi route
+trả lời và mang security header; bề mặt không có route mutation; một request bị
+ranh giới từ chối không bao giờ tới handler; route/task/inspect kind không tồn
+tại là từ chối có mã ổn định, không stack trace; và payload có giới hạn + đã
+redact.
+
+*Chứng minh fail-positive.* Bỏ qua ranh giới và bỏ security header làm fail 5/15.
+
+**Còn mở.** Static asset đóng gói và CSP của nó (chính sách đã có sẵn — mọi
+response đều mang — nhưng chưa có asset nào được phục vụ), các route mutation,
+và chính browser shell.
+
 ### Bộ đếm operation của checkpoint (code)
 
 `TaskCheckpoint` giờ mang `operations_completed`, lưu trong cột mới

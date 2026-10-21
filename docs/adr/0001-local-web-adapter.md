@@ -127,9 +127,58 @@ rather than a preference. No runtime dependency is added.
 - The token is bootstrapped locally; it is a CSRF barrier, not
   authentication against a local attacker.
 
-**Not decided here.** The HTTP framework, the packaged static assets
-and their CSP, and the API surface shape. Those are the next packets,
-and the contract for them is in `docs/BETA_LIMITATIONS.md`.
+**Not decided here (as of the original decision).** The HTTP framework,
+the packaged static assets and their CSP, and the API surface shape.
+Those are the next packets, and the contract for them is in
+`docs/BETA_LIMITATIONS.md`.
+
+## Amendment — the transport is a minimal ASGI application (2026-10-21)
+
+**Measured requirement.** The surface needs: ASGI (the contract says "one
+ASGI process"), routing with path parameters, query parsing, a bounded
+body, JSON responses with stable codes, and static assets from the
+package. It does **not** need: a schema/validation framework, dependency
+injection, an OpenAPI document, or an ORM. It is read-only, and its
+routes are eight.
+
+**Decision: no framework.** `src/paw/web/asgi.py` is a minimal ASGI
+application - a route table, a bounded body reader, a JSON renderer and
+the security boundary in front of them. The *server* is the only
+dependency, and it is an **optional** extra: the core install stays
+dependency-free, exactly as it is today.
+
+**Why.**
+
+* A framework's value here - validation, DI, OpenAPI - is not what an
+  eight-route read-only surface needs, and adopting one would mean
+  constraining its request model to the boundary's anyway.
+* **The tests are the proof.** An ASGI application is a callable, so
+  the surface is proved by driving it directly: no server, no socket,
+  no test client, no network, no second dependency. A framework's own
+  test client would add a dependency to obtain the same proof.
+* The boundary was deliberately transport-agnostic so this choice could
+  be made against a requirement instead of a preference. A framework
+  would have made the choice for us, and the boundary would have had to
+  be bent around it.
+* The project is "pure Python, zero vendor lock-in"; the core install
+  has no web dependency today and keeps none.
+
+**Alternatives.**
+
+| Option | Why not |
+|---|---|
+| **Starlette** (plus uvicorn) | A second dependency, and a request model the boundary would have to be bent around, for eight read-only routes whose validation is already in the projections. It would also add a test-client dependency to prove the surface, where the ASGI callable is proved directly. |
+| **FastAPI** | More than the read-only surface needs: OpenAPI, a validation layer, and dependency injection. Its value is for a public API; this is a local surface. |
+| **A WSGI framework** | The contract says ASGI, and WSGI has no streaming story for the event projection. |
+
+**Accepted cost.** PAW owns a small amount of HTTP-shaped code: the route
+table, the body reader and the renderer. It is bounded by the boundary
+(Host, Origin, CSRF, body size, query) and it is covered by its own
+contract test, so the cost is visible rather than spread.
+
+**What this does not change.** The safety boundary, the request
+semantics, the read-only scope and the rule that mutations wait for F02
+are all as decided above. The transport is a shell.
 
 ## Evidence
 

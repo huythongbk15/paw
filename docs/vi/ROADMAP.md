@@ -20,11 +20,13 @@ quyền hạ gate. [Audit BETA/web](BETA_LIMITATIONS.md) ghi findings/parity/cas
 | Parity | B-27..B-33 | Session/approval/project/decision/DAG/inspect/memory/skills/models/experimental qua service chung. |
 | Release candidate | B-34..B-36 | Install/upgrade/backup/restore/docs/parity; D3 clean và verdict rõ. |
 
-Việc an toàn tiếp theo: chọn HTTP transport và chính sách asset đóng gói theo
-yêu cầu đo được, rồi mở bề mặt **chỉ đọc** (`/capabilities`, `/health`, lịch
-sử session, trạng thái task và các projection inspect có giới hạn) trên các
-application service sẵn có. Ranh giới an toàn và ngữ nghĩa request đã có sẵn, nên
-packet này là transport, không phải phán đoán. **B-23..B-26 đã được giao ngày
+Việc an toàn tiếp theo: static asset đóng gói và browser shell trên bề mặt chỉ
+đọc, giữ nguyên CSP mà mọi response đã mang, và chỉ sau đó mới tới các route
+mutation — vốn tắt cho tới khi câu hỏi concurrency (F02) được giải quyết.
+**Ngày 2026-10-21 transport đã được chọn (một ứng dụng ASGI tối giản, không
+framework) và bề mặt chỉ đọc đã được mở** — tám route `GET` dưới `/api/v1`,
+được chứng minh bằng cách chạy trực tiếp ASGI callable, không server, không
+socket, không test client, không network. **B-23..B-26 đã được giao ngày
 2026-10-21** dưới dạng `docs/adr/0001-local-web-adapter.md` cùng một ranh giới
 transport-agnostic — xem record B-20 trong implementation map. Mutation vẫn tắt
 cho tới khi câu hỏi concurrency (F02) được giải quyết. **Ngày 2026-10-21 các đơn

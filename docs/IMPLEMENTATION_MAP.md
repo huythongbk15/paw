@@ -556,6 +556,53 @@ in `docs/BETA_LIMITATIONS.md`. The surface is local and single-user for
 this release; a shared or hosted deployment needs a different threat
 model and a different decision.
 
+### B-27 read-only surface: the transport chosen, the routes exposed — 2026-10-21, STANDARD / READY
+
+The transport decision and the read-only surface are now made. The
+amendment in `docs/adr/0001-local-web-adapter.md` records it.
+
+**The transport is a minimal ASGI application, with no framework.**
+`src/paw/web/asgi.py` is a route table, a bounded body reader, a JSON
+renderer and the security boundary in front of them. The measured
+requirement is eight read-only routes with path parameters, query
+parsing, a bounded body and stable error codes - it needs no validation
+framework, no dependency injection, no OpenAPI document and no ORM. The
+*server* is the only dependency and it is an **optional** extra: the
+core install keeps zero web dependencies, as it has today.
+
+**The surface is read-only.** `src/paw/web/routes.py` is a fixed table of
+eight `GET` routes under `/api/v1`: `/capabilities`, `/health`,
+`/sessions`, `/sessions/{id}`, `/sessions/{id}/messages`, `/tasks/{id}`,
+`/tasks/{id}/events` and `/tasks/{id}/inspect/{kind}`. There is no
+mutating route, so a mutation has nothing to reach - the write
+admission stays process-wide and F02 stays open.
+
+**The projections are the substance.**
+`src/paw/application/web_projection.py` owns the bounded, redacted
+views: a limit is clamped rather than trusted, a credential-shaped
+field is redacted, an absolute path is not the caller's business, an
+unknown task or session is a typed refusal with a stable code, and the
+inspect kinds come from a closed allowlist rather than a method name
+the caller supplies.
+
+**The proof needs no server.** An ASGI application is a callable, so
+the surface is driven directly - no socket, no test client, no network,
+no second dependency. That is what the transport-agnostic boundary
+bought.
+
+**Evidence.** `tests/test_local_web_asgi_contract.py` (15 tests): every
+route answers and carries the security headers; the surface has no
+mutating route; a request the boundary refuses never reaches a handler;
+an unknown route, task or inspect kind is a typed refusal with no stack
+trace; and the payload is bounded and redacted.
+
+*Fail-positive proven.* Skipping the boundary and dropping the security
+headers fails 5 of the 15.
+
+**Still open.** The packaged static assets and their CSP (the policy is
+already in place - every response carries it - but no asset is served
+yet), the mutation routes, and the browser shell itself.
+
 ### Checkpoint operation counter (code)
 
 `TaskCheckpoint` now carries `operations_completed`, persisted in a new

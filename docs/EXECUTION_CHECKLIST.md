@@ -142,10 +142,22 @@
   `tests/test_local_web_request_contract.py` 22 passed, fail-positive
   proven (14/58 fail with the controls weakened); `paw/web` ships in the
   wheel; ruff check clean.
-- [ ] The HTTP framework, the packaged static assets and their CSP, and
-  the API surface shape are not chosen yet. The boundary is
-  transport-agnostic precisely so the choice can be made against a
-  measured requirement.
+- [x] The HTTP transport is chosen and the read-only surface is exposed:
+  a minimal ASGI application with **no framework**, eight read-only
+  `GET` routes under `/api/v1`, and bounded redacted projections in the
+  application layer. The surface is proved by driving the ASGI callable
+  directly - no server, no socket, no test client, no network. The
+  *server* is the only dependency and it is an optional extra, so the
+  core install keeps zero web dependencies.
+  — RESOLVED. The decision is an amendment in
+  `docs/adr/0001-local-web-adapter.md`;
+  `tests/test_local_web_asgi_contract.py` 15 passed, fail-positive proven
+  (5/15 fail with the boundary skipped or the headers dropped);
+  `src/paw/application/web_projection.py` owns the bounding and the
+  redaction; ruff check clean.
+- [ ] The packaged static assets and their CSP, the mutation routes and
+  the browser shell are not built. The CSP policy itself is in place -
+  every response carries it - but no asset is served yet.
   — OPEN. The next packet.
 - [x] B-19/F04: provider discovery is an explicit, Policy-admitted operation.
   `ModelRouter.route()` is cache-only; `discover_providers()` is the explicit

@@ -139,9 +139,21 @@
   `tests/test_local_web_security_contract.py` 36 passed và
   `tests/test_local_web_request_contract.py` 22 passed, có chứng minh fail-positive
   (14/58 fail khi làm yếu các control); `paw/web` có trong wheel; ruff check clean.
-- [ ] HTTP framework, static asset đóng gói và CSP, và hình dạng bề mặt API chưa
-  được chọn. Ranh giới transport-agnostic chính là để lựa chọn đó dựa trên yêu
-  cầu đo được.
+- [x] HTTP transport đã được chọn và bề mặt chỉ đọc đã được mở: một ứng dụng
+  ASGI tối giản **không framework**, tám route `GET` chỉ đọc dưới `/api/v1`, và
+  projection có giới hạn + đã redact ở application layer. Bề mặt được chứng minh
+  bằng cách chạy trực tiếp ASGI callable — không server, không socket, không test
+  client, không network. *Server* là dependency duy nhất và là extra tùy chọn, nên
+  bản cài core giữ zero dependency web.
+  — RESOLVED. Quyết định là một bản sửa đổi trong
+  `docs/adr/0001-local-web-adapter.md`;
+  `tests/test_local_web_asgi_contract.py` 15 passed, có chứng minh fail-positive
+  (5/15 fail khi bỏ ranh giới hoặc bỏ security header);
+  `src/paw/application/web_projection.py` sở hữu việc giới hạn và redact; ruff
+  check clean.
+- [ ] Static asset đóng gói và CSP của nó, các route mutation, và browser shell
+  chưa được dựng. Chính sách CSP đã có sẵn — mọi response đều mang — nhưng chưa
+  có asset nào được phục vụ.
   — OPEN. Packet tiếp theo.
 - [x] B-19/F04: provider discovery là thao tác tường minh, do Policy cho phép.
   `ModelRouter.route()` chỉ dùng cache; `discover_providers()` là thao tác tường

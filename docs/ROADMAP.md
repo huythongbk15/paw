@@ -25,12 +25,13 @@ order, preserving unfinished E1 ranking work and without enabling training:
 | Feature parity | B-27..B-33 | Sessions/chat, approvals, project/context, decision/DAG, inspect, memory/skills, model/experimental views through shared services. |
 | Product candidate | B-34..B-36 | Install/upgrade/backup/restore and documentation; browser/CLI parity; one clean-revision D3 + explicit release verdict. |
 
-Next safe action: choose the HTTP transport and the packaged asset policy
-against the measured requirement, then expose the **read-only** surface
-(`/capabilities`, `/health`, session history, task state and the bounded
-inspect projections) over the existing application services. The safety
-boundary and the request semantics are already in place, so this packet is
-transport, not judgement. **B-23..B-26 were delivered on 2026-10-21** as
+Next safe action: the packaged static assets and the browser shell over the
+read-only surface, keeping the CSP every response already carries, and only then
+the mutation routes - which stay off until the concurrency question (F02) is
+settled. **On 2026-10-21 the transport was chosen (a minimal ASGI application,
+no framework) and the read-only surface was exposed** - eight `GET` routes under
+`/api/v1`, proved by driving the ASGI callable directly, with no server, no
+socket, no test client and no network. **B-23..B-26 were delivered on 2026-10-21** as
 `docs/adr/0001-local-web-adapter.md` plus a transport-agnostic boundary - see
 the B-20 record in the implementation map. Mutations stay off until the
 concurrency question (F02) is settled. **On 2026-10-21 the cost
