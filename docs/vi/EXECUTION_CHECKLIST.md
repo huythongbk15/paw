@@ -119,11 +119,15 @@
   phải estimate. Provider không phát hành receipt thì estimate được giữ.
   — RESOLVED. `tests/test_usage_receipt_contract.py` 7 passed, có chứng minh
   fail-positive; adapter Ollama phát hành receipt từ số đếm nó nhận được.
-- [ ] `ResourceUsage.total_cost()` và trần chi phí theo role khác đơn vị, nên
+- [x] `ResourceUsage.total_cost()` và trần chi phí theo role khác đơn vị, nên
   một action khai báo estimate có model call bị chặn bởi trần role trước cả khi
-  gọi. Trọng số được ghim bởi `tests/test_e2_33_step_usage_receipt.py`, nên không
-  sửa ngầm; các đơn vị cần một quyết định.
-  — OPEN. Đã ghi trong implementation map.
+  gọi.
+  — RESOLVED. Trọng số nay là USD, ở dạng hằng số có tên, và các trần (phía
+  nhất quán) không đổi. Một estimate khai báo bình thường nay nằm dưới trần của
+  role fast; một bước destructive thì không. `tests/test_cost_unit_reconciliation_contract.py`
+  8 passed, có chứng minh fail-positive (3/8 fail với đơn vị cũ). Phép tính
+  được ghim trong `tests/test_e2_33_step_usage_receipt.py` được cập nhật để ghi
+  rõ đơn vị.
 - [x] B-19/F04: provider discovery là thao tác tường minh, do Policy cho phép.
   `ModelRouter.route()` chỉ dùng cache; `discover_providers()` là thao tác tường
   minh; runtime chỉ thực hiện sau khi Policy cho phép `Capability.NETWORK_HTTP`;

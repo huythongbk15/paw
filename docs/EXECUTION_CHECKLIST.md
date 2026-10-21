@@ -121,12 +121,15 @@
   leaves the estimate in place.
   — RESOLVED. `tests/test_usage_receipt_contract.py` 7 passed, fail-positive
   proven; the Ollama adapter issues a receipt from the counts it received.
-- [ ] `ResourceUsage.total_cost()` and the per-role cost ceilings are in
+- [x] `ResourceUsage.total_cost()` and the per-role cost ceilings are in
   different units, so an action that declares an estimate containing a model
-  call is refused by the role ceiling before the call. The weights are pinned
-  by `tests/test_e2_33_step_usage_receipt.py`, so they were not changed
-  silently; the units need one decision.
-  — OPEN. Recorded in the implementation map.
+  call is refused by the role ceiling before the call.
+  — RESOLVED. The weights are now US dollars, as named constants, and the
+  ceilings (which were the coherent side) are unchanged. A normal declared
+  estimate now fits under the fast role's ceiling; a destructive step does
+  not. `tests/test_cost_unit_reconciliation_contract.py` 8 passed, fail-positive
+  proven (3/8 fail with the old units). The pinned arithmetic in
+  `tests/test_e2_33_step_usage_receipt.py` was updated to name its unit.
 - [x] B-19/F04: provider discovery is an explicit, Policy-admitted operation.
   `ModelRouter.route()` is cache-only; `discover_providers()` is the explicit
   operation; the runtime performs it only after Policy admits

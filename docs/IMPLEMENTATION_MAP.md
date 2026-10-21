@@ -435,6 +435,73 @@ shows that integration - it runs the target project's own `pytest` suite
 as the declared verification, fails on the first pass, and passes on the
 restart.
 
+### The cost units are reconciled — 2026-10-21, STANDARD / READY
+
+**The defect.** `ResourceUsage.total_cost()` and the per-role cost
+ceilings (`ROLE_CEILINGS[...].max_cost_usd`, 0.01-0.20 dollars) were
+compared against each other while being in **different units**. The
+weights were arbitrary relative numbers - a model call counted as 1.0, a
+tool call 0.5, a thousand tokens 1.0, a destructive operation 10.0 -
+which is a hundred to a thousand times over every ceiling. The visible
+effect: an action that *declared* an estimate containing a model call
+was refused by the role ceiling **before the call was made**. Declaring
+a cost was impossible.
+
+**The decision.** The ceilings were the coherent side: they are named
+`max_cost_usd` and their values (one cent for a fast call, twenty cents
+for a vision call) read as dollars. The weights were the incoherent
+side, so the weights are now dollars too:
+
+| Weight | Value | Meaning |
+|---|---|---|
+| `COST_PER_MODEL_CALL_USD` | 0.001 | a tenth of a cent per model call |
+| `COST_PER_TOOL_CALL_USD` | 0.0005 | half a tenth of a cent per tool call |
+| `COST_PER_TOKEN_USD` | 0.000001 | a millionth of a dollar per token |
+| `COST_PER_MILLISECOND_USD` | 0.0000001 | wall clock |
+| `COST_PER_NETWORK_BYTE_USD` | 0.000000001 | network egress |
+| `COST_PER_DESTRUCTIVE_OP_USD` | 0.01 | a destructive step needs a bigger role than a fast one |
+
+They are named constants in `paw/core/models.py`, not literals in an
+expression, so the unit is visible where the arithmetic lives.
+
+**Evidence.** `tests/test_cost_unit_reconciliation_contract.py` (8 tests):
+the weights are dollars and are named; a normal declared estimate fits
+under the fast role's ceiling, so declaring a cost is possible; a
+destructive step does not fit under it, so the "this needs a bigger
+role" signal survives; the cost is monotone in every input; and end to
+end the runtime now **admits** an action that declares a cost instead of
+refusing it with `role_ceiling_exceeded:cost_limit`.
+
+*Fail-positive proven.* Restoring the old relative units fails 3 of the
+8, including the end-to-end one.
+
+**The pinned numbers.** `tests/test_e2_33_step_usage_receipt.py` pinned
+the old arithmetic (`2*1.0 + 100*0.001 = 2.1`). It now pins the new one
+and names the unit in the assertion, so the next reader knows what the
+number means. The ceilings themselves are unchanged -
+`tests/test_e2_32_role_token_cost_ceilings.py` is untouched and passes.
+
+### The replay seam is one notion, not two — 2026-10-21, STANDARD / READY
+
+The approval binds a `SkillReplayEvidence`, while the E3 track already
+had a `ReplayResult` (positive and negative case outcomes). Two
+overlapping types for one concept is the thing AGENTS.md forbids, so one
+is now derived from the other: `replay_evidence(result)` turns an E3
+replay result into the evidence a review and an approval bind to. A
+replay passes when the positive case passed **and** the negative case
+did not fire - the skill must do the right thing when it should, and
+nothing when it should not.
+
+`SkillGovernance.promote_to_active` accepts either form, so an
+application that already runs the E3 replay hands its result over
+directly instead of translating it. That closes the "supply the replay
+evidence from the application" item: the seam is explicit, fail-closed,
+and the existing replay result is usable as-is.
+
+**Evidence.** `tests/test_skill_versioning_contract.py` (12 tests): an
+E3 replay result is directly usable as approval evidence, and a result
+that fired on the negative case cannot activate a skill.
+
 ### Checkpoint operation counter (code)
 
 `TaskCheckpoint` now carries `operations_completed`, persisted in a new

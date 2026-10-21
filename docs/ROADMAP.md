@@ -25,10 +25,13 @@ order, preserving unfinished E1 ranking work and without enabling training:
 | Feature parity | B-27..B-33 | Sessions/chat, approvals, project/context, decision/DAG, inspect, memory/skills, model/experimental views through shared services. |
 | Product candidate | B-34..B-36 | Install/upgrade/backup/restore and documentation; browser/CLI parity; one clean-revision D3 + explicit release verdict. |
 
-Next safe action: reconcile the cost units (the role ceilings and
-`ResourceUsage.total_cost()` are in different units, so a declared estimate with
-a model call is refused before the call), then supply the skill replay evidence
-from the application. **On 2026-10-20 the engineering workflow was proved**
+Next safe action: the web adapter, on the workflow that is now proved - and
+only as a presentation adapter over the existing services, with the Host/Origin/
+CSRF/boundary controls the B-23..B-26 contract names. **On 2026-10-21 the cost
+units were reconciled** (the role ceilings and `ResourceUsage.total_cost()` are
+now both in US dollars, so a declared estimate is possible again) **and the skill
+replay seam was made one notion** (an E3 `ReplayResult` is directly usable as
+approval evidence) - see the B-20 record in the implementation map. **On 2026-10-20 the engineering workflow was proved**
 (research -> choose -> change -> declared verification, with a failure and a
 restart) against a real project's own test suite, the runtime e2e harness became
 a real proof with a reviewed Plan and a declared verification, the ledger began

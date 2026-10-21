@@ -20,10 +20,13 @@ quyền hạ gate. [Audit BETA/web](BETA_LIMITATIONS.md) ghi findings/parity/cas
 | Parity | B-27..B-33 | Session/approval/project/decision/DAG/inspect/memory/skills/models/experimental qua service chung. |
 | Release candidate | B-34..B-36 | Install/upgrade/backup/restore/docs/parity; D3 clean và verdict rõ. |
 
-Việc an toàn tiếp theo: hoà giải các đơn vị chi phí (trần theo role và
-`ResourceUsage.total_cost()` khác đơn vị, nên một estimate khai báo có model
-call bị từ chối trước cả khi gọi), rồi cấp replay evidence cho skill từ
-application. **Ngày 2026-10-20 workflow engineering đã được chứng minh**
+Việc an toàn tiếp theo: web adapter, trên workflow đã được chứng minh — và
+chỉ như một presentation adapter trên các service sẵn có, với các control
+Host/Origin/CSRF/boundary mà hợp đồng B-23..B-26 nêu. **Ngày 2026-10-21 các đơn
+vị chi phí đã được hoà giải** (trần theo role và `ResourceUsage.total_cost()` nay
+cùng là USD, nên khai báo estimate lại khả thi) **và seam replay của skill đã
+thành một khái niệm** (một E3 `ReplayResult` dùng làm approval evidence trực
+tiếp) — xem record B-20 trong implementation map. **Ngày 2026-10-20 workflow engineering đã được chứng minh**
 (nghiên cứu -> chọn -> sửa -> declared verification, có một failure và một
 restart) với test suite thật của một project; harness runtime e2e trở thành một
 bằng chứng thật với Plan đã review và declared verification; ledger bắt đầu ghi

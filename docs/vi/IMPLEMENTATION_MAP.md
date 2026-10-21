@@ -400,6 +400,67 @@ cung cấp qua verification port của workflow, không phải do PAW.
 chính project đích làm declared verification, fail ở pass đầu, và pass ở lần
 restart.
 
+### Các đơn vị chi phí đã được hoà giải — 2026-10-21, STANDARD / READY
+
+**Lỗi.** `ResourceUsage.total_cost()` và trần chi phí theo role
+(`ROLE_CEILINGS[...].max_cost_usd`, 0.01–0.20 USD) được so sánh với nhau
+trong khi ở **hai đơn vị khác nhau**. Trọng số là các số tương đối tùy ý — một
+model call tính là 1.0, tool call 0.5, nghìn token 1.0, một thao tác destructive
+10.0 — tức là gấp trăm đến nghìn lần mọi trần. Hệ quả nhìn thấy được: một
+action *khai báo* estimate có model call bị chặn bởi trần role **trước cả khi
+gọi**. Khai báo chi phí là bất khả thi.
+
+**Quyết định.** Trần là phía nhất quán: nó mang tên `max_cost_usd` và giá trị
+(một cent cho một lệnh fast, hai mươi cent cho một lệnh vision) đọc ra như USD.
+Trọng số là phía không nhất quán, nên trọng số nay cũng là USD:
+
+| Trọng số | Giá trị | Ý nghĩa |
+|---|---|---|
+| `COST_PER_MODEL_CALL_USD` | 0.001 | một phần mười cent mỗi model call |
+| `COST_PER_TOOL_CALL_USD` | 0.0005 | nửa phần mười cent mỗi tool call |
+| `COST_PER_TOKEN_USD` | 0.000001 | một phần triệu USD mỗi token |
+| `COST_PER_MILLISECOND_USD` | 0.0000001 | wall clock |
+| `COST_PER_NETWORK_BYTE_USD` | 0.000000001 | network egress |
+| `COST_PER_DESTRUCTIVE_OP_USD` | 0.01 | một bước destructive cần role lớn hơn role fast |
+
+Chúng là hằng số có tên trong `paw/core/models.py`, không phải literal trong một
+biểu thức, nên đơn vị hiện ngay tại chỗ phép tính.
+
+**Bằng chứng.** `tests/test_cost_unit_reconciliation_contract.py` (8 test): trọng
+số là USD và có tên; một estimate khai báo bình thường nằm dưới trần của role
+fast, nên khai báo chi phí là khả thi; một bước destructive thì không, nên tín
+hiệu "cần role lớn hơn" còn nguyên; chi phí đơn điệu theo mọi đầu vào; và end
+to end runtime nay **cho phép** một action khai báo chi phí thay vì từ chối với
+`role_ceiling_exceeded:cost_limit`.
+
+*Chứng minh fail-positive.* Khôi phục các đơn vị tương đối cũ làm fail 3/8,
+gồm cả test end-to-end.
+
+**Các số được ghim.** `tests/test_e2_33_step_usage_receipt.py` ghim phép tính cũ
+(`2*1.0 + 100*0.001 = 2.1`). Nay nó ghim phép tính mới và **ghi rõ đơn vị**
+trong assertion, để người đọc sau biết con số nghĩa là gì. Bản thân các trần
+không đổi — `tests/test_e2_32_role_token_cost_ceilings.py` không bị đụng và vẫn
+pass.
+
+### Seam replay là một khái niệm, không phải hai — 2026-10-21, STANDARD / READY
+
+Approval gắn một `SkillReplayEvidence`, trong khi track E3 đã có sẵn một
+`ReplayResult` (kết quả case positive và negative). Hai kiểu chồng lấn cho một
+khái niệm là điều AGENTS.md cấm, nên nay một kiểu **sinh ra** từ kiểu kia:
+`replay_evidence(result)` biến một replay result của E3 thành bằng chứng mà
+review và approval gắn vào. Một replay pass khi case positive pass **và** case
+negative không kích hoạt — skill phải làm đúng khi nên làm, và không làm gì khi
+không nên.
+
+`SkillGovernance.promote_to_active` nhận cả hai dạng, nên một application đã
+chạy E3 replay sẽ đưa thẳng kết quả của nó vào thay vì phải chuyển đổi. Điều
+đó đóng item "cấp replay evidence cho skill từ application": seam rõ ràng,
+fail-closed, và replay result sẵn có dùng được nguyên trạng.
+
+**Bằng chứng.** `tests/test_skill_versioning_contract.py` (12 test): một E3 replay
+result dùng làm approval evidence trực tiếp, và một result kích hoạt ở case
+negative thì không activate được skill.
+
 ### Bộ đếm operation của checkpoint (code)
 
 `TaskCheckpoint` giờ mang `operations_completed`, lưu trong cột mới
