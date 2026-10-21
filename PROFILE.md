@@ -1146,11 +1146,33 @@ proven.
   `SkillGovernance.promote_to_active` accepts either — so an application
   that already runs the E3 replay hands its result over directly.
 
+### The local web decision and its safety foundation (2026-10-21)
+
+**B-23..B-26** are delivered as a decision and a safety foundation, not
+as HTTP handlers. `docs/adr/0001-local-web-adapter.md` fixes the shape:
+the adapter is a **projection** — no step, no gate, no store of its own
+— the safety boundary comes **first** and is **transport-agnostic** (so
+the controls are provable without a server and the HTTP framework stays
+an open decision), the request key **reuses the durable operation
+identity** the runtime already records, a disconnect is neither a
+completion nor a cancellation, and there is no new runtime dependency.
+
+`src/paw/web/security.py` enforces it: loopback bind only, an **exact**
+Host allowlist, an **exact** Origin (a wildcard CORS is not
+representable), a local CSRF token for mutations compared in constant
+time, bounded body/history/stream buffers, no credential in a query
+string, and writes serialised **process-wide** (a session lock is not a
+database fix). `src/paw/web/requests.py` owns the request semantics.
+
+58 contract tests, fail-positive proven (14 fail with the controls
+weakened); the layering is checked mechanically — `paw.core` imports no
+HTTP type and no `paw.web` module.
+
 ### Still open (tracked)
 
-the gitignored E1-27 measurement report · the web adapter (next safe
-action, as a presentation adapter over the existing services with the
-Host/Origin/CSRF/boundary controls the B-23..B-26 contract names).
+the HTTP transport, the packaged assets and their CSP, and the API
+surface shape (the next packet — read-only surface first, mutations off
+until F02 is settled) · the gitignored E1-27 measurement report.
 
 ---
 
@@ -1170,5 +1192,6 @@ Host/Origin/CSRF/boundary controls the B-23..B-26 contract names).
 | **Skill versioning** | ✅ FIXED | Version history, one row per version, review/approval bound to version + content hash + replay, rollback finds a prior version. 10 contract tests, fail-positive proven. |
 | **Proofs** | ✅ REAL | The workflow is verified against a real `pytest` suite; the e2e harness has a reviewed Plan and a declared verification; the ledger records provider-issued usage receipts; the shell boundary is a checked invariant. |
 | **Cost units** | ✅ RECONCILED | Weights and role ceilings are both in USD; a declared estimate is possible again. 8 contract tests, fail-positive proven. |
-| **Next** | the web adapter | as a presentation adapter over the existing services, with the Host/Origin/CSRF/boundary controls |
+| **B-23..B-26** | ✅ DELIVERED | The local web decision (an ADR) and a transport-agnostic safety boundary: loopback, exact Host/Origin, CSRF, bounds, no credential in query, process-wide write admission; the request key reuses the durable operation identity. 58 contract tests, fail-positive proven. |
+| **Next** | choose the HTTP transport | then the read-only surface; mutations wait for F02 |
 
