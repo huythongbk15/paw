@@ -1132,11 +1132,25 @@ proven.
   provider actually reported, not the estimate; a provider that issues no
   receipt leaves the estimate in place. The Ollama adapter now issues one.
 
+### The cost units and the replay seam (2026-10-21)
+
+* **The cost units are reconciled.** `ResourceUsage.total_cost()` and the
+  per-role ceilings (`max_cost_usd`, 0.01–0.20 dollars) were compared
+  while in *different* units — a model call counted as 1.0 against a
+  $0.01 ceiling — so an action that *declared* an estimate was refused
+  before the call. The weights are now dollars, as named constants; the
+  ceilings are unchanged. 8 contract tests, fail-positive proven.
+* **The replay seam is one notion.** The E3 `ReplayResult` and the
+  approval's `SkillReplayEvidence` were overlapping types for one idea.
+  `replay_evidence(result)` derives one from the other, and
+  `SkillGovernance.promote_to_active` accepts either — so an application
+  that already runs the E3 replay hands its result over directly.
+
 ### Still open (tracked)
 
-reconciling the cost units (`total_cost()` and the role ceilings are in
-different units) · supplying the skill replay evidence from the
-application · the gitignored E1-27 measurement report · the web adapter.
+the gitignored E1-27 measurement report · the web adapter (next safe
+action, as a presentation adapter over the existing services with the
+Host/Origin/CSRF/boundary controls the B-23..B-26 contract names).
 
 ---
 
@@ -1155,5 +1169,6 @@ application · the gitignored E1-27 measurement report · the web adapter.
 | **B-20** | ✅ PROVED | The engineering workflow: research → choose → change → declared verification, with a failure and a restart. 8 contract tests, fail-positive proven, runnable demo. |
 | **Skill versioning** | ✅ FIXED | Version history, one row per version, review/approval bound to version + content hash + replay, rollback finds a prior version. 10 contract tests, fail-positive proven. |
 | **Proofs** | ✅ REAL | The workflow is verified against a real `pytest` suite; the e2e harness has a reviewed Plan and a declared verification; the ledger records provider-issued usage receipts; the shell boundary is a checked invariant. |
-| **Next** | reconcile the cost units, then supply the skill replay evidence | then the web adapter on a workflow that is already proved |
+| **Cost units** | ✅ RECONCILED | Weights and role ceilings are both in USD; a declared estimate is possible again. 8 contract tests, fail-positive proven. |
+| **Next** | the web adapter | as a presentation adapter over the existing services, with the Host/Origin/CSRF/boundary controls |
 
