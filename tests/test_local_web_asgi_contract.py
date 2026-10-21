@@ -269,3 +269,55 @@ class TestThePayloadIsBounded:
         assert out["api_key"] == "<redacted>"
         assert out["nested"]["token"] == "<redacted>"
         assert out["ok"] == 1
+
+
+# ── 6. The packaged shell is served ────────────────────────────────────
+
+
+class TestThePackagedShell:
+    @pytest.mark.asyncio
+    async def test_the_root_serves_the_shell(self):
+        driver = _Driver(_app())
+        status, headers, body = await driver.request(
+            "GET", "/", headers={"Host": "127.0.0.1:8765"},
+        )
+        assert status == 200
+        assert headers["content-type"].startswith("text/html")
+        assert b"PAW" in body if isinstance(body, bytes) else "PAW" in str(body)
+
+    @pytest.mark.asyncio
+    async def test_an_asset_is_served_with_its_own_type(self):
+        driver = _Driver(_app())
+        status, headers, body = await driver.request(
+            "GET", "/static/app.css", headers={"Host": "127.0.0.1:8765"},
+        )
+        assert status == 200
+        assert headers["content-type"].startswith("text/css")
+        assert b"--" in body if isinstance(body, bytes) else "--" in str(body)
+
+    @pytest.mark.asyncio
+    async def test_a_traversal_is_refused(self):
+        driver = _Driver(_app())
+        status, _headers, body = await driver.request(
+            "GET", "/static/../../etc/passwd", headers={"Host": "127.0.0.1:8765"},
+        )
+        assert status == 404
+        assert body["code"].startswith("web.asset")
+
+    @pytest.mark.asyncio
+    async def test_an_unknown_asset_is_a_typed_refusal(self):
+        driver = _Driver(_app())
+        status, _headers, body = await driver.request(
+            "GET", "/static/nope.js", headers={"Host": "127.0.0.1:8765"},
+        )
+        assert status == 404
+        assert body["code"] == "web.asset_not_found"
+
+    @pytest.mark.asyncio
+    async def test_the_shell_carries_the_security_headers_too(self):
+        driver = _Driver(_app())
+        _status, headers, _body = await driver.request(
+            "GET", "/", headers={"Host": "127.0.0.1:8765"},
+        )
+        assert headers["content-security-policy"] == CONTENT_SECURITY_POLICY
+        assert headers["x-content-type-options"] == "nosniff"

@@ -106,13 +106,39 @@ async def _inspect(ctx: WebRequestContext) -> WebResponse:
     return WebResponse(body=body)
 
 
+def _asset_response(request_path: str) -> WebResponse:
+    """A packaged asset, resolved under the asset policy."""
+    from .assets import AssetError, AssetPolicy
+
+    try:
+        asset = AssetPolicy().resolve(request_path)
+    except AssetError as exc:
+        return WebResponse(status=404, body=exc.to_dict())
+    return WebResponse(
+        status=200,
+        body=asset.body,
+        content_type=asset.content_type,
+        headers={"etag": f'"{asset.etag}"'},
+    )
+
+
+async def _index(_ctx: WebRequestContext) -> WebResponse:
+    """The packaged shell."""
+    return _asset_response("index.html")
+
+
+async def _asset(ctx: WebRequestContext) -> WebResponse:
+    """A packaged asset, named by the request path."""
+    return _asset_response(ctx.param("asset_path"))
+
+
 def build_application(
     *,
     guard: Any = None,
     revision: str = "",
     schema_version: int = 0,
 ) -> WebApplication:
-    """The application, with its read-only routes."""
+    """The application, with its read-only routes and the packaged shell."""
     app = WebApplication(
         guard=guard,
         revision=revision,
@@ -129,5 +155,13 @@ def build_application(
     app.add(Route("GET", f"{API}/tasks/{{task_id}}/events", _events, "events"))
     app.add(
         Route("GET", f"{API}/tasks/{{task_id}}/inspect/{{kind}}", _inspect, "inspect"),
+    )
+    # The packaged shell. It is same-origin, carries no credential, and the
+    # asset policy refuses anything that is not inside the package's own
+    # static directory.
+    app.add(Route("GET", "/", _index, "index"))
+    app.add(Route("GET", "/index.html", _index, "index.html"))
+    app.add(
+        Route("GET", "/static/{asset_path*}", _asset, "asset"),
     )
     return app

@@ -87,3 +87,8 @@ pretty = true
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["paw*"]
+
+# The packaged browser shell. The assets travel with the package so an
+# installed wheel serves the same surface a source checkout does.
+[tool.setuptools.package-data]
+"paw.web" = ["static/*.html", "static/*.css", "static/*.js"]

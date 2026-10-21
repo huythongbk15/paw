@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>PAW — Personal Agent Workstation</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<a class="skip" href="#workspace">Bỏ tới nội dung chính</a>
+
+<header class="bar" role="banner">
+  <h1 class="brand">PAW</h1>
+  <div class="bar-state" role="status" aria-live="polite">
+    <span class="chip" id="state-project" title="Project và revision">project: <b>—</b></span>
+    <span class="chip" id="state-profile" title="Profile đang chọn">profile: <b>—</b></span>
+    <span class="chip" id="state-model" title="Model thật hay stand-in">model: <b>—</b></span>
+    <span class="chip" id="state-task" title="Trạng thái task">task: <b>—</b></span>
+  </div>
+  <button type="button" id="refresh" class="btn">Làm mới</button>
+</header>
+
+<div class="shell">
+  <nav class="region region-left" id="nav" aria-label="Điều hướng">
+    <h2 class="region-title">Điều hướng</h2>
+    <ul class="nav-list">
+      <li><button type="button" class="nav-item" data-view="sessions">Sessions</button></li>
+      <li><button type="button" class="nav-item" data-view="tasks">Tasks</button></li>
+      <li><button type="button" class="nav-item" data-view="inspect">Inspect</button></li>
+      <li><button type="button" class="nav-item" data-view="capabilities">Capabilities</button></li>
+      <li><button type="button" class="nav-item" data-view="health">Health</button></li>
+    </ul>
+    <h3 class="region-subtitle">Sắp tới</h3>
+    <p class="muted small">
+      Projects · Decisions/Plans · Approvals · Memory/Knowledge · Skills · Models ·
+      Diagnostics
+    </p>
+    <p class="muted small">Bề mặt hiện <b>chỉ đọc</b>. Các thao tác ghi được bật sau
+      khi câu hỏi lưu trữ đồng thời được giải quyết.</p>
+  </nav>
+
+  <main class="region region-center" id="workspace" tabindex="-1" aria-label="Không gian làm việc">
+    <h2 class="region-title" id="view-title">Sessions</h2>
+    <div id="view" class="view" aria-live="polite" aria-busy="false">
+      <p class="muted">Đang tải…</p>
+    </div>
+  </main>
+
+  <aside class="region region-right" id="inspector" aria-label="Inspector bằng chứng">
+    <h2 class="region-title">Bằng chứng</h2>
+    <div id="inspect" class="view">
+      <p class="muted">Chọn một task để xem bằng chứng, context, routing, policy,
+        checks và artifacts.</p>
+    </div>
+  </aside>
+</div>
+
+<div class="toast" id="toast" role="alert" hidden></div>
+
+<script src="/static/app.js" defer></script>
+</body>
+</html>

@@ -67,6 +67,9 @@ CONTENT_SECURITY_POLICY = (
 API_PREFIX = "/api/v1"
 
 _SEGMENT = re.compile(r"^\{([a-zA-Z_][a-zA-Z0-9_]*)\}$")
+# A trailing wildcard captures the rest of the path, so an asset may live
+# in a sub-directory.
+_REST = re.compile(r"^\{([a-zA-Z_][a-zA-Z0-9_]*)\*\}$")
 
 
 @dataclass(frozen=True)
@@ -82,17 +85,41 @@ class Route:
         """Match a path, returning its parameters, or None."""
         route_parts = [p for p in self.pattern.strip("/").split("/") if p]
         path_parts = [p for p in path.strip("/").split("/") if p]
+        params: dict[str, str] = {}
+
+        # A trailing wildcard takes everything that is left, so an asset may
+        # live in a sub-directory.
+        if route_parts:
+            rest = _REST.match(route_parts[-1])
+            if rest:
+                head = route_parts[:-1]
+                if len(path_parts) < len(head):
+                    return None
+                for index, route_part in enumerate(head):
+                    match = _SEGMENT.match(route_part)
+                    if match:
+                        if not path_parts[index]:
+                            return None
+                        params[match.group(1)] = path_parts[index]
+                        continue
+                    if route_part != path_parts[index]:
+                        return None
+                remainder = path_parts[len(head):]
+                if not remainder:
+                    return None
+                params[rest.group(1)] = "/".join(remainder)
+                return params
+
         if len(route_parts) != len(path_parts):
             return None
-        params: dict[str, str] = {}
-        for route_part, path_part in zip(route_parts, path_parts, strict=True):
+        for index, route_part in enumerate(route_parts):
             match = _SEGMENT.match(route_part)
             if match:
-                if not path_part:
+                if not path_parts[index]:
                     return None
-                params[match.group(1)] = path_part
+                params[match.group(1)] = path_parts[index]
                 continue
-            if route_part != path_part:
+            if route_part != path_parts[index]:
                 return None
         return params
 
