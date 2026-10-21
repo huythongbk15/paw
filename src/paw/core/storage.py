@@ -7,9 +7,11 @@ Uses aiosqlite for async operations. Schema is defined in SQL for clarity and co
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import json
 import uuid
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -571,6 +573,21 @@ CREATE INDEX IF NOT EXISTS idx_kce_model ON knowledge_chunk_embeddings(model);
 """
 
 
+@dataclass
+class _TxScope:
+    """The scope of an open transaction.
+
+    It carries the connection and the **nesting depth of this
+    transaction**. The depth is per transaction rather than a counter
+    shared by the process: that shared counter is what let one task's
+    transaction look like a nested transaction to another task, and what
+    let a rollback reach across a task boundary.
+    """
+
+    conn: aiosqlite.Connection
+    depth: int = 1
+
+
 class Database:
     """Async SQLite database wrapper."""
 
@@ -578,9 +595,15 @@ class Database:
         self.db_path = db_path or settings.db_path
         self._conn: aiosqlite.Connection | None = None
         self._initialized = False
-        self._transaction_depth = 0
         self._connection_lock = asyncio.Lock()
         self._connection_owner: asyncio.Task | None = None
+        # The open transaction's scope. A context variable is inherited by a
+        # coroutine awaited from inside the transaction and is *not*
+        # inherited by another task, so a transaction is a unit of work of
+        # one task rather than a global flag any other task can join.
+        self._tx_scope: contextvars.ContextVar[_TxScope | None] = (
+            contextvars.ContextVar("paw_tx_scope", default=None)
+        )
 
     @asynccontextmanager
     async def _connection_access(self):
@@ -612,7 +635,7 @@ class Database:
 
     async def close(self) -> None:
         async with self._connection_access():
-            if self._transaction_depth:
+            if self._tx_scope.get() is not None:
                 raise RuntimeError("Cannot close database inside an owned transaction")
             await self._close()
 
@@ -621,7 +644,6 @@ class Database:
             await self._conn.close()
             self._conn = None
             self._initialized = False
-            self._transaction_depth = 0
             logger.info("database_closed")
 
     async def initialize(self) -> None:
@@ -632,7 +654,7 @@ class Database:
     async def _initialize(self) -> None:
         if self._initialized and self._conn is not None:
             return
-        if self._transaction_depth:
+        if self._tx_scope.get() is not None:
             raise RuntimeError("Initialize database before opening a transaction")
         await self.connect()
         await self._conn.executescript(SCHEMA)
@@ -793,35 +815,62 @@ class Database:
 
     @asynccontextmanager
     async def transaction(self):
-        """Task-owned transaction, with savepoints for same-task nesting."""
-        async with self._connection_access():
-            await self.connect()
-            depth = self._transaction_depth
-            savepoint = f"paw_nested_{depth}"
-            self._transaction_depth = depth + 1
+        """A transaction scoped to the task that opened it.
+
+        The scope is a **context variable**, so it is inherited by a
+        coroutine awaited from inside the transaction and is *not*
+        inherited by another task. A transaction is therefore a unit of work
+        of one task, not a global flag that any other task can join.
+
+        The depth lives on the scope, so it is **per transaction** rather
+        than a shared counter: one task's nesting can no longer make
+        another task's transaction look nested, and a rollback can no longer
+        reach across a task boundary.
+        """
+        scope = self._tx_scope.get()
+        if scope is not None:
+            # Nested in the transaction this scope belongs to: a savepoint,
+            # so the whole unit of work commits or rolls back together.
+            scope.depth += 1
+            savepoint = f"paw_nested_{scope.depth}"
+            await scope.conn.execute(f"SAVEPOINT {savepoint}")
             try:
-                await self._conn.execute(f"SAVEPOINT {savepoint}" if depth else "BEGIN")
-                yield self._conn
-                if depth:
-                    await self._conn.execute(f"RELEASE SAVEPOINT {savepoint}")
-                else:
-                    await self._conn.commit()
+                yield scope.conn
+                await scope.conn.execute(f"RELEASE SAVEPOINT {savepoint}")
             except BaseException:
                 # CancelledError is a BaseException: cancellation must not leak
                 # uncommitted writes or connection ownership to another task.
-                if depth:
-                    await self._conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
-                    await self._conn.execute(f"RELEASE SAVEPOINT {savepoint}")
-                else:
-                    await self._conn.rollback()
+                await scope.conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+                await scope.conn.execute(f"RELEASE SAVEPOINT {savepoint}")
                 raise
             finally:
-                self._transaction_depth = depth
+                scope.depth -= 1
+            return
+        async with self._connection_access():
+            await self.connect()
+            state = _TxScope(conn=self._conn, depth=1)
+            token = self._tx_scope.set(state)
+            try:
+                await self._conn.execute("BEGIN")
+                yield self._conn
+                await self._conn.commit()
+            except BaseException:
+                # CancelledError is a BaseException: cancellation must not leak
+                # uncommitted writes or connection ownership to another task.
+                await self._conn.rollback()
+                raise
+            finally:
+                self._tx_scope.reset(token)
 
     # --- Explicit Storage Mutation Contract (Part A6) ---
     # Read operations - no mutation, safe to call without transaction
     async def fetch_one(self, sql: str, params: tuple = ()) -> dict | None:
         """Execute a SELECT query and return one row as dict."""
+        scope = self._tx_scope.get()
+        if scope is not None:
+            async with scope.conn.execute(sql, params) as cursor:
+                row = await cursor.fetchone()
+                return dict(row) if row else None
         async with self._connection_access():
             await self.connect()
             async with self._conn.execute(sql, params) as cursor:
@@ -830,6 +879,11 @@ class Database:
 
     async def fetch_all(self, sql: str, params: tuple = ()) -> list[dict]:
         """Execute a SELECT query and return all rows as list of dicts."""
+        scope = self._tx_scope.get()
+        if scope is not None:
+            async with scope.conn.execute(sql, params) as cursor:
+                rows = await cursor.fetchall()
+                return [dict(row) for row in rows]
         async with self._connection_access():
             await self.connect()
             async with self._conn.execute(sql, params) as cursor:
@@ -860,16 +914,19 @@ class Database:
     async def execute(self, sql: str, params: tuple = ()) -> aiosqlite.Cursor:
         """Legacy: executes any SQL. Prefer fetch_one/fetch_all for reads,
         write/write_many for writes inside transactions."""
+        scope = self._tx_scope.get()
+        if scope is not None:
+            # Inside the open transaction: the statement belongs to it, and
+            # its commit or rollback is the owner's decision.
+            return await scope.conn.execute(sql, params)
         async with self._connection_access():
             await self.connect()
             try:
                 cursor = await self._conn.execute(sql, params)
-                if self._transaction_depth == 0:
-                    await self._conn.commit()
+                await self._conn.commit()
                 return cursor
             except BaseException:
-                if self._transaction_depth == 0:
-                    await self._conn.rollback()
+                await self._conn.rollback()
                 raise
 
     async def fetchone(self, sql: str, params: tuple = ()) -> aiosqlite.Row | None:
