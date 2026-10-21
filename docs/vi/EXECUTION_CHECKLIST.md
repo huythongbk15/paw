@@ -176,6 +176,15 @@
   `test_b_survives_a_rollback`); đường đi thông thường không đổi (một lần ghi
   tiện lợi vẫn thuộc unit of work của caller, và ambient lock vẫn tuần tự hóa
   các lần ghi); ruff check clean.
+- [x] F02, mô hình đa process: `busy_timeout` tường minh trên mọi connection
+  (đặt trước, trước mọi statement có thể cần lock), và một database đã đúng
+  phiên bản được mở mà không chạy schema script, nên việc mở không lấy write
+  lock. Hai process ghi cùng một file đồng thời đều thành công; database không
+  bị hỏng; writer không lấy được lock thì fail rõ ràng trong tròn thời gian đã
+  đặt.
+  — RESOLVED. `tests/test_f02_cross_process_contract.py` 5 passed, dùng subprocess
+  thật; có chứng minh fail-positive (bỏ timeout tường minh làm fail
+  `test_the_bound_is_explicit` với `assert 5000 == 1234`); ruff check clean.
 - [ ] F02, nửa còn mở: một lần ghi do coroutine **được await bên trong**
   transaction của coroutine khác là lần ghi lồng, và rollback của chủ sở hữu sẽ
   xóa nó. Muốn nó commit độc lập thì cần connection thứ hai, mà SQLite chỉ cho

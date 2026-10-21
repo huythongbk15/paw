@@ -632,6 +632,46 @@ thấy được. Biến lần ghi lồng thành lần ghi trì hoãn, commit đ�
 thay đổi lớn hơn (một write queue trên storage owner) và được ghi lại là nửa
 còn mở của F02.
 
+### F02, phần để ship: hai process, một database — 2026-10-21, STANDARD / READY
+
+Hợp đồng B-19 nêu rõ: *"CLI and web sharing the DB also needs an explicit
+process lock or proven SQLite concurrency model."* Hai khoảng trống thật, cả hai
+tìm ra khi đọc phần thiết lập connection chứ không phải khi đọc văn xuôi.
+
+**Không có `busy_timeout` ở đâu cả.** SQLite chỉ cho một writer, nên writer thứ
+hai phải chờ. PAW đặt WAL và `synchronous = NORMAL` nhưng không bao giờ nói với
+SQLite phải chờ bao lâu, nên writer không lấy được lock sẽ rơi về mặc định 5
+giây của Python rồi fail với "database is locked" trần trụi — không có dấu hiệu
+đang tranh chấp cái gì hay phải làm gì. `Database` nay nhận `busy_timeout_ms`
+tường minh (mặc định 10s) và áp cho **mọi** connection, và áp **trước** mọi
+statement có thể cần lock. Thứ tự này quan trọng: statement phát ra trước khi
+timeout được đặt sẽ rơi về mặc định.
+
+**Mở database cần write lock.** `initialize()` chạy schema script rồi commit.
+Trên một database đã đúng phiên bản, việc đó thừa, và nó khiến một process
+chỉ muốn *mở* file phải tranh write lock với một process đang ghi thật. Nay
+phiên bản schema được đọc trước, và script + migration chỉ chạy khi database
+còn thiếu.
+
+**Bằng chứng.** `tests/test_f02_cross_process_contract.py` (5 test). Bằng chứng
+dùng **subprocess thật**, không dùng thread: CLI và web adapter là hai process
+riêng, còn một thread sẽ dùng chung một connection và chứng minh được gì về
+lock ở mức file. Hai process ghi cùng một file đồng thời đều thành công và mọi
+row đã được xác nhận đều còn; database không bị hỏng (`PRAGMA integrity_check`);
+trần là trần đã cấu hình chứ không phải mặc định của Python; writer không lấy
+được lock thì **fail rõ ràng** và trong tròn thời gian đã đặt (đo được đúng bằng
+timeout đã cấu hình); và một process thứ hai vẫn mở được database trong lúc
+process thứ nhất giữ write lock.
+
+*Chứng minh fail-positive.* Bỏ `busy_timeout` tường minh làm fail
+`test_the_bound_is_explicit` với `assert 5000 == 1234` — mặc định của Python đối
+chiếu với trần đã cấu hình.
+
+**Lưu ý cho application code.** Một lần ghi thất bại để lại connection đang giữ
+transaction, và connection phải được đóng tường minh. Không làm vậy thì process
+có thể treo lúc thoát trong khi driver rollback. Cả CLI lẫn web adapter đều
+đóng khi shutdown; một script chạy PAW trong process của nó phải làm tương tự.
+
 ### Bộ đếm operation của checkpoint (code)
 
 `TaskCheckpoint` giờ mang `operations_completed`, lưu trong cột mới

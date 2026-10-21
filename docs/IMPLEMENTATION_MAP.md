@@ -694,6 +694,49 @@ without anybody being able to see it. Turning the nested write into a
 deferred, independently committed write is a larger change (a write queue
 on the storage owner) and is recorded as the open half of F02.
 
+### F02, the part that ships: two processes, one database — 2026-10-21, STANDARD / READY
+
+The B-19 contract names it: *"CLI and web sharing the DB also needs an
+explicit process lock or proven SQLite concurrency model."* Two real gaps,
+both found by reading the connection setup rather than the prose.
+
+**No `busy_timeout` anywhere.** SQLite allows one writer at a time, so the
+second writer has to wait. PAW set WAL and `synchronous = NORMAL` but never
+told SQLite how long to wait, so a writer that could not get the lock fell
+back to Python's arbitrary five second default and then failed with a bare
+"database is locked" - no indication of what was contended for or what to
+do about it. `Database` now takes an explicit `busy_timeout_ms` (10s by
+default) and applies it to **every** connection, *first*, before any
+statement that could need the lock. The order matters: a statement issued
+before the timeout is set falls back to the default.
+
+**Opening the database needed the write lock.** `initialize()` ran the
+schema script and committed. On an up-to-date database that work is
+unnecessary, and it made a process that only wanted to *open* the file
+compete for the write lock with a process that was actually writing. The
+schema version is now read first, and the script and the migration only run
+when the database is behind.
+
+**Evidence.** `tests/test_f02_cross_process_contract.py` (5 tests). The proof
+uses **real subprocesses**, not threads: the CLI and the web adapter are
+separate processes, and a thread would share one connection and prove nothing
+about the file-level lock. Two processes writing the same file concurrently
+both succeed and every acknowledged row is present; the database is not
+corrupted (`PRAGMA integrity_check`); the bound is the configured one, not
+Python's default; a writer that cannot get the lock fails **loudly** and
+within the bound (measured at exactly the configured timeout); and a second
+process can open the database while the first holds the write lock.
+
+*Fail-positive proven.* Removing the explicit `busy_timeout` fails
+`test_the_bound_is_explicit` with `assert 5000 == 1234` - Python's default
+against the configured bound.
+
+**A note for application code.** A failed write leaves the connection
+holding a transaction, and the connection has to be closed explicitly. Without
+that, the process can hang on exit while the driver rolls back. The CLI and
+the web adapter both close on shutdown; a script that runs PAW in-process has
+to do the same.
+
 ### Checkpoint operation counter (code)
 
 `TaskCheckpoint` now carries `operations_completed`, persisted in a new

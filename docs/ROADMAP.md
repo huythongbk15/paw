@@ -25,37 +25,35 @@ order, preserving unfinished E1 ranking work and without enabling training:
 | Feature parity | B-27..B-33 | Sessions/chat, approvals, project/context, decision/DAG, inspect, memory/skills, model/experimental views through shared services. |
 | Product candidate | B-34..B-36 | Install/upgrade/backup/restore and documentation; browser/CLI parity; one clean-revision D3 + explicit release verdict. |
 
-Next safe action: the mutation routes and the shell's mutating affordances,
-which stay off until the storage concurrency question (F02) is settled - and
-that question is the next thing to settle, not the routes. **On 2026-10-21 the
-packaged shell and its asset policy were delivered**: the shell travels in the
-wheel, the asset policy refuses a traversal or a symlink out of the tree, and the
-shell holds no credential because the read-only surface needs none. **On 2026-10-21 the transport was chosen (a minimal ASGI application,
-no framework) and the read-only surface was exposed** - eight `GET` routes under
-`/api/v1`, proved by driving the ASGI callable directly, with no server, no
-socket, no test client and no network. **B-23..B-26 were delivered on 2026-10-21** as
-`docs/adr/0001-local-web-adapter.md` plus a transport-agnostic boundary - see
-the B-20 record in the implementation map. Mutations stay off until the
-concurrency question (F02) is settled. **On 2026-10-21 the cost
-units were reconciled** (the role ceilings and `ResourceUsage.total_cost()` are
-now both in US dollars, so a declared estimate is possible again) **and the skill
-replay seam was made one notion** (an E3 `ReplayResult` is directly usable as
-approval evidence) - see the B-20 record in the implementation map. **On 2026-10-20 the engineering workflow was proved**
-(research -> choose -> change -> declared verification, with a failure and a
-restart) against a real project's own test suite, the runtime e2e harness became
-a real proof with a reviewed Plan and a declared verification, the ledger began
-recording provider-issued usage receipts, and the shell boundary became a
-mechanically checked invariant - see the B-20 record in the implementation map. **B-19 F04 (discovery is an explicit,
-Policy-admitted operation) and F05 (the outbound payload is bound to the
-reviewed manifest) were closed on 2026-10-20.** B-15 inventory and B-18
-bounded migration have scoped evidence; do not reopen their architecture or
-promote dependent HTTP. B-16/B-17 have scoped repair evidence in the
-implementation map, not a clean release. F06 is independent repair within the
-same pre-HTTP safety group; no dependent HTTP execution or automatic
-provider/training expansion is authorized.
-D0/D1/D2 per packet; D3 at high-risk core boundaries and final candidate.
-The older sequence and counts below are retained as dated historical records;
-where they disagree on current status, this review and actual evidence govern.
+Next safe action: **the write-queue half of F02** - a write made by a
+coroutine awaited inside another coroutine's transaction is a nested write, and
+the owner's rollback discards it. Making it independently committed needs a
+write queue on the storage owner. Then the **mutation routes** and the shell's
+mutating affordances, which stay off until that question is settled - and it
+is the question that is next, not the routes.
+
+What was delivered on 2026-10-20 and 2026-10-21, with the evidence in the
+implementation map (B-20 record):
+
+* the engineering workflow, proved against a real project's own test suite,
+  with a failure and a restart;
+* the ledger recording provider-issued usage receipts, and the cost units
+  reconciled (the role ceilings and ``ResourceUsage.total_cost()`` are both in
+  US dollars);
+* the shell boundary as a mechanically checked invariant, the local web
+  transport chosen (a minimal ASGI application, no framework), the read-only
+  surface exposed, and the packaged shell with its asset policy;
+* B-19 F04 (discovery is an explicit, Policy-admitted operation) and F05 (the
+  outbound payload is bound to the reviewed manifest);
+* F02's transaction ownership (the scope is per task, the depth per
+  transaction) and the cross-process model (an explicit busy timeout, and
+  opening an up-to-date database takes no write lock).
+
+B-15 inventory and B-18 bounded migration have scoped evidence; do not reopen
+their architecture or promote dependent HTTP. B-16/B-17 have scoped repair
+evidence in the implementation map, not a clean release. F06 is independent
+repair within the same pre-HTTP safety group; no dependent HTTP execution or
+automatic provider/training expansion is authorized.
 
 ## Historical stabilization and post-core records
 

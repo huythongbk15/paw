@@ -182,6 +182,15 @@
   the common path is unchanged (a convenience write still joins the
   caller's unit of work, and the ambient lock still serialises the
   writes); ruff check clean.
+- [x] F02, the cross-process model: an explicit `busy_timeout` on every
+  connection (applied first, before any statement that could need the lock),
+  and an up-to-date database is opened without running the schema script, so
+  opening it does not take the write lock. Two processes writing the same file
+  concurrently both succeed; the database is not corrupted; a writer that
+  cannot get the lock fails loudly within the bound.
+  — RESOLVED. `tests/test_f02_cross_process_contract.py` 5 passed, using real
+  subprocesses; fail-positive proven (removing the explicit timeout fails
+  `test_the_bound_is_explicit` with `assert 5000 == 1234`); ruff check clean.
 - [ ] F02, the open half: a write made by a coroutine **awaited inside**
   another coroutine's transaction is a nested write, and the owner's
   rollback discards it. Making it independently committed needs a second

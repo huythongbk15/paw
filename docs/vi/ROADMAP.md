@@ -20,37 +20,34 @@ quyền hạ gate. [Audit BETA/web](BETA_LIMITATIONS.md) ghi findings/parity/cas
 | Parity | B-27..B-33 | Session/approval/project/decision/DAG/inspect/memory/skills/models/experimental qua service chung. |
 | Release candidate | B-34..B-36 | Install/upgrade/backup/restore/docs/parity; D3 clean và verdict rõ. |
 
-Việc an toàn tiếp theo: các route mutation và affordance ghi của shell, vốn tắt
-cho tới khi câu hỏi lưu trữ đồng thời (F02) được giải quyết — và chính câu hỏi
-đó là thứ cần giải quyết tiếp, chứ không phải các route. **Ngày 2026-10-21
-packaged shell và chính sách asset của nó đã được giao**: shell đi cùng wheel,
-chính sách asset từ chối traversal hay symlink trỏ ra ngoài, và shell không giữ
-credential nào vì bề mặt chỉ đọc không cần.
-**Ngày 2026-10-21 transport đã được chọn (một ứng dụng ASGI tối giản, không
-framework) và bề mặt chỉ đọc đã được mở** — tám route `GET` dưới `/api/v1`,
-được chứng minh bằng cách chạy trực tiếp ASGI callable, không server, không
-socket, không test client, không network. **B-23..B-26 đã được giao ngày
-2026-10-21** dưới dạng `docs/adr/0001-local-web-adapter.md` cùng một ranh giới
-transport-agnostic — xem record B-20 trong implementation map. Mutation vẫn tắt
-cho tới khi câu hỏi concurrency (F02) được giải quyết. **Ngày 2026-10-21 các đơn
-vị chi phí đã được hoà giải** (trần theo role và `ResourceUsage.total_cost()` nay
-cùng là USD, nên khai báo estimate lại khả thi) **và seam replay của skill đã
-thành một khái niệm** (một E3 `ReplayResult` dùng làm approval evidence trực
-tiếp) — xem record B-20 trong implementation map. **Ngày 2026-10-20 workflow engineering đã được chứng minh**
-(nghiên cứu -> chọn -> sửa -> declared verification, có một failure và một
-restart) với test suite thật của một project; harness runtime e2e trở thành một
-bằng chứng thật với Plan đã review và declared verification; ledger bắt đầu ghi
-usage receipt từ provider; và ranh giới shell trở thành một bất biến được kiểm
-bằng cơ học — xem record B-20 trong implementation map. **B-19 F04 (discovery là thao tác tường minh, do
-Policy cho phép) và F05 (payload gửi đi được ràng buộc với manifest đã review)
-đã đóng ngày 2026-10-20.**
-Inventory B-15 và migration bounded B-18 có proof theo phạm vi; không mở lại
-kiến trúc hoặc promote HTTP phụ thuộc. B-16/B-17 có proof sửa theo phạm vi,
-không phải clean release. F06 sửa độc lập cùng nhóm safety trước HTTP.
-Giữ việc ranking chưa xong,
-không tự bật training/provider mới. D0/D1/D2 theo packet; D3 khi core trigger
-và candidate. Sequence/count phía dưới là record lịch sử; review này và
-bằng chứng thực tế quyết định hiện trạng khi có mâu thuẫn.
+Việc an toàn tiếp theo: **nửa còn mở của F02** — một lần ghi do coroutine
+được await bên trong transaction của coroutine khác là lần ghi lồng, và rollback
+của chủ sở hữu sẽ xóa nó. Muốn nó commit độc lập thì cần một write queue trên
+storage owner. Sau đó mới tới **các route mutation** và affordance ghi của shell,
+vốn tắt cho tới khi câu hỏi đó được giải quyết — và chính câu hỏi đó là thứ
+tiếp theo, không phải các route.
+
+Những gì đã giao ngày 2026-10-20 và 2026-10-21, kèm bằng chứng trong
+implementation map (record B-20):
+
+* workflow engineering, chứng minh với test suite thật của một project, có
+  một failure và một restart;
+* ledger ghi usage receipt từ provider, và các đơn vị chi phí được hoà giải
+  (trần theo role và ``ResourceUsage.total_cost()`` nay cùng là USD);
+* ranh giới shell thành bất biến được kiểm bằng cơ học, HTTP transport được
+  chọn (một ứng dụng ASGI tối giản, không framework), bề mặt chỉ đọc được mở,
+  và packaged shell cùng chính sách asset của nó;
+* B-19 F04 (discovery là thao tác tường minh, do Policy cho phép) và F05 (payload
+  gửi đi được ràng buộc với manifest đã review);
+* ownership của transaction của F02 (scope là của từng task, depth là của từng
+  transaction) và mô hình đa process (busy timeout tường minh, và mở một
+  database đã đúng phiên bản không lấy write lock).
+
+B-15 inventory và B-18 bounded migration có bằng chứng theo phạm vi; không mở
+lại kiến trúc của chúng và không nâng HTTP phụ thuộc. B-16/B-17 có bằng chứng
+sửa chữa theo phạm vi trong implementation map, chưa phải một release sạch.
+F06 là sửa chữa độc lập trong cùng nhóm an toàn trước HTTP; không nào cho phép
+thực thi HTTP phụ thuộc hay tự mở rộng provider/training.
 
 ## Record ổn định hóa và post-core lịch sử
 
