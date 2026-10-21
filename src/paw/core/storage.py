@@ -591,8 +591,17 @@ class _TxScope:
 class Database:
     """Async SQLite database wrapper."""
 
-    def __init__(self, db_path: Path | None = None):
+    def __init__(self, db_path: Path | None = None, *, busy_timeout_ms: int = 10000):
         self.db_path = db_path or settings.db_path
+        # How long a writer waits for the database's write lock before it
+        # fails. SQLite allows one writer at a time, so a second writer -
+        # the CLI and the web adapter on the same database, or two web
+        # requests in different processes - has to wait for the first.
+        # Without an explicit value the wait is Python's five second
+        # default, which a legitimate transaction can exceed, and the
+        # failure is a bare "database is locked" with no indication of
+        # what to do about it.
+        self.busy_timeout_ms = busy_timeout_ms
         self._conn: aiosqlite.Connection | None = None
         self._initialized = False
         self._connection_lock = asyncio.Lock()
@@ -628,6 +637,10 @@ class Database:
             return
         self._conn = await aiosqlite.connect(self.db_path)
         self._conn.row_factory = aiosqlite.Row
+        # The busy timeout comes **first**: every statement below can need
+        # the database's lock, and a writer that has not been told how long
+        # to wait falls back to an arbitrary default.
+        await self._conn.execute(f"PRAGMA busy_timeout = {self.busy_timeout_ms}")
         await self._conn.execute("PRAGMA foreign_keys = ON")
         await self._conn.execute("PRAGMA journal_mode = WAL")
         await self._conn.execute("PRAGMA synchronous = NORMAL")
@@ -657,11 +670,25 @@ class Database:
         if self._tx_scope.get() is not None:
             raise RuntimeError("Initialize database before opening a transaction")
         await self.connect()
-        await self._conn.executescript(SCHEMA)
-        await self._migrate_schema()
-        await self._conn.commit()
+        # An up-to-date database needs **no write at all**. That matters
+        # for the second process on the same file: the CLI and the web
+        # adapter. Running the schema script and committing needs the
+        # write lock, so without this check a process that only wanted to
+        # *open* the database would have to wait for another process's
+        # transaction - and SQLite allows one writer at a time.
+        version = await self._schema_version()
+        if version < SCHEMA_VERSION:
+            await self._conn.executescript(SCHEMA)
+            await self._migrate_schema()
+            await self._conn.commit()
         self._initialized = True
-        logger.info("database_initialized")
+        logger.info("database_initialized", schema_version=version)
+
+    async def _schema_version(self) -> int:
+        """The database's schema version, without writing anything."""
+        cursor = await self._conn.execute("PRAGMA user_version")
+        row = await cursor.fetchone()
+        return int(row[0]) if row else 0
 
     async def _migrate_schema(self) -> None:
         """Repair known pre-v2 layouts without dropping user data."""
