@@ -1232,6 +1232,29 @@ rollback discards it. Making it independently committed needs a second
 connection, and SQLite allows one writer at a time — so it is recorded
 as a write-queue change on the storage owner, not claimed as done.
 
+### F02, the cross-process model (2026-10-21)
+
+The B-19 contract names it: *"CLI and web sharing the DB also needs an
+explicit process lock or proven SQLite concurrency model."* Two real gaps,
+found by reading the connection setup rather than the prose:
+
+* **no `busy_timeout` anywhere** — a second writer fell back to Python's
+  arbitrary five second default and then failed with a bare "database is
+  locked". Every connection now gets an explicit bound, applied *first*,
+  before any statement that could need the lock.
+* **opening the database needed the write lock** — `initialize()` ran the
+  schema script and committed, so a process that only wanted to *open* the
+  file competed with a process that was actually writing. The schema
+  version is read first now, and the script only runs when the database
+  is behind.
+
+Proved with **real subprocesses** (the CLI and the web adapter are
+separate processes; a thread would share one connection and prove
+nothing): two processes writing the same file concurrently both succeed,
+every acknowledged row is present, the database is not corrupted, a
+blocked writer fails loudly within the bound, and a second process can
+open the database while the first holds the write lock.
+
 ### Still open (tracked)
 
 the write-queue half of F02 · the mutation routes (which wait on the
@@ -1259,5 +1282,6 @@ storage concurrency question) · the gitignored E1-27 measurement report.
 | **B-27** | ✅ DELIVERED | A minimal ASGI transport with no framework and a fixed eight-route read-only surface; the projections own the bounding and the redaction; proved without a server. 15 contract tests, fail-positive proven. |
 | **B-28** | ✅ DELIVERED | The packaged shell and its asset policy: traversal, absolute path, null byte and an escaping symlink are all refused; the shell is UTF-8 Vietnamese, keyboard operable, contrast-checked, responsive, and holds no credential. 42 web contract tests, fail-positive proven. |
 | **F02** | ✅ CLOSED (one half open) | The transaction scope is per task and the depth is per transaction; an independent write in another task survives the owner's rollback. 9 contract tests, fail-positive proven. The nested-write half needs a write queue. |
+| **F02** | ✅ CLOSED (one half open) | The transaction scope is per task and the depth per transaction; and the cross-process model is explicit - a bounded busy timeout on every connection, and opening an up-to-date database takes no write lock. 14 contract tests, fail-positive proven. The nested-write half needs a write queue. |
 | **Next** | the write-queue half of F02 | then the mutation routes — not the other way round |
 
