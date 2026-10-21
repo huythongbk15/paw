@@ -1529,6 +1529,35 @@ class ReplayResult:
         }
 
 
+def replay_evidence(
+    result: ReplayResult,
+    *,
+    content_hash: str = "",
+) -> SkillReplayEvidence:
+    """The evidence an approval binds to, derived from a replay result.
+
+    ``ReplayResult`` is the E3 replay *result*: it carries the positive
+    and negative case outcomes. ``SkillReplayEvidence`` is what a review
+    and an approval bind to: did the replay pass, on which content. One
+    is derived from the other so there is one replay notion, not two.
+
+    A replay passes when the positive case passed **and** the negative
+    case did not fire: the skill must do the right thing when it should,
+    and nothing when it should not.
+    """
+    passed = bool(result.passed_positive and not result.passed_negative)
+    detail = (
+        f"outcome={result.outcome}"
+        f" positive={result.passed_positive}"
+        f" negative={result.passed_negative}"
+    )
+    if result.positive_detail:
+        detail += f" | positive: {result.positive_detail}"
+    if result.negative_detail:
+        detail += f" | negative: {result.negative_detail}"
+    return SkillReplayEvidence(ok=passed, detail=detail, content_hash=content_hash)
+
+
 def validate_skill_transition(
     from_state: SkillState,
     to_state: SkillState,

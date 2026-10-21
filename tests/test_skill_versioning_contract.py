@@ -290,3 +290,64 @@ async def test_rollback_to_an_unknown_version_is_refused(tmp_path):
     assert await fabric.rollback_skill("helper", "1.0.0") is False, (
         "a rollback to the current version is not a rollback"
     )
+
+
+# --- The replay seam -----------------------------------------------------
+
+
+async def test_an_e3_replay_result_is_directly_usable_as_evidence(tmp_path):
+    """An application that already runs the E3 replay needs no translation.
+
+    ``ReplayResult`` is the E3 replay *result*; ``SkillReplayEvidence`` is
+    what a review and an approval bind to. One is derived from the other,
+    so there is one replay notion rather than two parallel ones.
+    """
+    from paw.core.skill_governance import SkillGovernance
+    from paw.core.skills import ReplayResult, replay_evidence
+
+    fabric = await _fabric(tmp_path)
+    await fabric.submit_candidate(_manifest("helper", "1.0.0", "one"))
+    await fabric.review_skill(
+        "helper", "reviewer", "diff", "safe", "effect", version="1.0.0",
+        replay=SkillReplayEvidence(ok=True),
+    )
+
+    governance = SkillGovernance(fabric)
+    positive = ReplayResult(
+        candidate_name="helper", trace_id="t1",
+        passed_positive=True, passed_negative=False, outcome="passed",
+        positive_detail="ran clean",
+    )
+    assert await governance.promote_to_active(
+        "helper", "approver", version="1.0.0", replay_result=positive,
+    ) is True
+    assert fabric.get_manifest("helper").state == SkillState.ACTIVE
+
+    # The evidence derived from the result says the same thing.
+    evidence = replay_evidence(positive)
+    assert evidence.ok is True
+    assert "passed" in evidence.detail
+
+
+async def test_a_negative_replay_result_cannot_activate(tmp_path):
+    """A skill that fires on the negative case has not been proven."""
+    from paw.core.skill_governance import SkillGovernance
+    from paw.core.skills import ReplayResult
+
+    fabric = await _fabric(tmp_path)
+    await fabric.submit_candidate(_manifest("helper", "1.0.0", "one"))
+    await fabric.review_skill(
+        "helper", "reviewer", "diff", "safe", "effect", version="1.0.0",
+        replay=SkillReplayEvidence(ok=True),
+    )
+
+    governance = SkillGovernance(fabric)
+    negative = ReplayResult(
+        candidate_name="helper", trace_id="t2",
+        passed_positive=True, passed_negative=True, outcome="failed_negative",
+        negative_detail="it fired when it should not have",
+    )
+    assert await governance.promote_to_active(
+        "helper", "approver", version="1.0.0", replay_result=negative,
+    ) is False
+    assert fabric.get_manifest("helper").state == SkillState.REVIEWED

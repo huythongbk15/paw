@@ -20,7 +20,7 @@ from typing import Any
 
 from .logging import get_logger
 from .models import SkillReplayEvidence, SkillState
-from .skills import SkillFabric, SkillManifest
+from .skills import ReplayResult, SkillFabric, SkillManifest, replay_evidence
 from .storage import db
 
 logger = get_logger(__name__)
@@ -603,16 +603,25 @@ class SkillGovernance:
     async def promote_to_active(
         self, name: str, approver: str, notes: str = "",
         *, version: str = "", replay: SkillReplayEvidence | None = None,
+        replay_result: ReplayResult | None = None,
     ) -> bool:
         """Promote a REVIEWED skill to ACTIVE with explicit approval (E3-18).
 
         The approval is bound to the exact version and requires replay
         evidence. A changed body invalidates the approval that covered it.
+
+        The replay may be supplied either as the evidence directly, or as
+        the E3 ``ReplayResult`` it was derived from - an application that
+        already runs the E3 replay does not have to translate it.
         """
         manifest = self.fabric.get_manifest_version(name, version) if version \
             else self.fabric.get_manifest(name)
         if manifest is None or manifest.state != SkillState.REVIEWED:
             return False
+        if replay is None and replay_result is not None:
+            replay = replay_evidence(
+                replay_result, content_hash=SkillFabric.content_hash(manifest),
+            )
         return await self.fabric.approve_skill(
             name, approver, notes, version=manifest.skill_version, replay=replay,
         )
