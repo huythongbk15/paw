@@ -25,10 +25,12 @@ order, preserving unfinished E1 ranking work and without enabling training:
 | Feature parity | B-27..B-33 | Sessions/chat, approvals, project/context, decision/DAG, inspect, memory/skills, model/experimental views through shared services. |
 | Product candidate | B-34..B-36 | Install/upgrade/backup/restore and documentation; browser/CLI parity; one clean-revision D3 + explicit release verdict. |
 
-Next safe action: the packaged static assets and the browser shell over the
-read-only surface, keeping the CSP every response already carries, and only then
-the mutation routes - which stay off until the concurrency question (F02) is
-settled. **On 2026-10-21 the transport was chosen (a minimal ASGI application,
+Next safe action: the mutation routes and the shell's mutating affordances,
+which stay off until the storage concurrency question (F02) is settled - and
+that question is the next thing to settle, not the routes. **On 2026-10-21 the
+packaged shell and its asset policy were delivered**: the shell travels in the
+wheel, the asset policy refuses a traversal or a symlink out of the tree, and the
+shell holds no credential because the read-only surface needs none. **On 2026-10-21 the transport was chosen (a minimal ASGI application,
 no framework) and the read-only surface was exposed** - eight `GET` routes under
 `/api/v1`, proved by driving the ASGI callable directly, with no server, no
 socket, no test client and no network. **B-23..B-26 were delivered on 2026-10-21** as

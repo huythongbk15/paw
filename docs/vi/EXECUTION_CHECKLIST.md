@@ -151,9 +151,20 @@
   (5/15 fail khi bỏ ranh giới hoặc bỏ security header);
   `src/paw/application/web_projection.py` sở hữu việc giới hạn và redact; ruff
   check clean.
-- [ ] Static asset đóng gói và CSP của nó, các route mutation, và browser shell
-  chưa được dựng. Chính sách CSP đã có sẵn — mọi response đều mang — nhưng chưa
-  có asset nào được phục vụ.
+- [x] Static asset đóng gói và browser shell. Shell đi cùng wheel, nên một PAW
+  đã cài phục vụ đúng bề mặt như một source checkout; chính sách asset từ chối
+  traversal, đường dẫn tuyệt đối, null byte và symlink trỏ ra ngoài, chỉ phục vụ
+  kiểu file đã biết và không bao giờ liệt kê thư mục. Shell là bố cục ba vùng
+  với tiếng Việt UTF-8, điều khiển bằng bàn phím, focus ring nhìn thấy được,
+  layout hẹp đáp ứng và bốn trạng thái phân biệt được; mọi giá trị được render
+  dưới dạng text, nên không thể trở thành markup; và nó **không giữ credential**
+  nào — bề mặt chỉ đọc không cần token.
+  — RESOLVED. `tests/test_local_web_assets_contract.py` 22 passed và
+  `tests/test_local_web_asgi_contract.py` 20 passed, có chứng minh fail-positive
+  (2/22 fail khi bỏ kiểm tra traversal và containment); asset có trong wheel; ruff
+  check clean.
+- [ ] Các route mutation và affordance ghi của shell. Shell tự nói điều đó: bề mặt
+  là chỉ đọc cho tới khi câu hỏi lưu trữ đồng thời (F02) được giải quyết.
   — OPEN. Packet tiếp theo.
 - [x] B-19/F04: provider discovery là thao tác tường minh, do Policy cho phép.
   `ModelRouter.route()` chỉ dùng cache; `discover_providers()` là thao tác tường

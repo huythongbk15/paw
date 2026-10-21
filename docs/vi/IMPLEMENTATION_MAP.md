@@ -548,6 +548,47 @@ redact.
 response đều mang — nhưng chưa có asset nào được phục vụ), các route mutation,
 và chính browser shell.
 
+### B-28 browser shell đóng gói và chính sách asset của nó — 2026-10-21, STANDARD / READY
+
+Shell được **đóng gói**: nó đi cùng wheel, nên một PAW đã cài phục vụ đúng bề
+mặt như một source checkout. Điều đó làm thư mục asset trở thành nơi một sai
+sót đường dẫn sẽ là lộ file, nên chính sách được nêu rõ và được ghim.
+
+**Chính sách asset** (`src/paw/web/assets.py`): asset root là thư mục `static`
+của chính package, resolve một lần; request path được resolve **bên trong** nó,
+và traversal, đường dẫn tuyệt đối, null byte hay symlink trỏ ra ngoài đều bị
+**từ chối** chứ không bị clamp; chỉ một tập kiểu file đã biết được phục vụ, và
+kiểu do phần mở rộng quyết định; thư mục không bao giờ được liệt kê; asset lạ là
+một từ chối có mã, không phải một listing.
+
+**Shell** (`src/paw/web/static/`) là bố cục ba vùng mà hợp đồng nêu — điều hướng,
+không gian làm việc, inspector — với trạng thái project, profile, model và task
+hiện trên màn hình. Nó là UTF-8 với tiếng Việt, điều khiển được bằng bàn phím
+với skip link và focus ring nhìn thấy được, có layout hẹp đáp ứng, và phân biệt
+bốn trạng thái (loading, empty, error, unavailable). Mọi giá trị được render bằng
+`textContent`, nên một giá trị từ API không thể biến thành markup.
+
+**Nó không giữ credential nào.** Bề mặt chỉ đọc không cần CSRF token, nên trình
+duyệt không lưu gì: không `localStorage`, không `sessionStorage`, không cookie,
+không token trong query string. Đây là hệ quả của phạm vi chỉ đọc, không phải
+sự thiếu sót — khi mutation tới, token cần một cơ chế, và cơ chế đó là quyết
+định của packet kế tiếp.
+
+**Nó đọc trạng thái durable**, nên reload hay reconnect không mất gì: trạng thái
+nó hiện là trạng thái server giữ, còn việc chọn task là lựa chọn hiển thị chứ
+không phải trạng thái durable.
+
+**Bằng chứng.** `tests/test_local_web_assets_contract.py` (22 test) và
+`tests/test_local_web_asgi_contract.py` (20 test, năm test về việc shell được
+phục vụ).
+
+*Chứng minh fail-positive.* Bỏ kiểm tra traversal và kiểm tra containment làm
+fail 2/22 — null byte và symlink trỏ ra ngoài.
+
+**Còn mở.** Các route mutation, và các affordance có ghi của shell. Shell tự nói
+điều đó: bề mặt là chỉ đọc cho tới khi câu hỏi lưu trữ đồng thời (F02) được
+giải quyết.
+
 ### Bộ đếm operation của checkpoint (code)
 
 `TaskCheckpoint` giờ mang `operations_completed`, lưu trong cột mới

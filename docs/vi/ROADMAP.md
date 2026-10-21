@@ -20,9 +20,12 @@ quyền hạ gate. [Audit BETA/web](BETA_LIMITATIONS.md) ghi findings/parity/cas
 | Parity | B-27..B-33 | Session/approval/project/decision/DAG/inspect/memory/skills/models/experimental qua service chung. |
 | Release candidate | B-34..B-36 | Install/upgrade/backup/restore/docs/parity; D3 clean và verdict rõ. |
 
-Việc an toàn tiếp theo: static asset đóng gói và browser shell trên bề mặt chỉ
-đọc, giữ nguyên CSP mà mọi response đã mang, và chỉ sau đó mới tới các route
-mutation — vốn tắt cho tới khi câu hỏi concurrency (F02) được giải quyết.
+Việc an toàn tiếp theo: các route mutation và affordance ghi của shell, vốn tắt
+cho tới khi câu hỏi lưu trữ đồng thời (F02) được giải quyết — và chính câu hỏi
+đó là thứ cần giải quyết tiếp, chứ không phải các route. **Ngày 2026-10-21
+packaged shell và chính sách asset của nó đã được giao**: shell đi cùng wheel,
+chính sách asset từ chối traversal hay symlink trỏ ra ngoài, và shell không giữ
+credential nào vì bề mặt chỉ đọc không cần.
 **Ngày 2026-10-21 transport đã được chọn (một ứng dụng ASGI tối giản, không
 framework) và bề mặt chỉ đọc đã được mở** — tám route `GET` dưới `/api/v1`,
 được chứng minh bằng cách chạy trực tiếp ASGI callable, không server, không

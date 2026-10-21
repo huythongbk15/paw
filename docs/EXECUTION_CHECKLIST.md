@@ -155,9 +155,22 @@
   (5/15 fail with the boundary skipped or the headers dropped);
   `src/paw/application/web_projection.py` owns the bounding and the
   redaction; ruff check clean.
-- [ ] The packaged static assets and their CSP, the mutation routes and
-  the browser shell are not built. The CSP policy itself is in place -
-  every response carries it - but no asset is served yet.
+- [x] The packaged static assets and the browser shell. The shell travels
+  inside the wheel, so an installed PAW serves the same surface a source
+  checkout does; the asset policy refuses a traversal, an absolute path, a
+  null byte and a symlink out of the tree, serves only known file types
+  and never lists a directory. The shell is the three-region layout with
+  UTF-8 Vietnamese text, keyboard operability, a visible focus ring, a
+  responsive narrow layout and the four distinct states; it renders every
+  value as text, so a value cannot become markup; and it holds **no
+  credential** - the read-only surface needs no token.
+  — RESOLVED. `tests/test_local_web_assets_contract.py` 22 passed and
+  `tests/test_local_web_asgi_contract.py` 20 passed, fail-positive proven
+  (2/22 fail with the traversal and containment checks dropped); the
+  assets ship in the wheel; ruff check clean.
+- [ ] The mutation routes and the shell's mutating affordances. The shell
+  states this in its own text: the surface is read-only until the storage
+  concurrency question (F02) is settled.
   — OPEN. The next packet.
 - [x] B-19/F04: provider discovery is an explicit, Policy-admitted operation.
   `ModelRouter.route()` is cache-only; `discover_providers()` is the explicit

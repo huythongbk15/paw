@@ -603,6 +603,51 @@ headers fails 5 of the 15.
 already in place - every response carries it - but no asset is served
 yet), the mutation routes, and the browser shell itself.
 
+### B-28 the packaged shell and its asset policy — 2026-10-21, STANDARD / READY
+
+The shell is **packaged**: it travels inside the wheel, so an installed
+PAW serves the same surface a source checkout does. That makes the asset
+directory a place where a path mistake would be a file disclosure, so
+the policy is explicit and pinned.
+
+**The asset policy** (`src/paw/web/assets.py`): the asset root is the
+package's own `static` directory, resolved once; a request path is
+resolved **inside** it, and a traversal, an absolute path, a null byte
+or a symlink pointing out of the tree are all **refused** rather than
+clamped; only a known set of file types is served, decided by the
+extension; a directory is never listed; and an unknown asset is a typed
+refusal, not a listing.
+
+**The shell** (`src/paw/web/static/`) is the three-region layout the
+contract names - navigation, workspace, inspector - with the project,
+profile, model and task state on screen. It is UTF-8 with Vietnamese
+text, keyboard operable with a skip link and a visible focus ring, has
+a responsive narrow layout, and distinguishes the four states (loading,
+empty, error, unavailable). It renders every value with `textContent`,
+so a value from the API cannot become markup.
+
+**It holds no credential.** The read-only surface needs no CSRF token,
+so the browser stores none: no `localStorage`, no `sessionStorage`, no
+cookie, no token in a query string. That is a property of the read-only
+scope, not an omission - when mutations arrive, the token needs a
+mechanism, and the mechanism is the next packet's decision.
+
+**It reads durable state**, so a reload or a reconnect loses nothing: the
+state it shows is the state the server holds, and the task selection is
+a view choice rather than durable state.
+
+**Evidence.** `tests/test_local_web_assets_contract.py` (22 tests) and
+`tests/test_local_web_asgi_contract.py` (20 tests, five of them about
+the shell being served).
+
+*Fail-positive proven.* Dropping the traversal check and the
+containment check fails 2 of the 22 - the null byte and the symlink out
+of the tree.
+
+**Still open.** The mutation routes, and the shell's mutating
+affordances. The shell says so in its own text: the surface is read-only
+until the storage concurrency question (F02) is settled.
+
 ### Checkpoint operation counter (code)
 
 `TaskCheckpoint` now carries `operations_completed`, persisted in a new
