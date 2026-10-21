@@ -90,6 +90,54 @@ class FileContentVerification:
         )
 
 
+class TestSuiteVerification:
+    """A verification that runs the project's **own** test suite.
+
+    This is the real harness the workflow's verification port exists for.
+    It lives in the *application*, not in ``paw/``: the product charter
+    does not authorize shell execution, and PAW's own runtime layers
+    never spawn a process (``tests/test_no_shell_execution_in_runtime.py``
+    checks that mechanically). The application supplies the port; the
+    application may run whatever it needs to.
+
+    The suite is run with an argv list and ``shell=False``.
+    """
+
+    def __init__(self, root: Path, timeout: int = 300) -> None:
+        self.root = root
+        self.timeout = timeout
+        self.runs: list[dict] = []
+
+    async def verify(self, request: VerificationRequest) -> VerificationOutcome:
+        import subprocess
+        import sys
+
+        command = [sys.executable, "-m", "pytest", "-q", "--no-header",
+                   "-p", "no:cacheprovider", str(self.root)]
+        completed = await asyncio.to_thread(
+            subprocess.run,
+            command,
+            capture_output=True,
+            text=True,
+            timeout=self.timeout,
+            cwd=str(self.root),
+            shell=False,
+        )
+        output = (completed.stdout or "") + (completed.stderr or "")
+        passed = completed.returncode == 0
+        self.runs.append({"command": command, "returncode": completed.returncode})
+        tail = "\n".join(output.strip().splitlines()[-6:])
+        return VerificationOutcome(
+            passed=passed,
+            summary=(
+                f"the project's own test suite {'passed' if passed else 'failed'}"
+                f" (exit {completed.returncode})"
+            ),
+            evidence=tail[:2000],
+            command=" ".join(command),
+        )
+
+
 async def _ingest(root: Path) -> int:
     """Ingest the project so the research phase has real content to find."""
     sources, chunks = KnowledgeSourceManager(), KnowledgeChunkStore()
@@ -119,6 +167,22 @@ async def run_demo(work_dir: str | Path | None = None) -> dict:
     root = work_dir / "project"
     root.mkdir(parents=True, exist_ok=True)
     (root / "module.py").write_text(ORIGINAL)
+    # The project's own test suite. It asserts the *new* behaviour, so it
+    # is red before the change and green after it. This is what the
+    # verification port will run.
+    (root / "test_module.py").write_text(
+        "from module import value\n\n\n"
+        "def test_value_is_raised():\n"
+        "    assert value() == 2\n"
+    )
+    # A second test that needs an environment marker. It is red until the
+    # marker exists, which is the realistic "the change is right but the
+    # environment is not ready" failure the restart then clears.
+    (root / "test_environment.py").write_text(
+        "from pathlib import Path\n\n\n"
+        "def test_environment_is_ready():\n"
+        "    assert Path('environment.marker').exists()\n"
+    )
 
     await set_db_path(work_dir / "demo.db")
     await db.initialize()
@@ -168,7 +232,7 @@ async def run_demo(work_dir: str | Path | None = None) -> dict:
 
     workflow = EngineeringWorkflow(
         runtime,
-        verification_port=FileContentVerification(root, REPLACEMENT),
+        verification_port=TestSuiteVerification(root),
         declared_by="demo-human",
     )
     request = WorkflowRequest(
@@ -179,15 +243,19 @@ async def run_demo(work_dir: str | Path | None = None) -> dict:
         method="file_content",
     )
 
-    # First pass: the change applies, the verification fails because the
-    # port expects the new content and the executor wrote the old one.
-    failing = FileContentVerification(root, "a string that is not there")
+    # First pass: the change applies, then the project's own test suite is
+    # run. It is still red because a second test depends on an
+    # environment marker that nobody has created yet - a realistic
+    # "the change is right but the environment is not ready" failure.
     first = await EngineeringWorkflow(
-        runtime, verification_port=failing, declared_by="demo-human",
+        runtime, verification_port=TestSuiteVerification(root), declared_by="demo-human",
     ).run(request, task=task, plan=plan, approver=_grant)
 
-    # Second pass: restart from the checkpoint with a correct port. The
-    # completed change is not repeated; the verification is retried.
+    # The human fixes the environment: the marker the second test needs.
+    (root / "environment.marker").write_text("ready\n")
+
+    # Second pass: restart from the checkpoint. The completed change is
+    # not repeated; the test suite is run again and now passes.
     second = await workflow.run(
         request, task=task, plan=plan, approver=_grant,
         resume_from_checkpoint=first.checkpoint_id,
