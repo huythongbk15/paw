@@ -1286,10 +1286,25 @@ asked for a file was admitted by the boundary, then **asked for
 approval** and executed nothing, and the same request key again answered
 `already_recorded` with the same task id.
 
+### The shell can ask a human to decide (2026-10-21)
+
+The read-only surface reported that an approval was pending but offered
+no way to give it — the person had to leave the browser and use the
+CLI. The shell now shows an **approval card**: the operation, the
+capabilities, the target and the proposed change, with **Cho phép** and
+**Từ chối**.
+
+It says *which* approval it is, because there are two: an **evidence
+review** accepts the implementation-readiness evidence and is not
+execution authority; an **effect approval** is the runtime's policy ASK
+for one exact operation. The evidence review shows the selected option,
+the **contrary** evidence and the stop condition — a review that hides
+the risks is not a review.
+
 ### Still open (tracked)
 
-the shell's mutating affordances and the packaged assets · the
-gitignored E1-27 measurement report.
+the packaged assets and the remaining shell polish · the gitignored
+E1-27 measurement report.
 
 ---
 
@@ -1315,5 +1330,6 @@ gitignored E1-27 measurement report.
 | **F02** | ✅ CLOSED (one half open) | The transaction scope is per task and the depth is per transaction; an independent write in another task survives the owner's rollback. 9 contract tests, fail-positive proven. The nested-write half needs a write queue. |
 | **F02** | ✅ CLOSED | All three parts: the transaction scope is per task and the depth per transaction; the cross-process model is explicit - a bounded busy timeout on every connection, and opening an up-to-date database takes no write lock; and a write that must outlive its transaction has a form that works (`write_independent`). 21 contract tests, fail-positive proven. |
 | **B-29** | ✅ DELIVERED | The mutation routes: two mutations behind the unchanged boundary, a request key that makes a turn idempotent, a process-wide write admission, and the server as the only optional dependency. 15 contract tests against a real server; fail-positive proven. |
-| **Next** | the shell's mutating affordances and the packaged assets | the part a person actually looks at |
+| **B-29** | ✅ DELIVERED | The mutation routes, and the shell's approval affordance: the person sees the effect, the contrary evidence and the stop condition before deciding. 18 contract tests against a real server; fail-positive proven. |
+| **Next** | the packaged assets and the remaining shell polish | the part a person actually looks at |
 
