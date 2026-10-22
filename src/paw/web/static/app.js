@@ -1,15 +1,15 @@
 /* The PAW local web shell client.
  *
  * Rules this file keeps:
- *  - it holds **no credential**: the read-only surface needs no CSRF
- *    token, so nothing is written to localStorage, a cookie, or a query
- *    string;
+ *  - it holds the CSRF token **in memory only**: it is fetched over the
+ *    same origin, never written to localStorage, a cookie, or a URL;
  *  - it never renders raw HTML from the API: every value goes through
  *    textContent, so a value cannot become markup;
- *  - it reads durable state, so a reload or a reconnect loses nothing:
- *    the state it shows is the state the server holds;
- *  - it distinguishes loading, empty, error and unavailable;
- *  - it is keyboard operable and announces what it loads.
+ *  - a send is **idempotent**: the request key is minted once for a
+ *    composed message and reused if the request is retried, so a repeat
+ *    resolves to the same durable operation rather than a second attempt;
+ *  - it reads durable state, so a reload or a reconnect loses nothing;
+ *  - it distinguishes loading, empty, error and unavailable.
  */
 (function () {
   "use strict";
@@ -26,10 +26,18 @@
     stateProfile: document.getElementById("state-profile"),
     stateModel: document.getElementById("state-model"),
     stateTask: document.getElementById("state-task"),
-    refresh: document.getElementById("refresh")
+    refresh: document.getElementById("refresh"),
+    composer: document.getElementById("composer"),
+    composerInput: document.getElementById("composer-input"),
+    composerSend: document.getElementById("composer-send"),
+    composerHint: document.getElementById("composer-hint")
   };
 
-  var current = { view: "sessions", taskId: "" };
+  var current = { view: "chat", taskId: "", sessionId: "" };
+  /* The token lives here and nowhere else. */
+  var csrfToken = "";
+  /* The key for the message being composed, so a retry is the same turn. */
+  var pendingKey = "";
 
   function setChip(node, label, value) {
     if (!node) { return; }
@@ -41,15 +49,13 @@
     if (!el.toast) { return; }
     el.toast.textContent = message;
     el.toast.hidden = false;
-    window.setTimeout(function () { el.toast.hidden = true; }, 6000);
+    window.setTimeout(function () { el.toast.hidden = true; }, 8000);
   }
 
   function clear(node) {
     while (node && node.firstChild) { node.removeChild(node.firstChild); }
   }
 
-  /* Every state is explicit: the user is never left looking at a blank
-   * panel wondering whether it is loading or empty. */
   function renderState(node, kind, title, body) {
     clear(node);
     var wrap = document.createElement("div");
@@ -107,12 +113,24 @@
     node.appendChild(pre);
   }
 
-  function request(path) {
-    return fetch(API + path, {
-      method: "GET",
+  function request(path, options) {
+    var opts = options || {};
+    var init = {
+      method: opts.method || "GET",
       credentials: "omit",
       headers: { "Accept": "application/json" }
-    }).then(function (response) {
+    };
+    if (opts.body !== undefined) {
+      init.headers["Content-Type"] = "application/json";
+      init.body = JSON.stringify(opts.body);
+    }
+    if (opts.method && opts.method !== "GET") {
+      if (!csrfToken) {
+        return Promise.reject(new Error("Chưa có token cục bộ; tải lại trang."));
+      }
+      init.headers["X-CSRF-Token"] = csrfToken;
+    }
+    return fetch(API + path, init).then(function (response) {
       return response.json().catch(function () { return null; }).then(function (body) {
         if (!response.ok) {
           var code = (body && body.code) || "web.request_failed";
@@ -127,6 +145,99 @@
     });
   }
 
+  /* The token, fetched over the same origin and kept in memory. */
+  function loadToken() {
+    return request("/csrf-token").then(function (body) {
+      csrfToken = (body && body.csrf_token) || "";
+      return csrfToken;
+    });
+  }
+
+  function loadSession() {
+    return request("/session").then(function (body) {
+      current.sessionId = (body && body.session_id) || "";
+      setChip(el.stateProfile, "profile:", (body && body.status) || "—");
+      return body;
+    }).catch(function () {
+      current.sessionId = "";
+      return null;
+    });
+  }
+
+  function newKey() {
+    if (window.crypto && window.crypto.randomUUID) {
+      return window.crypto.randomUUID();
+    }
+    return "k-" + Date.now() + "-" + Math.floor(Math.random() * 1e9);
+  }
+
+  function renderChat(messages) {
+    clear(el.view);
+    if (!messages.length) {
+      renderState(el.view, "empty", "Chưa có tin nhắn",
+        "Gửi một yêu cầu để PAW bắt đầu. Một lần gửi là một lần phê duyệt.");
+      return;
+    }
+    messages.forEach(function (message) {
+      var block = document.createElement("div");
+      block.className = "msg msg-" + (message.role || "user");
+      var who = document.createElement("p");
+      who.className = "msg-role";
+      who.textContent = message.role === "assistant" ? "PAW" : "Bạn";
+      var body = document.createElement("p");
+      body.className = "msg-body";
+      body.textContent = message.content || "";
+      block.appendChild(who);
+      block.appendChild(body);
+      el.view.appendChild(block);
+    });
+  }
+
+  function loadChat() {
+    if (!current.sessionId) {
+      renderState(el.view, "unavailable", "Chưa có phiên",
+        "Bề mặt này chưa có phiên để nói chuyện.");
+      return Promise.resolve();
+    }
+    return request("/sessions/" + encodeURIComponent(current.sessionId) + "/messages?limit=50")
+      .then(function (page) {
+        renderChat((page && page.items) || []);
+      }).catch(function (error) {
+        renderState(el.view, "error", "Không tải được tin nhắn", error.message);
+      });
+  }
+
+  function sendMessage(text) {
+    if (!current.sessionId) {
+      showToast("Chưa có phiên để gửi.");
+      return Promise.resolve();
+    }
+    if (!pendingKey) { pendingKey = newKey(); }
+    el.composerSend.disabled = true;
+    el.composerHint.textContent = "Đang gửi…";
+    return request("/sessions/" + encodeURIComponent(current.sessionId) + "/messages", {
+      method: "POST",
+      body: { text: text, request_key: pendingKey }
+    }).then(function (reply) {
+      pendingKey = "";
+      el.composerInput.value = "";
+      setChip(el.stateTask, "task:", reply.task_id || "—");
+      if (reply.waiting_for_approval) {
+        el.composerHint.textContent = "Đang chờ bạn phê duyệt.";
+        showToast("PAW cần bạn phê duyệt tác động này.");
+      } else {
+        el.composerHint.textContent = "Một lần gửi = một phiếu duyệt.";
+      }
+      return loadChat();
+    }).catch(function (error) {
+      el.composerHint.textContent = "Một lần gửi = một phiếu duyệt.";
+      showToast(error.message);
+    }).then(function () {
+      el.composerSend.disabled = false;
+      el.composerInput.focus();
+    });
+  }
+
   function loadSessions() {
     el.view.setAttribute("aria-busy", "true");
     renderState(el.view, "loading", "Đang tải sessions…", "Một khoảnh khắc.");
@@ -138,7 +249,7 @@
         { label: "Trạng thái", get: function (r) { return r.status; } },
         { label: "Task", get: function (r) { return r.current_task_id; } },
         { label: "Cập nhật", get: function (r) { return r.updated_at; } }
-      ], items, "Chưa có session nào. Bề mặt hiện chỉ đọc.");
+      ], items, "Chưa có session nào.");
     }).catch(function (error) {
       el.view.setAttribute("aria-busy", "false");
       renderState(el.view, "error", "Không tải được sessions", error.message);
@@ -170,7 +281,7 @@
         },
         { label: "Session", get: function (r) { return r.session; } },
         { label: "Trạng thái", get: function (r) { return r.status; } }
-      ], rows, "Chưa có task nào. Một task xuất hiện khi một phiên chat chạy.");
+      ], rows, "Chưa có task nào.");
     }).catch(function (error) {
       el.view.setAttribute("aria-busy", "false");
       renderState(el.view, "error", "Không tải được tasks", error.message);
@@ -191,10 +302,9 @@
         .then(function (body) { return { kind: kind, body: body }; })
         .catch(function (error) { return { kind: kind, error: error.message }; });
     })).then(function (results) {
-      var summary = results.map(function (item) {
+      renderJson(el.inspect, results.map(function (item) {
         return { kind: item.kind, value: item.error ? ("— " + item.error) : item.body };
-      });
-      renderJson(el.inspect, summary);
+      }));
     });
   }
 
@@ -202,7 +312,6 @@
     renderState(el.view, "loading", "Đang tải capabilities…", "Một khoảnh khắc.");
     return request("/capabilities").then(function (body) {
       renderJson(el.view, body);
-      setChip(el.stateModel, "model:", "xem capabilities");
     }).catch(function (error) {
       renderState(el.view, "error", "Không tải được capabilities", error.message);
     });
@@ -234,6 +343,7 @@
   }
 
   var views = {
+    chat: { title: "Chat", load: loadChat },
     sessions: { title: "Sessions", load: loadSessions },
     tasks: { title: "Tasks", load: loadTasks },
     inspect: { title: "Inspect", load: loadInspect },
@@ -267,10 +377,28 @@
     show(current.view);
   });
 
-  /* The state the shell shows is the state the server holds, so a reload
-   * or a reconnect loses nothing durable. The task selection is a view
-   * choice, not durable state, so it is rebuilt from the URL. */
-  window.addEventListener("popstate", function () { show(current.view); });
+  el.composer.addEventListener("submit", function (event) {
+    event.preventDefault();
+    var text = el.composerInput.value.trim();
+    if (!text) { return; }
+    sendMessage(text);
+  });
 
-  show("sessions");
+  el.composerInput.addEventListener("keydown", function (event) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      el.composer.requestSubmit ? el.composer.requestSubmit()
+        : el.composer.dispatchEvent(new Event("submit", { cancelable: true }));
+    }
+  });
+
+  /* The token and the session come first: without them the surface is
+   * read-only, and the composer says so. */
+  loadToken()
+    .then(loadSession)
+    .then(function () { show("chat"); })
+    .catch(function (error) {
+      renderState(el.view, "unavailable", "Bề mặt chưa sẵn sàng", error.message);
+      if (el.composerSend) { el.composerSend.disabled = true; }
+    });
 }());

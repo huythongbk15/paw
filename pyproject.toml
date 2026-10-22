@@ -20,6 +20,11 @@ dependencies = [
 paw = "paw.cli:app"
 
 [project.optional-dependencies]
+# The local web server. The application, the boundary and the projections
+# have no such dependency: only the server does, and it is optional.
+web = [
+    "uvicorn>=0.30",
+]
 dev = [
     "pytest>=8.2",
     "pytest-asyncio>=0.23",

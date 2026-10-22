@@ -25,6 +25,7 @@
   <nav class="region region-left" id="nav" aria-label="Điều hướng">
     <h2 class="region-title">Điều hướng</h2>
     <ul class="nav-list">
+      <li><button type="button" class="nav-item" data-view="chat">Chat</button></li>
       <li><button type="button" class="nav-item" data-view="sessions">Sessions</button></li>
       <li><button type="button" class="nav-item" data-view="tasks">Tasks</button></li>
       <li><button type="button" class="nav-item" data-view="inspect">Inspect</button></li>
@@ -36,15 +37,24 @@
       Projects · Decisions/Plans · Approvals · Memory/Knowledge · Skills · Models ·
       Diagnostics
     </p>
-    <p class="muted small">Bề mặt hiện <b>chỉ đọc</b>. Các thao tác ghi được bật sau
-      khi câu hỏi lưu trữ đồng thời được giải quyết.</p>
+    <p class="muted small">Bề mặt này ghi vào workspace đã chọn. Mọi thao tác
+      ghi đều cần một <b>phiếu duyệt</b> của người dùng.</p>
   </nav>
 
   <main class="region region-center" id="workspace" tabindex="-1" aria-label="Không gian làm việc">
-    <h2 class="region-title" id="view-title">Sessions</h2>
+    <h2 class="region-title" id="view-title">Chat</h2>
     <div id="view" class="view" aria-live="polite" aria-busy="false">
       <p class="muted">Đang tải…</p>
     </div>
+    <form class="composer" id="composer" autocomplete="off">
+      <label class="visually-hidden" for="composer-input">Yêu cầu cho PAW</label>
+      <textarea id="composer-input" name="text" rows="3"
+        placeholder="Yêu cầu cho PAW… (Enter để gửi, Shift+Enter xuống dòng)"></textarea>
+      <div class="composer-row">
+        <span class="muted small" id="composer-hint">Một lần gửi = một phiếu duyệt.</span>
+        <button type="submit" class="btn btn-primary" id="composer-send">Gửi</button>
+      </div>
+    </form>
   </main>
 
   <aside class="region region-right" id="inspector" aria-label="Inspector bằng chứng">

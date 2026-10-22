@@ -182,14 +182,31 @@ class TestTheShell:
         return source
 
     def test_it_holds_no_credential(self):
-        """The read-only surface needs no token, so it stores none."""
+        """The token is held in memory and nowhere else.
+
+        The surface can mutate now, so the shell *does* need the local
+        CSRF token. What it must never do is persist it: not in browser
+        storage, not in a cookie, and not in a URL where it would end up
+        in a log or a Referer header.
+        """
         js = self._code_only(self._js())
         assert "localStorage" not in js
         assert "sessionStorage" not in js
         assert "document.cookie" not in js
         # No token in a query string either.
         assert "?token=" not in js
-        assert "csrf" not in js.lower()
+        assert "csrf_token=" not in js
+        # The token is fetched over the same origin and kept in a variable.
+        assert "csrf-token" in js
+        assert "var csrfToken" in js
+        # And it is sent as a header, never as a query parameter.
+        assert "X-CSRF-Token" in js
+
+    def test_the_read_only_surface_had_no_token_at_all(self):
+        """The shell is still usable without the token: reads do not need
+        one, and the composer says so rather than failing silently."""
+        js = self._code_only(self._js())
+        assert "Chưa có token cục bộ" in js
 
     def test_it_never_renders_raw_html(self):
         """A value from the API must not be able to become markup."""

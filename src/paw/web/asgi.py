@@ -47,8 +47,26 @@ __all__ = [
     "Route",
     "WebApplication",
     "WebRequestContext",
+    "WebRequestError",
     "WebResponse",
 ]
+
+
+class WebRequestError(Exception):
+    """A request the surface refuses, with a stable code.
+
+    The routes raise it instead of returning a response, so the refusal
+    has one shape wherever it comes from.
+    """
+
+    def __init__(self, code: str, message: str, *, status: int = 400) -> None:
+        self.code = code
+        self.message = message
+        self.status = status
+        super().__init__(f"{code}: {message}")
+
+    def to_dict(self) -> dict[str, str]:
+        return {"code": self.code, "message": self.message}
 
 # The Content-Security-Policy every response carries. The surface is
 # same-origin, packaged assets only, and it never executes remote code.
@@ -178,12 +196,20 @@ class WebApplication:
         static_dir: Path | None = None,
         revision: str = "",
         schema_version: int = 0,
+        csrf_token: str = "",
+        services: dict[str, Any] | None = None,
     ) -> None:
         self.guard = guard or LocalWebGuard(WebSecurityConfig())
         self.routes = list(routes or [])
         self.static_dir = static_dir
         self.revision = revision
         self.schema_version = schema_version
+        #: The local CSRF token. Minted per process by the server; the
+        #: shell reads it over the same origin and keeps it in memory. It
+        #: is never in a query string and never in browser storage.
+        self.csrf_token = csrf_token
+        #: The application services the routes project.
+        self.services: dict[str, Any] = dict(services or {})
         self._static_cache: dict[str, bytes] = {}
 
     # -- routing ----------------------------------------------------------
@@ -293,9 +319,23 @@ class WebApplication:
             correlation_id=correlation_id,
         )
         try:
-            response = await route.handler(context)
+            if method.upper() in ("POST", "PUT", "PATCH", "DELETE"):
+                # The write admission is **process-wide**: until the storage
+                # concurrency question is settled further, one effect at a
+                # time. A per-session lock would not be a database fix.
+                async with self.guard.write_lock:
+                    response = await route.handler(context)
+            else:
+                response = await route.handler(context)
         except WebSecurityError as exc:
             await self._send_error(send, exc, correlation_id)
+            return
+        except WebRequestError as exc:
+            await self._send(
+                send,
+                WebResponse(status=exc.status, body=exc.to_dict()),
+                correlation_id,
+            )
             return
         except Exception:  # pragma: no cover - defensive
             # A handler failure is a safe refusal, not a stack trace.

@@ -79,8 +79,17 @@ class TaskManager:
         project_id: ID | None = None,
         parent_id: ID | None = None,
         requested_capabilities: list[Capability] | None = None,
+        task_id: ID | None = None,
     ) -> Task:
+        """Create a task.
+
+        ``task_id`` lets a caller choose the identity. A request that
+        carries a request key uses it, so a retry resolves to the **same**
+        task and therefore to the same durable operation - which is what
+        makes a repeated request idempotent rather than a second attempt.
+        """
         task = Task(
+            id=task_id or Task.model_fields["id"].default_factory(),
             session_id=session_id,
             project_id=project_id,
             parent_id=parent_id,

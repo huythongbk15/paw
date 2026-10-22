@@ -355,7 +355,9 @@ class ChatService:
         selected.reverse()
         return [item.as_model_message() for item in selected]
 
-    async def _prepare_turn(self, message: str) -> ChatReply | tuple[Task, ProposedAction]:
+    async def _prepare_turn(
+        self, message: str, *, request_key: str | None = None,
+    ) -> ChatReply | tuple[Task, ProposedAction]:
         """Admit and persist one turn for every chat transport."""
         session = self._require_session()
         if session.status == ChatSessionStatus.CANCELLED:
@@ -397,6 +399,7 @@ class ChatService:
             session_id=session.session_id,
             goal=message,
             requested_capabilities=capabilities,
+            task_id=self._task_id_for(request_key) if request_key else None,
         )
         session.current_task_id = task.id
         session.pending_approval_id = None
@@ -455,12 +458,61 @@ class ChatService:
         await ChatStateStore.save_session(session)
         return task, action
 
-    async def send(self, message: str) -> ChatReply:
-        prepared = await self._prepare_turn(message)
+    async def send(self, message: str, *, request_key: str | None = None) -> ChatReply:
+        """Send one turn.
+
+        ``request_key`` makes the turn **idempotent**. The key determines
+        the task's identity, so a retry - a double click, a reconnect, a
+        browser that repeated the request - resolves to the same task and
+        therefore to the same durable operation. The runtime's operation
+        records then decide whether the effect repeats, rather than this
+        method creating a second attempt.
+        """
+        if request_key:
+            existing = await self._existing_turn(request_key)
+            if existing is not None:
+                return existing
+        prepared = await self._prepare_turn(message, request_key=request_key)
         if isinstance(prepared, ChatReply):
             return prepared
         task, action = prepared
         return await self._run_action(task, action)
+
+    def _task_id_for(self, request_key: str) -> str:
+        """The task identity a request key determines."""
+        import hashlib
+
+        digest = hashlib.sha256(request_key.encode("utf-8")).hexdigest()[:20]
+        return f"web-{digest}"
+
+    async def _existing_turn(self, request_key: str) -> ChatReply | None:
+        """The outcome of a turn that already ran under this request key.
+
+        A repeated request must not run the turn again. If the task is
+        already there, its durable state is the answer.
+        """
+        task_id = self._task_id_for(request_key)
+        task = await TaskManager.get(task_id)
+        if task is None:
+            return None
+        session = self._require_session()
+        if task.status == TaskStatus.PENDING:
+            # The attempt was interrupted. Report it rather than starting
+            # a second one: the runtime's replay safety owns the resume.
+            return ChatReply(
+                session_id=session.session_id,
+                task_id=task.id,
+                content="Yêu cầu đã được ghi nhận nhưng chưa hoàn tất.",
+                status=task.status.value,
+                reason="already_recorded",
+            )
+        return ChatReply(
+            session_id=session.session_id,
+            task_id=task.id,
+            content=task.result.get("content", "") if isinstance(task.result, dict) else "",
+            status=task.status.value,
+            reason="already_recorded",
+        )
 
     def _preferred_provider(self) -> str | None:
         """Which provider the runtime should prefer, given the requested mode.

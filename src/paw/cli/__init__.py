@@ -157,6 +157,13 @@ def _print_inspection(title: str, value: Any, json_output: bool = False) -> None
     console.print_json(data=value)
 
 
+def _storage_schema_version() -> int:
+    """The database schema version this build speaks."""
+    from ..core.storage import SCHEMA_VERSION
+
+    return SCHEMA_VERSION
+
+
 def version_callback(value: bool) -> None:
     if value:
         console.print(f"PAW version [bold]{__version__}[/bold]")
@@ -650,6 +657,73 @@ def tui(
     except ValueError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=2) from None
+
+
+@app.command()
+def web(
+    session_id: str | None = typer.Option(
+        None,
+        "--session",
+        "-s",
+        help="Resume a durable chat session.",
+    ),
+    provider: str = typer.Option(
+        "auto",
+        "--provider",
+        help="Model provider mode: auto (try Ollama, fall back to local), local (offline), or ollama.",
+    ),
+    workspace: str = typer.Option(
+        ".",
+        "--workspace",
+        help="Workspace boundary for local filesystem operations.",
+    ),
+    host: str = typer.Option(
+        "127.0.0.1",
+        "--host",
+        help="Bind address. Only a loopback address is accepted.",
+    ),
+    port: int = typer.Option(
+        8765,
+        "--port",
+        help="Port to bind on the loopback address.",
+    ),
+    quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress INFO logs (only show errors)."),
+    debug: bool = typer.Option(False, "--debug", help="Show DEBUG-level logs."),
+) -> None:
+    """Serve the local web surface on the loopback address, in the foreground."""
+    from ..core.logging import configure_logging as _configure_logging
+
+    if debug:
+        _log_level = logging.DEBUG
+    elif quiet:
+        _log_level = logging.ERROR
+    else:
+        _log_level = logging.WARNING
+    _configure_logging(_log_level)
+
+    from ..web.server import LocalWebServer
+
+    server = LocalWebServer(
+        workspace_root=workspace,
+        provider_mode=provider,
+        session_id=session_id,
+        host=host,
+        port=port,
+        revision=__version__,
+        schema_version=_storage_schema_version(),
+    )
+    console.print(
+        f"[green]PAW web[/green] on http://{host}:{port} - loopback only, Ctrl-C to stop."
+    )
+    try:
+        import asyncio
+
+        asyncio.run(server.serve())
+    except RuntimeError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from None
+    except KeyboardInterrupt:
+        console.print("[dim]stopped[/dim]")
 
 
 @beta_app.command("inspect")
