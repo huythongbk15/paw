@@ -784,6 +784,65 @@ and its depth per transaction; the cross-process model is explicit (a
 bounded busy timeout, and opening an up-to-date database takes no write
 lock); and a write that must outlive its transaction has a form that works.
 
+### B-29 the mutation routes: the surface can write, under the same gates — 2026-10-21, STANDARD / READY
+
+The read-only surface was the last thing before the surface could write
+anything. It now can, and it can only do so the way everything else in
+PAW does.
+
+**The mutations are two, and they are the two a person needs to drive the
+agent**: send a turn, and answer the pending approval. They are only
+registered when the surface has a chat service, so a deployment without
+one has **no mutation surface at all** - there is nothing to reach.
+
+**The boundary is in front of them, unchanged.** The exact ``Host``, the
+exact ``Origin``, the local CSRF token, the body bound, and no
+credential in the query string. A mutation also presents an ``Origin``,
+because a browser always sends one and its absence means the request did
+not come from a browser.
+
+**The token lives in memory.** The server mints one per process; the
+shell fetches it over the same origin and keeps it in a variable. It is
+never in a query string, never in ``localStorage``, never in a cookie.
+A foreign page cannot read it - the same-origin policy blocks the
+response, and no CORS header is sent - and it could not forge a request
+anyway, because the ``Origin`` check refuses a cross-origin ``POST``
+before the token is even considered.
+
+**The request key makes a turn idempotent.** The key determines the
+task's identity, so a retry - a double click, a reconnect - resolves to
+the **same** task and therefore to the same durable operation, and the
+runtime's operation records decide whether the effect repeats. A repeat
+answers ``already_recorded`` rather than starting a second attempt.
+
+**The write admission is process-wide.** It lives in the ASGI layer, so
+it is a property of the surface rather than of one route, and one effect
+happens at a time.
+
+**The server is the only optional dependency.** ``paw web`` serves the
+surface in the foreground on the loopback address. The application, the
+boundary and the projections have no such dependency; the ASGI server
+does, and it is an extra (``pip install 'paw[web]'``).
+
+**Evidence.** `tests/test_local_web_mutation_contract.py` (15 tests),
+against a **real server** on a real loopback port with a real database:
+the packaged shell is served; the token is available over the same
+origin; a mutation without the token is refused; a mutation with a wrong
+token is refused; a foreign ``Host`` and a credential in the query are
+refused; a malformed request key and a missing message are refused; an
+unknown approval is a typed refusal; a write **asks for approval before
+it writes**, and the file is not there until a human approves; and a
+repeated request is the **same turn**, not a second one.
+
+*Fail-positive proven.* Disabling the CSRF check and the request-key
+identity fails 3 of the 15 - the two token refusals and the idempotency.
+
+**Proved by hand as well.** ``paw web`` was run: the health, the shell
+and the token answered; a message that asked for a file was **admitted
+by the boundary**, then **asked for approval** and executed nothing
+("Chưa gọi model hoặc executor"); and the same request key again
+answered ``already_recorded`` with the same task id.
+
 ### Checkpoint operation counter (code)
 
 `TaskCheckpoint` now carries `operations_completed`, persisted in a new

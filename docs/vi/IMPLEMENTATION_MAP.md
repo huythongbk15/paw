@@ -713,6 +713,58 @@ và depth là của từng transaction; mô hình đa process tường minh (bus
 trần, và mở một database đã đúng phiên bản không lấy write lock); và một lần ghi
 phải sống lâu hơn transaction của nó nay có một hình thức thực sự chạy được.
 
+### B-29 các route mutation: bề mặt ghi được, qua đúng các gate đó — 2026-10-21, STANDARD / READY
+
+Bề mặt chỉ đọc là thứ cuối trước khi bề mặt có thể ghi bất cứ thứ gì. Nay nó
+ghi được, và chỉ ghi được theo đúng cách mọi thứ khác trong PAW ghi.
+
+**Có hai mutation, và đó là hai thứ một người cần để dẫn agent**: gửi một
+lượt, và trả lời approval đang chờ. Chúng chỉ được đăng ký khi bề mặt có một
+chat service, nên một bản cài không có thì **không có bề mặt mutation nào** —
+không có gì để chạm tới.
+
+**Ranh giới vẫn đứng trước, không đổi.** `Host` chính xác, `Origin` chính xác,
+CSRF token cục bộ, giới hạn body, và không mang credential trong query string. Một
+mutation còn phải có `Origin`, vì trình duyệt luôn gửi Origin và việc thiếu nó
+nghĩa là request không đến từ trình duyệt.
+
+**Token nằm trong bộ nhớ.** Server sinh một token mỗi process; shell lấy nó qua
+cùng origin và giữ trong một biến. Nó không bao giờ nằm trong query string,
+không trong `localStorage`, không trong cookie. Một trang lạ không đọc được nó —
+chính sách same-origin chặn response, và không có header CORS nào được gửi — và
+dù đọc được thì cũng không giả mạo được request, vì kiểm tra `Origin` đã từ
+chối một POST cross-origin trước khi token được xét tới.
+
+**Request key làm một lượt idempotent.** Key quyết định identity của task, nên
+một lần thử lại — click đúp, reconnect — resolve về **cùng** task, và do đó về
+cùng durable operation; các operation record của runtime quyết định effect có
+lặp lại hay không. Một lần thử lại trả lời `already_recorded` thay vì mở một
+lần thử thứ hai.
+
+**Write admission là toàn process.** Nó nằm ở tầng ASGI, nên là thuộc tính của
+bề mặt chứ không phải của một route, và chỉ một effect xảy ra tại một thời điểm.
+
+**Server là dependency tùy chọn duy nhất.** `paw web` phục vụ bề mặt ở foreground
+trên địa chỉ loopback. Application, ranh giới và projection không có dependency
+đó; ASGI server thì có, và là một extra (`pip install 'paw[web]'`).
+
+**Bằng chứng.** `tests/test_local_web_mutation_contract.py` (15 test), với một
+**server thật** trên một port loopback thật và database thật: packaged shell được
+phục vụ; token có sẵn qua cùng origin; mutation không token bị từ chối; mutation
+token sai bị từ chối; `Host` lạ và credential trong query bị từ chối; request
+key sai khăn và thiếu message bị từ chối; approval không tồn tại là từ chối có
+mã; một lần ghi **xin phê duyệt trước khi ghi**, và file chưa có cho tới khi
+con người phê duyệt; và một request lặp lại là **cùng một lượt**, không phải
+lượt thứ hai.
+
+*Chứng minh fail-positive.* Tắt kiểm tra CSRF và identity theo request key làm
+fail 3/15 — hai lần từ chối token và tính idempotent.
+
+**Cũng đã chứng minh bằng tay.** `paw web` đã chạy: health, shell và token đều
+trả lời; một tin nhắn xin tạo file được **boundary cho qua**, rồi **xin phê
+duyệt** và không thực thi gì ("Chưa gọi model hoặc executor"); và cùng request
+key lần nữa trả lời `already_recorded` với cùng task id.
+
 ### Bộ đếm operation của checkpoint (code)
 
 `TaskCheckpoint` giờ mang `operations_completed`, lưu trong cột mới

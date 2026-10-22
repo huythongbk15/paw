@@ -204,6 +204,19 @@
   to apply is raised by the transaction that queued it, so the party that
   owns the transaction is the one that learns; ruff check clean.
   **F02 is now closed in all three parts.**
+- [x] B-29: the mutation routes. Two mutations - send a turn, answer the
+  pending approval - behind the unchanged boundary (exact Host, exact Origin,
+  the local CSRF token, the body bound, no credential in the query). The
+  request key makes a turn idempotent: it determines the task's identity, so
+  a retry resolves to the same durable operation. The write admission is
+  process-wide. The server is the only optional dependency (`paw[web]`).
+  — RESOLVED. `tests/test_local_web_mutation_contract.py` 15 passed against a
+  **real server** on a real loopback port with a real database, fail-positive
+  proven (3/15 fail with the CSRF check or the request-key identity
+  disabled); also proved by hand with `paw web`: a request that asked for a
+  file was admitted by the boundary, then asked for approval and executed
+  nothing, and the same request key again answered `already_recorded` with the
+  same task id. Ruff check clean.
 - [x] B-19/F04: provider discovery is an explicit, Policy-admitted operation.
   `ModelRouter.route()` is cache-only; `discover_providers()` is the explicit
   operation; the runtime performs it only after Policy admits

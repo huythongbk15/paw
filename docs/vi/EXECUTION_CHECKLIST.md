@@ -196,6 +196,18 @@
   fail-positive (bỏ phần trì hoãn làm fail 2/7); lỗi khi áp dụng được raise bởi
   transaction đã queue nó, nên bên sở hữu transaction là bên biết được; ruff
   check clean. **F02 nay đã đóng trọn cả ba phần.**
+- [x] B-29: các route mutation. Hai mutation — gửi một lượt, trả lời approval
+  đang chờ — sau ranh giới không đổi (Host chính xác, Origin chính xác, CSRF token
+  cục bộ, giới hạn body, không credential trong query). Request key làm một lượt
+  idempotent: nó quyết định identity của task, nên lần thử lại resolve về cùng
+  durable operation. Write admission là toàn process. Server là dependency tùy chọn
+  duy nhất (`paw[web]`).
+  — RESOLVED. `tests/test_local_web_mutation_contract.py` 15 passed với một
+  **server thật** trên port loopback thật và database thật, có chứng minh
+  fail-positive (3/15 fail khi tắt kiểm tra CSRF hoặc identity theo request key);
+  cũng đã chứng minh bằng tay với `paw web`: một request xin tạo file được
+  boundary cho qua, rồi xin phê duyệt và không thực thi gì, và cùng request key
+  lần nữa trả lời `already_recorded` với cùng task id. Ruff check clean.
 - [x] B-19/F04: provider discovery là thao tác tường minh, do Policy cho phép.
   `ModelRouter.route()` chỉ dùng cache; `discover_providers()` là thao tác tường
   minh; runtime chỉ thực hiện sau khi Policy cho phép `Capability.NETWORK_HTTP`;

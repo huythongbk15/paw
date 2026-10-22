@@ -25,12 +25,14 @@ order, preserving unfinished E1 ranking work and without enabling training:
 | Feature parity | B-27..B-33 | Sessions/chat, approvals, project/context, decision/DAG, inspect, memory/skills, model/experimental views through shared services. |
 | Product candidate | B-34..B-36 | Install/upgrade/backup/restore and documentation; browser/CLI parity; one clean-revision D3 + explicit release verdict. |
 
-Next safe action: the **mutation routes** and the shell's mutating
-affordances. The storage concurrency question is settled: F02 is closed in all
-three parts - the transaction scope is per task, the cross-process model is
-explicit and bounded, and a write that must outlive its transaction has a
-form that works (`write_independent`). The mutations are the last thing
-before the surface can write anything.
+Next safe action: the browser shell's mutating affordances, and the
+packaged assets the ADR promised. **The mutation routes were delivered on
+2026-10-21** (B-29): two mutations behind the unchanged boundary, a
+request key that makes a turn idempotent, a process-wide write admission,
+and the server as the only optional dependency (`paw[web]`). What remains
+of the surface is the part a person actually looks at: the shell's
+composer, the transcript, and the evidence panel — and the packaged
+assets that travel with the wheel.
 
 What was delivered on 2026-10-20 and 2026-10-21, with the evidence in the
 implementation map (B-20 record):

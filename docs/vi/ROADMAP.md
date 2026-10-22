@@ -20,12 +20,12 @@ quyền hạ gate. [Audit BETA/web](BETA_LIMITATIONS.md) ghi findings/parity/cas
 | Parity | B-27..B-33 | Session/approval/project/decision/DAG/inspect/memory/skills/models/experimental qua service chung. |
 | Release candidate | B-34..B-36 | Install/upgrade/backup/restore/docs/parity; D3 clean và verdict rõ. |
 
-Việc an toàn tiếp theo: **các route mutation** và affordance ghi của shell.
-Câu hỏi concurrency của lưu trữ đã được giải quyết: F02 đã đóng trọn cả ba
-phần — scope của transaction là của từng task, mô hình đa process tường minh và
-có trần, và một lần ghi phải sống lâu hơn transaction của nó nay có một hình
-thức chạy được (`write_independent`). Mutation là thứ cuối trước khi bề mặt có
-thể ghi bất cứ thứ gì.
+Việc an toàn tiếp theo: affordance ghi của browser shell, và các asset đóng
+gói mà ADR đã hứa. **Các route mutation đã được giao ngày 2026-10-21** (B-29):
+hai mutation sau ranh giới không đổi, một request key làm một lượt idempotent,
+write admission toàn process, và server là dependency tùy chọn duy nhất
+(`paw[web]`). Còn lại của bề mặt là phần người ta thực sự nhìn: composer của
+shell, transcript, và bảng bằng chứng — cùng các asset đi kèm wheel.
 
 Những gì đã giao ngày 2026-10-20 và 2026-10-21, kèm bằng chứng trong
 implementation map (record B-20):

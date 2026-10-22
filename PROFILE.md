@@ -1271,10 +1271,25 @@ the one that learns.
 
 7 contract tests, fail-positive proven.
 
+### The surface can write (2026-10-21)
+
+**B-29**: two mutations — send a turn, answer the pending approval —
+behind the unchanged boundary. The request key makes a turn idempotent
+(it determines the task's identity, so a retry resolves to the same
+durable operation), the write admission is process-wide, and the ASGI
+server is the only optional dependency (`paw[web]`, `paw web`).
+
+The token is held in memory by the shell — never in `localStorage`, a
+cookie or a URL. 15 contract tests against a **real server** on a real
+loopback port; fail-positive proven. Proved by hand too: a request that
+asked for a file was admitted by the boundary, then **asked for
+approval** and executed nothing, and the same request key again answered
+`already_recorded` with the same task id.
+
 ### Still open (tracked)
 
-the mutation routes (the last thing before the surface can write
-anything) · the gitignored E1-27 measurement report.
+the shell's mutating affordances and the packaged assets · the
+gitignored E1-27 measurement report.
 
 ---
 
@@ -1299,5 +1314,6 @@ anything) · the gitignored E1-27 measurement report.
 | **B-28** | ✅ DELIVERED | The packaged shell and its asset policy: traversal, absolute path, null byte and an escaping symlink are all refused; the shell is UTF-8 Vietnamese, keyboard operable, contrast-checked, responsive, and holds no credential. 42 web contract tests, fail-positive proven. |
 | **F02** | ✅ CLOSED (one half open) | The transaction scope is per task and the depth is per transaction; an independent write in another task survives the owner's rollback. 9 contract tests, fail-positive proven. The nested-write half needs a write queue. |
 | **F02** | ✅ CLOSED | All three parts: the transaction scope is per task and the depth per transaction; the cross-process model is explicit - a bounded busy timeout on every connection, and opening an up-to-date database takes no write lock; and a write that must outlive its transaction has a form that works (`write_independent`). 21 contract tests, fail-positive proven. |
-| **Next** | the mutation routes | the last thing before the surface can write anything |
+| **B-29** | ✅ DELIVERED | The mutation routes: two mutations behind the unchanged boundary, a request key that makes a turn idempotent, a process-wide write admission, and the server as the only optional dependency. 15 contract tests against a real server; fail-positive proven. |
+| **Next** | the shell's mutating affordances and the packaged assets | the part a person actually looks at |
 
