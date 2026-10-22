@@ -309,7 +309,7 @@ class TestTheApprovalFlow:
         await chat.open()
         try:
             reply = await chat.send(
-                "hãy tạo file x.txt với nội dung chào",
+                "hãy tạo file x.txt với nội dung: chào",
                 request_key="req-key-approval-01",
             )
             assert reply.waiting_for_approval is True, reply.content
@@ -342,3 +342,79 @@ class TestTheApprovalFlow:
             await handler(context)
         assert exc.value.code == "web.approval_not_found"
         assert exc.value.status == 404
+
+
+class TestTheApprovalAffordance:
+    """The surface must let a human see and decide the pending effect."""
+
+    @pytest.mark.asyncio
+    async def test_the_pending_approval_is_projected_readably(self, tmp_path):
+        """What the person is asked to allow is named, bounded and readable."""
+        from paw.application.chat import ChatService
+        from paw.application.web_projection import pending_approval_projection
+
+        workspace = tmp_path / "workspace-approval-projection"
+        workspace.mkdir()
+        chat = ChatService(provider_mode="local", workspace_root=workspace)
+        await chat.open()
+        try:
+            reply = await chat.send(
+                "hãy tạo file x.txt với nội dung: chào",
+                request_key="req-key-projection-01",
+            )
+            assert reply.waiting_for_approval is True
+            view = await pending_approval_projection(chat.session.session_id)
+            assert view["approval_id"] == reply.approval_id
+            assert view["task_id"] == reply.task_id
+            # The first approval is the *evidence* review: it accepts the
+            # readiness evidence, not the effect. The surface says which
+            # one it is showing.
+            assert view["kind"] == "evidence_review"
+            assert view["decision_version_id"]
+            # The target and the proposed change are named, so the decision
+            # is informed rather than a blind yes.
+            assert view["path"]
+            assert view["change_preview"]
+            assert view["selected"]
+            # The contrary evidence and the stop condition are shown too:
+            # a review that hides the risks is not a review.
+            assert view["contrary"]
+            assert view["stop_condition"]
+            # And it is bounded: a summary, not a file dump.
+            assert len(view["change_preview"]) <= 4000
+        finally:
+            await chat.close()
+
+    @pytest.mark.asyncio
+    async def test_a_session_with_nothing_pending_is_not_an_error(self, tmp_path):
+        from paw.application.chat import ChatService
+        from paw.application.web_projection import (
+            ProjectionError,
+            pending_approval_projection,
+        )
+
+        workspace = tmp_path / "workspace-approval-none"
+        workspace.mkdir()
+        chat = ChatService(provider_mode="local", workspace_root=workspace)
+        await chat.open()
+        try:
+            with pytest.raises(ProjectionError) as exc:
+                await pending_approval_projection(chat.session.session_id)
+            assert exc.value.code == "web.no_pending_approval"
+        finally:
+            await chat.close()
+
+    def test_the_shell_offers_the_decision(self):
+        """The shell shows the effect and offers both decisions."""
+        static = Path(__file__).resolve().parents[1] / "src" / "paw" / "web" / "static"
+        source = (static / "app.js").read_text(encoding="utf-8")
+        assert "renderApproval" in source
+        assert "Cho phép" in source
+        assert "Từ chối" in source
+        # And the decision goes through the mutation route, with a key.
+        assert "/approvals" in source
+        assert "request_key" in source
+        # The card is in the centre region, where the work is.
+        html = (static / "index.html").read_text(encoding="utf-8")
+        assert 'id="composer"' in html
+        assert 'id="inspector"' in html

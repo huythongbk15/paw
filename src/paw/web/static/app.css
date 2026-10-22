@@ -236,3 +236,38 @@ pre {
   color: var(--muted);
 }
 .msg-body { margin: 0; white-space: pre-wrap; }
+
+/* --- the approval card ------------------------------------------------ */
+
+.approval {
+  border: 1px solid var(--warn);
+  border-left-width: 3px;
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: var(--surface-2);
+}
+.approval-title {
+  margin: 0 0 10px;
+  font-weight: 600;
+  color: var(--warn);
+}
+.approval-what {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 3px 12px;
+  margin: 0 0 10px;
+}
+.approval-what dt {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--muted);
+  align-self: center;
+}
+.approval-what dd { margin: 0; overflow-wrap: anywhere; }
+.approval-preview {
+  max-height: 220px;
+  margin: 0 0 10px;
+  background: var(--bg);
+}
+.approval-row { display: flex; gap: 9px; }

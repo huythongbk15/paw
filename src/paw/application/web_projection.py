@@ -427,3 +427,96 @@ async def checkpoint_projection(task_id: str) -> dict[str, Any]:
         "progress_ratio": checkpoint.progress_ratio,
         "created_at": checkpoint.created_at.isoformat(),
     })
+
+
+# --- The pending approval ------------------------------------------------
+
+
+async def pending_approval_projection(session_id: str) -> dict[str, Any]:
+    """The effect a human is being asked to approve, in a readable form.
+
+    There are two kinds of approval, and the surface must say which one it
+    is showing:
+
+    * an **evidence review** (``decision_review``) accepts the
+      implementation-readiness evidence for a decision snapshot. It is not
+      execution authority: a separate approval covers the effect.
+    * an **effect approval** is the runtime's policy ASK for one exact
+      operation.
+
+    Both are shown with what they are: the operation, the capabilities it
+    would use, what it would touch, and what the proposed change looks
+    like. Nothing credential-shaped is projected, and the content is
+    bounded - an approval is a summary, not a file dump.
+    """
+    from ..core.approval import ApprovalStatus, ApprovalStore
+
+    session = await ChatStateStore.get_session(session_id)
+    if session is None:
+        raise ProjectionError("web.session_not_found", "no such session")
+    if not session.pending_approval_id:
+        raise ProjectionError(
+            "web.no_pending_approval", "this session is not waiting for an approval",
+        )
+    approval = await ApprovalStore.get(session.pending_approval_id)
+    if approval is None:
+        raise ProjectionError(
+            "web.no_pending_approval", "this session is not waiting for an approval",
+        )
+    if approval.status != ApprovalStatus.PENDING:
+        raise ProjectionError(
+            "web.approval_not_pending", "that approval was already decided",
+        )
+    action = approval.action
+    metadata = action.metadata if isinstance(action.metadata, dict) else {}
+    context = action.context if isinstance(action.context, dict) else {}
+
+    if metadata.get("purpose") == "decision_review":
+        decision = context.get("decision")
+        decision = decision if isinstance(decision, dict) else {}
+        payload = decision.get("payload")
+        payload = payload if isinstance(payload, dict) else {}
+        implementation = payload.get("implementation_action")
+        implementation = implementation if isinstance(implementation, dict) else {}
+        # The action is serialised whole, so its metadata is nested.
+        implementation_metadata = implementation.get("metadata")
+        implementation_metadata = (
+            implementation_metadata if isinstance(implementation_metadata, dict) else {}
+        )
+        intent = implementation_metadata.get("filesystem")
+        intent = intent if isinstance(intent, dict) else {}
+        return redact({
+            "kind": "evidence_review",
+            "approval_id": approval.id,
+            "task_id": approval.task_id,
+            "operation_id": approval.operation_id,
+            "goal": action.goal,
+            "decision_version_id": decision.get("version_id", ""),
+            "capabilities": [c.value for c in action.capabilities],
+            "selected": payload.get("selected", ""),
+            "options": payload.get("options", []),
+            "contrary": payload.get("contrary", []),
+            "stop_condition": payload.get("stop_condition", ""),
+            "acceptance": payload.get("acceptance", []),
+            "operation": intent.get("operation", ""),
+            "path": intent.get("path", ""),
+            "change_preview": (implementation_metadata.get("change_preview") or "")[:4000],
+            "requested_at": approval.requested_at.isoformat(),
+        })
+
+    filesystem = metadata.get("filesystem")
+    filesystem = filesystem if isinstance(filesystem, dict) else {}
+    preview = metadata.get("change_preview")
+    return redact({
+        "kind": "effect_approval",
+        "approval_id": approval.id,
+        "task_id": approval.task_id,
+        "operation_id": approval.operation_id,
+        "goal": action.goal,
+        "capabilities": [c.value for c in action.capabilities],
+        "policy_reason": (approval.metadata or {}).get("policy_reason", ""),
+        "operation": filesystem.get("operation", ""),
+        "path": filesystem.get("path", ""),
+        "change_preview": (preview or "")[:4000],
+        "requested_at": approval.requested_at.isoformat(),
+    })

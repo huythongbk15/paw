@@ -98,6 +98,15 @@ async def _messages(ctx: WebRequestContext) -> WebResponse:
     return WebResponse(body=page.to_dict())
 
 
+async def _pending_approval(ctx: WebRequestContext) -> WebResponse:
+    """The effect this session is asking a human to approve."""
+    try:
+        body = await web_projection.pending_approval_projection(ctx.param("session_id"))
+    except ProjectionError as exc:
+        return _error(exc)
+    return WebResponse(body=body)
+
+
 async def _task(ctx: WebRequestContext) -> WebResponse:
     try:
         body = await web_projection.task_projection(ctx.param("task_id"))
@@ -275,6 +284,12 @@ def build_application(
     app.add(Route("GET", f"{API}/sessions/{{session_id}}", _session, "session"))
     app.add(
         Route("GET", f"{API}/sessions/{{session_id}}/messages", _messages, "messages"),
+    )
+    app.add(
+        Route(
+            "GET", f"{API}/sessions/{{session_id}}/approval",
+            _pending_approval, "pending-approval",
+        ),
     )
     app.add(Route("GET", f"{API}/tasks/{{task_id}}", _task, "task"))
     app.add(Route("GET", f"{API}/tasks/{{task_id}}/events", _events, "events"))

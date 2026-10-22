@@ -238,6 +238,102 @@
     });
   }
 
+  /* The approval card: what PAW is asking a human to allow. It is the
+   * one mutating affordance the read-only surface did not have, and it
+   * is deliberately explicit - the person sees the operation, the
+   * capabilities and the proposed change before deciding. */
+  function renderApproval(approval) {
+    clear(el.view);
+    var card = document.createElement("div");
+    card.className = "approval";
+
+    var title = document.createElement("p");
+    title.className = "approval-title";
+    title.textContent = "PAW cần bạn cho phép một tác động.";
+    card.appendChild(title);
+
+    var what = document.createElement("dl");
+    what.className = "approval-what";
+    [
+      ["Tác động", approval.operation || approval.operation_id],
+      ["Năng lực", (approval.capabilities || []).join(", ")],
+      ["Đường dẫn", approval.path],
+      ["Lý do", approval.policy_reason]
+    ].forEach(function (pair) {
+      var dt = document.createElement("dt");
+      dt.textContent = pair[0];
+      var dd = document.createElement("dd");
+      dd.textContent = pair[1] || "—";
+      what.appendChild(dt);
+      what.appendChild(dd);
+    });
+    card.appendChild(what);
+
+    if (approval.change_preview) {
+      var pre = document.createElement("pre");
+      pre.className = "approval-preview";
+      pre.textContent = approval.change_preview;
+      card.appendChild(pre);
+    }
+
+    var row = document.createElement("div");
+    row.className = "approval-row";
+    var approve = document.createElement("button");
+    approve.type = "button";
+    approve.className = "btn btn-primary";
+    approve.textContent = "Cho phép";
+    approve.addEventListener("click", function () { decide(approval.approval_id, "approve"); });
+    var deny = document.createElement("button");
+    deny.type = "button";
+    deny.className = "btn";
+    deny.textContent = "Từ chối";
+    deny.addEventListener("click", function () { decide(approval.approval_id, "deny"); });
+    row.appendChild(approve);
+    row.appendChild(deny);
+    card.appendChild(row);
+
+    el.view.appendChild(card);
+  }
+
+  function decide(approvalId, decision) {
+    request("/sessions/" + encodeURIComponent(current.sessionId) + "/approvals", {
+      method: "POST",
+      body: {
+        approval_id: approvalId,
+        decision: decision,
+        request_key: newKey()
+      }
+    }).then(function (reply) {
+      showToast(decision === "approve"
+        ? "Đã cho phép. PAW tiếp tục tác động."
+        : "Đã từ chối tác động này.");
+      return loadChat();
+    }).then(function () {
+      return loadPendingApproval();
+    }).catch(function (error) {
+      showToast(error.message);
+    });
+  }
+
+  function loadPendingApproval() {
+    if (!current.sessionId) { return Promise.resolve(); }
+    return request("/sessions/" + encodeURIComponent(current.sessionId) + "/approval")
+      .then(function (approval) {
+        if (approval && approval.approval_id) {
+          renderApproval(approval);
+        } else {
+          return loadChat();
+        }
+      })
+      .catch(function (error) {
+        // No pending approval is the normal case, not an error.
+        if (error && error.code === "web.no_pending_approval") {
+          return loadChat();
+        }
+        return loadChat();
+      });
+  }
+
   function loadSessions() {
     el.view.setAttribute("aria-busy", "true");
     renderState(el.view, "loading", "Đang tải sessions…", "Một khoảnh khắc.");
@@ -343,7 +439,7 @@
   }
 
   var views = {
-    chat: { title: "Chat", load: loadChat },
+    chat: { title: "Chat", load: loadPendingApproval },
     sessions: { title: "Sessions", load: loadSessions },
     tasks: { title: "Tasks", load: loadTasks },
     inspect: { title: "Inspect", load: loadInspect },
