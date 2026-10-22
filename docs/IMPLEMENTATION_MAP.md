@@ -819,6 +819,18 @@ answers ``already_recorded`` rather than starting a second attempt.
 it is a property of the surface rather than of one route, and one effect
 happens at a time.
 
+**The surface can now ask a human to decide.** The read-only surface
+reported that an approval was pending but offered no way to give it, so
+the person had to leave the browser and use the CLI. The shell now shows
+an **approval card**: the operation, the capabilities it would use, the
+target, and the proposed change, with **Cho phép** and **Từ chối**.
+The view names *which* approval it is, because there are two: an
+**evidence review** accepts the implementation-readiness evidence and is
+not execution authority, while an **effect approval** is the runtime's
+policy ASK for one exact operation. The evidence review shows the
+selected option, the **contrary** evidence and the stop condition - a
+review that hides the risks is not a review.
+
 **The server is the only optional dependency.** ``paw web`` serves the
 surface in the foreground on the loopback address. The application, the
 boundary and the projections have no such dependency; the ASGI server
@@ -831,8 +843,13 @@ origin; a mutation without the token is refused; a mutation with a wrong
 token is refused; a foreign ``Host`` and a credential in the query are
 refused; a malformed request key and a missing message are refused; an
 unknown approval is a typed refusal; a write **asks for approval before
-it writes**, and the file is not there until a human approves; and a
-repeated request is the **same turn**, not a second one.
+it writes**, and the file is not there until a human approves; a repeated
+request is the **same turn**, not a second one; and the pending approval
+is projected readably - named, bounded, and telling the person whether
+it is the evidence review or the effect approval.
+
+*Fail-positive proven* (the affordance). Removing the review branch of
+the projection and the two decision buttons fails 2 of the 18.
 
 *Fail-positive proven.* Disabling the CSRF check and the request-key
 identity fails 3 of the 15 - the two token refusals and the idempotency.

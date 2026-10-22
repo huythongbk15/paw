@@ -210,13 +210,21 @@
   request key makes a turn idempotent: it determines the task's identity, so
   a retry resolves to the same durable operation. The write admission is
   process-wide. The server is the only optional dependency (`paw[web]`).
-  — RESOLVED. `tests/test_local_web_mutation_contract.py` 15 passed against a
+  — RESOLVED. `tests/test_local_web_mutation_contract.py` 18 passed against a
   **real server** on a real loopback port with a real database, fail-positive
-  proven (3/15 fail with the CSRF check or the request-key identity
-  disabled); also proved by hand with `paw web`: a request that asked for a
-  file was admitted by the boundary, then asked for approval and executed
-  nothing, and the same request key again answered `already_recorded` with the
-  same task id. Ruff check clean.
+  proven (3/18 fail with the CSRF check or the request-key identity disabled);
+  also proved by hand with `paw web`: a request that asked for a file was
+  admitted by the boundary, then asked for approval and executed nothing, and
+  the same request key again answered `already_recorded` with the same task id.
+  Ruff check clean.
+- [x] The shell's mutating affordance: an approval card that names the
+  operation, the capabilities, the target and the proposed change, with
+  **Cho phép** and **Từ chối**, and that says which kind of approval it is
+  (the evidence review or the effect approval).
+  — RESOLVED. The pending approval is projected readably and bounded;
+  fail-positive proven (2/18 fail with the review branch or the two
+  decision buttons removed). The shell no longer sends a person to the CLI
+  to give an approval.
 - [x] B-19/F04: provider discovery is an explicit, Policy-admitted operation.
   `ModelRouter.route()` is cache-only; `discover_providers()` is the explicit
   operation; the runtime performs it only after Policy admits

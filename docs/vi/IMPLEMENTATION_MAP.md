@@ -744,6 +744,16 @@ lần thử thứ hai.
 **Write admission là toàn process.** Nó nằm ở tầng ASGI, nên là thuộc tính của
 bề mặt chứ không phải của một route, và chỉ một effect xảy ra tại một thời điểm.
 
+**Bề mặt nay biết xin người dùng quyết định.** Bề mặt chỉ đọc báo rằng có
+approval đang chờ nhưng không cho cách nào để đưa ra quyết định, nên người ta
+phải rời trình duyệt và dùng CLI. Nay shell hiện một **thẻ phê duyệt**: tác động,
+các năng lực nó sẽ dùng, đường dẫn, và thay đổi đề xuất, kèm **Cho phép** và
+**Từ chối**. View nói rõ *đang* là approval nào, vì có hai: một **evidence
+review** chấp nhận bằng chứng sẵn sàng và không phải quyền thực thi, còn một
+**effect approval** là policy ASK của runtime cho đúng một operation. Evidence
+review hiện lựa chọn đã chọn, **bằng chứng trái chiều** và điều kiện dừng — một
+cuộc review giấu rủi ro thì không phải review.
+
 **Server là dependency tùy chọn duy nhất.** `paw web` phục vụ bề mặt ở foreground
 trên địa chỉ loopback. Application, ranh giới và projection không có dependency
 đó; ASGI server thì có, và là một extra (`pip install 'paw[web]'`).
@@ -754,8 +764,12 @@ phục vụ; token có sẵn qua cùng origin; mutation không token bị từ c
 token sai bị từ chối; `Host` lạ và credential trong query bị từ chối; request
 key sai khăn và thiếu message bị từ chối; approval không tồn tại là từ chối có
 mã; một lần ghi **xin phê duyệt trước khi ghi**, và file chưa có cho tới khi
-con người phê duyệt; và một request lặp lại là **cùng một lượt**, không phải
-lượt thứ hai.
+con người phê duyệt; một request lặp lại là **cùng một lượt**, không phải lượt
+thứ hai; và approval đang chờ được chiếu ra dạng dễ đọc — có tên, có giới hạn,
+và nói rõ đó là evidence review hay effect approval.
+
+*Chứng minh fail-positive* (cho affordance). Bỏ nhánh review của projection và
+hai nút quyết định làm fail 2/18.
 
 *Chứng minh fail-positive.* Tắt kiểm tra CSRF và identity theo request key làm
 fail 3/15 — hai lần từ chối token và tính idempotent.

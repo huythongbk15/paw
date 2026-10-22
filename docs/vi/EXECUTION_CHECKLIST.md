@@ -202,12 +202,18 @@
   idempotent: nó quyết định identity của task, nên lần thử lại resolve về cùng
   durable operation. Write admission là toàn process. Server là dependency tùy chọn
   duy nhất (`paw[web]`).
-  — RESOLVED. `tests/test_local_web_mutation_contract.py` 15 passed với một
+  — RESOLVED. `tests/test_local_web_mutation_contract.py` 18 passed với một
   **server thật** trên port loopback thật và database thật, có chứng minh
-  fail-positive (3/15 fail khi tắt kiểm tra CSRF hoặc identity theo request key);
+  fail-positive (3/18 fail khi tắt kiểm tra CSRF hoặc identity theo request key);
   cũng đã chứng minh bằng tay với `paw web`: một request xin tạo file được
   boundary cho qua, rồi xin phê duyệt và không thực thi gì, và cùng request key
   lần nữa trả lời `already_recorded` với cùng task id. Ruff check clean.
+- [x] Affordance ghi của shell: một thẻ phê duyệt nêu tên tác động, các năng
+  lực, đường dẫn và thay đổi đề xuất, kèm **Cho phép** và **Từ chối**, và nói
+  rõ đó là loại approval nào (evidence review hay effect approval).
+  — RESOLVED. Approval đang chờ được chiếu ra dạng dễ đọc và có giới hạn; có
+  chứng minh fail-positive (2/18 fail khi bỏ nhánh review hoặc hai nút quyết
+  định). Shell không còn bắt người ta sang CLI để phê duyệt.
 - [x] B-19/F04: provider discovery là thao tác tường minh, do Policy cho phép.
   `ModelRouter.route()` chỉ dùng cache; `discover_providers()` là thao tác tường
   minh; runtime chỉ thực hiện sau khi Policy cho phép `Capability.NETWORK_HTTP`;
